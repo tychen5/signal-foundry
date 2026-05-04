@@ -14,6 +14,23 @@ This repository is a public showcase of evaluation-first AI systems engineering:
 * Task 2: Generalized Browser Automation Agent
 * Task 3: SEC 10-K Item-level Structured Extraction
 
+## Task 3 API
+Task 3 is implemented as a hybrid rule + optional LLM pipeline:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sec/extract \
+  -H "Content-Type: application/json" \
+  -d '{"cik":"0000320193","accession_number":"0000320193-23-000106","skip_llm":true,"skip_xbrl":true}'
+```
+
+The response returns item-level JSON with `part`, `item_number`, `item_title`, `content_text`, `char_range`, `status`, confidence, extraction method, validation metadata, cost, and latency.
+
+Task 3 evals use official SEC identifiers and can be run with:
+
+```bash
+python -m evals.task3.run_eval --skip-xbrl
+```
+
 
 ## Architecture
 * 共用的 orchestrator / harness / evaluator / logging
@@ -50,6 +67,5 @@ This repository is a public showcase of evaluation-first AI systems engineering:
 * 哪些地方還不完美
 * 還想加什麼
 * 工程判斷
-
 
 

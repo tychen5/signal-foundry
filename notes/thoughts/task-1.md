@@ -22,15 +22,15 @@
 - [x] All 18 tests passing
 
 ## Phase 1: Task 3 — SEC 10-K Extraction
-- [ ] Implement src/task3_sec/fetcher.py
-- [ ] Implement src/task3_sec/normalizer.py
-- [ ] Implement src/task3_sec/rule_parser.py
-- [ ] Implement src/task3_sec/llm_refiner.py
-- [ ] Implement src/task3_sec/validator.py
-- [ ] Implement src/task3_sec/xbrl_client.py
-- [ ] Implement src/task3_sec/pipeline.py
-- [ ] Implement src/task3_sec/router.py
-- [ ] Create evals/task3/ eval set
+- [x] Implement src/task3_sec/fetcher.py
+- [x] Implement src/task3_sec/normalizer.py
+- [x] Implement src/task3_sec/rule_parser.py
+- [x] Implement src/task3_sec/llm_refiner.py
+- [x] Implement src/task3_sec/validator.py
+- [x] Implement src/task3_sec/xbrl_client.py
+- [x] Implement src/task3_sec/pipeline.py
+- [x] Implement src/task3_sec/router.py
+- [x] Create evals/task3/ eval set
 - [ ] Create templates/task3.html
 
 ## Phase 2: Task 2 — Browser Automation Agent
