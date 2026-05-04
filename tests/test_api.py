@@ -1,25 +1,40 @@
 """Tests for FastAPI application endpoints."""
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
 
 from src.main import app
+from src.task3_sec.schemas import (
+    ExtractedItem,
+    ExtractionResult,
+    FilingMetadata,
+    ItemStatus,
+    ProcessingMetadata,
+)
 
-client = TestClient(app)
+pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture
+async def client():
+    """Async ASGI client for FastAPI endpoint tests."""
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as async_client:
+        yield async_client
 
 
 class TestHealthAndSystem:
     """Test system endpoints."""
 
-    def test_health_check(self):
-        response = client.get("/health")
+    async def test_health_check(self, client):
+        response = await client.get("/health")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
         assert "tasks" in data
 
-    def test_list_models(self):
-        response = client.get("/api/v1/models")
+    async def test_list_models(self, client):
+        response = await client.get("/api/v1/models")
         assert response.status_code == 200
         data = response.json()
         assert "models" in data
@@ -30,14 +45,14 @@ class TestHealthAndSystem:
         assert "openrouter" in providers
         assert "nvidia" in providers
 
-    def test_metrics(self):
-        response = client.get("/metrics")
+    async def test_metrics(self, client):
+        response = await client.get("/metrics")
         assert response.status_code == 200
         data = response.json()
         assert "total_calls" in data
 
-    def test_dashboard(self):
-        response = client.get("/")
+    async def test_dashboard(self, client):
+        response = await client.get("/")
         assert response.status_code == 200
         assert "Signal-Foundry" in response.text
 
@@ -45,14 +60,14 @@ class TestHealthAndSystem:
 class TestTask1Routes:
     """Test CI/CD Skills API routes."""
 
-    def test_list_skills(self):
-        response = client.get("/api/v1/skills/list")
+    async def test_list_skills(self, client):
+        response = await client.get("/api/v1/skills/list")
         assert response.status_code == 200
         data = response.json()
         assert len(data["skills"]) == 4
 
-    def test_run_skill(self):
-        response = client.post(
+    async def test_run_skill(self, client):
+        response = await client.post(
             "/api/v1/skills/run",
             json={
                 "repo_url": "https://github.com/tychen5/signal-foundry",
@@ -63,8 +78,8 @@ class TestTask1Routes:
         data = response.json()
         assert data["status"] == "success"
 
-    def test_run_invalid_skill(self):
-        response = client.post(
+    async def test_run_invalid_skill(self, client):
+        response = await client.post(
             "/api/v1/skills/run",
             json={
                 "repo_url": "https://github.com/test/repo",
@@ -77,8 +92,8 @@ class TestTask1Routes:
 class TestTask2Routes:
     """Test Browser Agent API routes."""
 
-    def test_execute_task(self):
-        response = client.post(
+    async def test_execute_task(self, client):
+        response = await client.post(
             "/api/v1/browser/execute",
             json={
                 "task_description": "Search Wikipedia for AI",
@@ -93,8 +108,35 @@ class TestTask2Routes:
 class TestTask3Routes:
     """Test SEC 10-K Extraction API routes."""
 
-    def test_extract_with_cik(self):
-        response = client.post(
+    async def test_extract_with_cik(self, client, monkeypatch):
+        async def fake_extract_10k(**kwargs):
+            return ExtractionResult(
+                filing_metadata=FilingMetadata(
+                    cik=kwargs["cik"],
+                    accession_number=kwargs["accession_number"],
+                    filing_url="https://www.sec.gov/Archives/edgar/data/320193/example/aapl.htm",
+                ),
+                items=[
+                    ExtractedItem(
+                        part="I",
+                        item_number="1",
+                        item_title="Business",
+                        content_text="Business content.",
+                        char_range=[0, 17],
+                        status=ItemStatus.EXTRACTED,
+                        confidence=0.99,
+                    )
+                ],
+                processing_metadata=ProcessingMetadata(
+                    total_latency_ms=12.0,
+                    stages_used=["rule_based", "validation"],
+                    validation_report={"overall_valid": True},
+                ),
+            )
+
+        monkeypatch.setattr("src.task3_sec.pipeline.extract_10k", fake_extract_10k)
+
+        response = await client.post(
             "/api/v1/sec/extract",
             json={
                 "cik": "0000320193",
@@ -104,9 +146,11 @@ class TestTask3Routes:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success"
+        assert data["result"]["filing_metadata"]["cik"] == "0000320193"
+        assert data["cost_metadata"]["validation_overall_valid"] is True
 
-    def test_extract_missing_input(self):
-        response = client.post(
+    async def test_extract_missing_input(self, client):
+        response = await client.post(
             "/api/v1/sec/extract",
             json={},
         )

@@ -7,7 +7,6 @@ Supports dual LLM providers: OpenRouter and NVIDIA AI Endpoints.
 
 from __future__ import annotations
 
-import os
 from enum import Enum
 from typing import Optional
 
@@ -92,6 +91,18 @@ class Settings(BaseSettings):
     sec_user_agent: str = Field(
         default="signal-foundry/1.0 (signal-foundry@example.com)",
         description="User-Agent header for SEC API requests",
+    )
+    sec_cache_dir: str = Field(
+        default="/tmp/signal_foundry_sec_cache",
+        description="Disk cache directory for SEC filings and metadata",
+    )
+    sec_max_download_mb: int = Field(
+        default=200,
+        description="Maximum SEC filing download size in megabytes",
+    )
+    sec_request_timeout_sec: float = Field(
+        default=120.0,
+        description="Timeout for SEC API and filing download requests",
     )
 
     # Application

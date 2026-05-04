@@ -1,7 +1,8 @@
 """Tests for shared infrastructure."""
 
 import pytest
-from src.shared.schemas import ExecutionStatus, FailureType, ExecutionResult, TaskType
+
+from src.shared.schemas import ExecutionResult, ExecutionStatus, FailureType, TaskType
 
 
 class TestSchemas:
@@ -76,7 +77,7 @@ class TestHarness:
 
     @pytest.mark.asyncio
     async def test_fast_fail(self):
-        from src.shared.harness import execute_with_harness, FastFailError
+        from src.shared.harness import FastFailError, execute_with_harness
 
         async def bad_input():
             raise FastFailError("Invalid input")

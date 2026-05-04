@@ -13,6 +13,7 @@ authors = [
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py311"

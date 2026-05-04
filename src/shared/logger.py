@@ -7,6 +7,7 @@ Every operation gets a unique execution_id for end-to-end tracing.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from contextvars import ContextVar
 from typing import Any
@@ -19,6 +20,7 @@ _trace_id: ContextVar[str] = ContextVar("trace_id", default="")
 
 def setup_logging(log_level: str = "INFO") -> None:
     """Configure structlog with JSON output and trace ID binding."""
+    resolved_level = getattr(logging, log_level.upper(), logging.INFO)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
@@ -28,9 +30,7 @@ def setup_logging(log_level: str = "INFO") -> None:
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(
-            structlog.get_level_from_name(log_level)
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(resolved_level),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,

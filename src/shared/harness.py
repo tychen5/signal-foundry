@@ -17,14 +17,6 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, TypeVar
 
-from tenacity import (
-    RetryError,
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
-
 from src.shared.logger import get_logger
 
 T = TypeVar("T")

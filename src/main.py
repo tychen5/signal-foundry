@@ -11,12 +11,12 @@ Plus: dashboard, health checks, metrics, and model selection.
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
-from typing import Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -56,9 +56,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Static files and templates
-import os
 
 _base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _static_dir = os.path.join(_base_dir, "static")
