@@ -1,0 +1,90 @@
+[
+  {
+    "case_id": "t2_wikipedia_search",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to Wikipedia and search for 'artificial intelligence', then extract the first paragraph of the article",
+      "target_url": "https://www.wikipedia.org"
+    },
+    "expected_behavior": "Navigate to Wikipedia, search, find article, extract first paragraph text",
+    "difficulty": "easy",
+    "tags": ["search", "extract", "wikipedia"]
+  },
+  {
+    "case_id": "t2_google_search",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Search Google for 'SEC 10-K filing requirements' and return the titles of the top 3 results",
+      "target_url": "https://www.google.com"
+    },
+    "expected_behavior": "Perform Google search, extract top 3 result titles",
+    "difficulty": "normal",
+    "tags": ["search", "google", "extract"]
+  },
+  {
+    "case_id": "t2_form_fill",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to httpbin.org/forms/post and fill in the form with: customer name 'John Doe', telephone '555-1234', choose 'Medium' pizza size, select 'Mushroom' topping, then submit",
+      "target_url": "https://httpbin.org/forms/post"
+    },
+    "expected_behavior": "Fill form fields correctly and submit. Verify submission response.",
+    "difficulty": "normal",
+    "tags": ["form", "fill", "submit"]
+  },
+  {
+    "case_id": "t2_multi_step_navigation",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to Hacker News, find the top story, click on it to read comments, and report the number of comments",
+      "target_url": "https://news.ycombinator.com"
+    },
+    "expected_behavior": "Navigate multi-step, extract comment count from top story",
+    "difficulty": "normal",
+    "tags": ["navigation", "multi_step", "extract"]
+  },
+  {
+    "case_id": "t2_dynamic_content",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to GitHub trending repositories page and list the top 5 repository names",
+      "target_url": "https://github.com/trending"
+    },
+    "expected_behavior": "Handle dynamic loading, extract trending repo names",
+    "difficulty": "normal",
+    "tags": ["dynamic", "github", "extract"]
+  },
+  {
+    "case_id": "t2_scroll_pagination",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to the Python Package Index (pypi.org), search for 'langchain', and list the first 5 package results with their descriptions",
+      "target_url": "https://pypi.org"
+    },
+    "expected_behavior": "Search, handle results page, extract package info",
+    "difficulty": "normal",
+    "tags": ["search", "pagination", "extract"]
+  },
+  {
+    "case_id": "t2_error_recovery",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to a page that doesn't exist (https://httpbin.org/nonexistent) and report what error page is shown",
+      "target_url": "https://httpbin.org/nonexistent"
+    },
+    "expected_behavior": "Handle 404 gracefully, report error page content",
+    "difficulty": "edge_case",
+    "tags": ["error", "404", "recovery"]
+  },
+  {
+    "case_id": "t2_cookie_banner",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to a news website (reuters.com) and find the headline of the top story, handling any cookie consent dialogs that appear",
+      "target_url": "https://www.reuters.com"
+    },
+    "expected_behavior": "Dismiss cookie banner if present, extract headline",
+    "difficulty": "hard",
+    "tags": ["cookie_banner", "news", "popup"]
+  }
+]

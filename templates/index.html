@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Signal-Foundry: Evaluation-first AI systems for CI/CD Skills, browser automation, and SEC 10-K extraction.">
+    <title>Signal-Foundry — AI Systems Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🔧 Signal-Foundry</h1>
+            <p>Evaluation-first AI systems — harness engineering for reliable automation</p>
+        </header>
+
+        <!-- Model Selector -->
+        <div class="model-selector">
+            <label for="model-select">LLM Model Selection</label>
+            <select id="model-select">
+                {% for model in models %}
+                <option value="{{ model.id }}">{{ model.display_name }} ({{ model.provider }})</option>
+                {% endfor %}
+            </select>
+            <input type="password" id="user-api-key" placeholder="Your OpenRouter API Key (optional — uses your own tokens)">
+        </div>
+
+        <!-- Task Cards -->
+        <div class="task-grid">
+            <div class="task-card" id="task1-card">
+                <h3>📋 Task 1: CI/CD Skills Engine</h3>
+                <p>GitHub CI/CD workflows packaged as reusable, precisely-triggered Claude Skills with sandbox execution and idempotency.</p>
+                <span class="badge badge-skills">Skills</span>
+                <a href="/api/v1/skills/list">View Skills →</a>
+                <span class="status">Ready</span>
+            </div>
+
+            <div class="task-card" id="task2-card">
+                <h3>🌐 Task 2: Browser Automation Agent</h3>
+                <p>Self-healing browser agent with AOM-first locators, semantic state tracking, and silent failure prevention.</p>
+                <span class="badge badge-agent">Agent</span>
+                <a href="#task2">Try Agent →</a>
+                <span class="status">Ready</span>
+            </div>
+
+            <div class="task-card" id="task3-card">
+                <h3>📊 Task 3: SEC 10-K Extraction</h3>
+                <p>Hybrid rule+LLM pipeline for structured extraction with XBRL cross-validation and cost discipline.</p>
+                <span class="badge badge-pipeline">Pipeline</span>
+                <a href="#task3">Extract Filing →</a>
+                <span class="status">Ready</span>
+            </div>
+        </div>
+
+        <!-- System Links -->
+        <footer class="footer">
+            <a href="/health">Health</a>
+            <a href="/metrics">Metrics</a>
+            <a href="/api/v1/models">Models</a>
+            <a href="/docs">API Docs</a>
+        </footer>
+    </div>
+
+    <script>
+        // Store model selection for API calls
+        const modelSelect = document.getElementById('model-select');
+        const apiKeyInput = document.getElementById('user-api-key');
+
+        function getModelConfig() {
+            return {
+                model_id: modelSelect.value,
+                user_openrouter_key: apiKeyInput.value || null
+            };
+        }
+
+        // Card hover animations
+        document.querySelectorAll('.task-card').forEach(card => {
+            card.style.cursor = 'pointer';
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+[project]
+name = "signal-foundry"
+version = "0.1.0"
+description = "Evaluation-first AI systems: Claude Skills for CI/CD, browser automation agent, and SEC 10-K extraction pipeline."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "tychen5"},
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

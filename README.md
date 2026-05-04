@@ -38,6 +38,7 @@ This repository is a public showcase of evaluation-first AI systems engineering:
 * 哪些 prompt 失敗過、你怎麼修正
 
 ## How to Run
+* how to run, key design decisions, where LLM involved
 * demo URL
 * Zeabur URL
 

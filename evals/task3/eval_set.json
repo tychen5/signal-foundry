@@ -1,0 +1,90 @@
+[
+  {
+    "case_id": "t3_apple_2023",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000320193",
+      "accession_number": "0000320193-23-000106"
+    },
+    "expected_behavior": "Modern HTML, clean anchors. All 16 items extracted. Part III likely incorporated by reference.",
+    "difficulty": "normal",
+    "tags": ["large_cap", "tech", "modern", "html"]
+  },
+  {
+    "case_id": "t3_microsoft_2023",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000789019",
+      "accession_number": "0000789019-23-000069"
+    },
+    "expected_behavior": "Clean modern filing. Should extract all items with high confidence.",
+    "difficulty": "normal",
+    "tags": ["large_cap", "tech", "modern"]
+  },
+  {
+    "case_id": "t3_jpmorgan_2023",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000019617",
+      "accession_number": "0000019617-24-000021"
+    },
+    "expected_behavior": "Financial company — different item patterns, heavy Part III incorporation.",
+    "difficulty": "normal",
+    "tags": ["large_cap", "finance", "incorporated"]
+  },
+  {
+    "case_id": "t3_exxon_2023",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000034088",
+      "accession_number": "0000034088-24-000012"
+    },
+    "expected_behavior": "Energy sector — different risk factors, environmental disclosures.",
+    "difficulty": "normal",
+    "tags": ["large_cap", "energy"]
+  },
+  {
+    "case_id": "t3_tesla_2023",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001318605",
+      "accession_number": "0001318605-24-000006"
+    },
+    "expected_behavior": "Modern filing with clean structure. All items should extract cleanly.",
+    "difficulty": "normal",
+    "tags": ["large_cap", "auto", "tech"]
+  },
+  {
+    "case_id": "t3_small_company",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001411579",
+      "accession_number": "0001411579-24-000015"
+    },
+    "expected_behavior": "Smaller company — potentially messier formatting, different structure.",
+    "difficulty": "hard",
+    "tags": ["small_cap", "messy_format"]
+  },
+  {
+    "case_id": "t3_old_filing_2005",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000320193",
+      "accession_number": "0000320193-05-000014"
+    },
+    "expected_behavior": "Old Apple filing — may be plain text or minimal HTML. Tests format detection.",
+    "difficulty": "edge_case",
+    "tags": ["old_format", "text", "apple"]
+  },
+  {
+    "case_id": "t3_healthcare",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000078003",
+      "accession_number": "0000078003-24-000007"
+    },
+    "expected_behavior": "Healthcare company — FDA-related risk factors, different item content patterns.",
+    "difficulty": "normal",
+    "tags": ["large_cap", "healthcare"]
+  }
+]

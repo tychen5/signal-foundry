@@ -1,0 +1,63 @@
+[
+  {
+    "case_id": "t1_clean_python",
+    "task": "task1_cicd",
+    "input_data": {
+      "repo_url": "https://github.com/tychen5/signal-foundry",
+      "branch": "main",
+      "skill_name": "lint-and-test"
+    },
+    "expected_behavior": "Should detect Python project, run ruff + pytest, report results",
+    "difficulty": "normal",
+    "tags": ["python", "lint", "test"]
+  },
+  {
+    "case_id": "t1_medical_repo",
+    "task": "task1_cicd",
+    "input_data": {
+      "repo_url": "https://github.com/tychen5/Medical-Summary-Builder",
+      "branch": "main",
+      "skill_name": "dependency-audit"
+    },
+    "expected_behavior": "Should audit Python dependencies for known CVEs",
+    "difficulty": "normal",
+    "tags": ["python", "audit", "dependencies"]
+  },
+  {
+    "case_id": "t1_security_scan",
+    "task": "task1_cicd",
+    "input_data": {
+      "repo_url": "https://github.com/tychen5/signal-foundry",
+      "branch": "main",
+      "skill_name": "security-scan"
+    },
+    "expected_behavior": "Should scan for hardcoded secrets and security issues",
+    "difficulty": "normal",
+    "tags": ["security", "secrets"]
+  },
+  {
+    "case_id": "t1_nonexistent_repo",
+    "task": "task1_cicd",
+    "input_data": {
+      "repo_url": "https://github.com/nonexistent/repo-12345",
+      "branch": "main",
+      "skill_name": "lint-and-test"
+    },
+    "expected_behavior": "Should return clear error message about repo not found",
+    "difficulty": "edge_case",
+    "tags": ["error_handling", "not_found"]
+  },
+  {
+    "case_id": "t1_build_release_dryrun",
+    "task": "task1_cicd",
+    "input_data": {
+      "repo_url": "https://github.com/tychen5/signal-foundry",
+      "branch": "main",
+      "skill_name": "build-and-release",
+      "dry_run": true
+    },
+    "expected_behavior": "Should show release plan without executing. Must not create tags.",
+    "difficulty": "normal",
+    "tags": ["release", "dry_run", "safety"]
+  }
+]
