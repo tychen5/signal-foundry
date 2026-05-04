@@ -8,7 +8,8 @@
     },
     "expected_behavior": "Navigate to Wikipedia, search, find article, extract first paragraph text",
     "difficulty": "easy",
-    "tags": ["search", "extract", "wikipedia"]
+    "tags": ["search", "extract", "wikipedia"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_single"]
   },
   {
     "case_id": "t2_google_search",
@@ -19,10 +20,11 @@
     },
     "expected_behavior": "Perform Google search, extract top 3 result titles",
     "difficulty": "normal",
-    "tags": ["search", "google", "extract"]
+    "tags": ["search", "google", "extract"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_single"]
   },
   {
-    "case_id": "t2_form_fill",
+    "case_id": "t2_form_fill_httpbin",
     "task": "task2_browser",
     "input_data": {
       "task_description": "Go to httpbin.org/forms/post and fill in the form with: customer name 'John Doe', telephone '555-1234', choose 'Medium' pizza size, select 'Mushroom' topping, then submit",
@@ -30,10 +32,11 @@
     },
     "expected_behavior": "Fill form fields correctly and submit. Verify submission response.",
     "difficulty": "normal",
-    "tags": ["form", "fill", "submit"]
+    "tags": ["form", "fill", "submit"],
+    "eval_dimensions": ["task_complexity_multi", "domain_diversity"]
   },
   {
-    "case_id": "t2_multi_step_navigation",
+    "case_id": "t2_multi_step_hackernews",
     "task": "task2_browser",
     "input_data": {
       "task_description": "Go to Hacker News, find the top story, click on it to read comments, and report the number of comments",
@@ -41,21 +44,23 @@
     },
     "expected_behavior": "Navigate multi-step, extract comment count from top story",
     "difficulty": "normal",
-    "tags": ["navigation", "multi_step", "extract"]
+    "tags": ["navigation", "multi_step", "extract"],
+    "eval_dimensions": ["task_complexity_multi", "domain_diversity"]
   },
   {
-    "case_id": "t2_dynamic_content",
+    "case_id": "t2_github_trending",
     "task": "task2_browser",
     "input_data": {
-      "task_description": "Go to GitHub trending repositories page and list the top 5 repository names",
+      "task_description": "Go to GitHub trending repositories page and list the top 5 repository names with their descriptions",
       "target_url": "https://github.com/trending"
     },
-    "expected_behavior": "Handle dynamic loading, extract trending repo names",
+    "expected_behavior": "Handle dynamic loading, extract trending repo names and descriptions",
     "difficulty": "normal",
-    "tags": ["dynamic", "github", "extract"]
+    "tags": ["dynamic", "github", "extract"],
+    "eval_dimensions": ["domain_diversity", "edge_case_dynamic_loading"]
   },
   {
-    "case_id": "t2_scroll_pagination",
+    "case_id": "t2_pypi_search",
     "task": "task2_browser",
     "input_data": {
       "task_description": "Go to the Python Package Index (pypi.org), search for 'langchain', and list the first 5 package results with their descriptions",
@@ -63,10 +68,11 @@
     },
     "expected_behavior": "Search, handle results page, extract package info",
     "difficulty": "normal",
-    "tags": ["search", "pagination", "extract"]
+    "tags": ["search", "pagination", "extract"],
+    "eval_dimensions": ["task_complexity_multi", "domain_diversity"]
   },
   {
-    "case_id": "t2_error_recovery",
+    "case_id": "t2_error_recovery_404",
     "task": "task2_browser",
     "input_data": {
       "task_description": "Go to a page that doesn't exist (https://httpbin.org/nonexistent) and report what error page is shown",
@@ -74,17 +80,67 @@
     },
     "expected_behavior": "Handle 404 gracefully, report error page content",
     "difficulty": "edge_case",
-    "tags": ["error", "404", "recovery"]
+    "tags": ["error", "404", "recovery"],
+    "eval_dimensions": ["failure_injection", "edge_case"]
   },
   {
-    "case_id": "t2_cookie_banner",
+    "case_id": "t2_cookie_banner_news",
     "task": "task2_browser",
     "input_data": {
-      "task_description": "Go to a news website (reuters.com) and find the headline of the top story, handling any cookie consent dialogs that appear",
+      "task_description": "Go to reuters.com and find the headline of the top story, handling any cookie consent dialogs that appear",
       "target_url": "https://www.reuters.com"
     },
     "expected_behavior": "Dismiss cookie banner if present, extract headline",
     "difficulty": "hard",
-    "tags": ["cookie_banner", "news", "popup"]
+    "tags": ["cookie_banner", "news", "popup"],
+    "eval_dimensions": ["edge_case_popup", "domain_diversity"]
+  },
+  {
+    "case_id": "t2_multi_tab_comparison",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to Wikipedia and find the population of Tokyo and New York City. Report which city has a larger population.",
+      "target_url": "https://en.wikipedia.org"
+    },
+    "expected_behavior": "Navigate to two articles, extract population data, compare and report",
+    "difficulty": "hard",
+    "tags": ["multi_step", "navigation", "comparison", "extract"],
+    "eval_dimensions": ["task_complexity_multi", "domain_diversity"]
+  },
+  {
+    "case_id": "t2_sec_edgar_lookup",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to SEC EDGAR (sec.gov/cgi-bin/browse-edgar), search for company 'Apple Inc', and find the CIK number",
+      "target_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany"
+    },
+    "expected_behavior": "Navigate SEC EDGAR, search for company, extract CIK from results",
+    "difficulty": "normal",
+    "tags": ["form", "fill", "government", "extract"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_multi"]
+  },
+  {
+    "case_id": "t2_spa_navigation",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to the MDN Web Docs (developer.mozilla.org), search for 'fetch API', and extract the first sentence of the article description",
+      "target_url": "https://developer.mozilla.org"
+    },
+    "expected_behavior": "Handle SPA routing, search, extract content from documentation page",
+    "difficulty": "normal",
+    "tags": ["search", "spa", "extract", "documentation"],
+    "eval_dimensions": ["edge_case_spa", "domain_diversity"]
+  },
+  {
+    "case_id": "t2_table_extraction",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to the Wikipedia page for 'List of countries by GDP (nominal)' and extract the top 5 countries with their GDP values",
+      "target_url": "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)"
+    },
+    "expected_behavior": "Navigate to page with complex tables, extract structured data from table",
+    "difficulty": "hard",
+    "tags": ["extract", "table", "structured_data"],
+    "eval_dimensions": ["task_complexity_multi", "edge_case_complex_dom"]
   }
 ]

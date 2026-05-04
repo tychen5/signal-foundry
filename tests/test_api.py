@@ -92,7 +92,22 @@ class TestTask1Routes:
 class TestTask2Routes:
     """Test Browser Agent API routes."""
 
-    async def test_execute_task(self, client):
+    async def test_execute_task(self, client, monkeypatch):
+        from src.task2_browser.schemas import AgentResult
+
+        async def fake_run(self, **kwargs):
+            return AgentResult(
+                trace_id="test-123",
+                task_description="Search Wikipedia for AI",
+                target_url="https://www.wikipedia.org",
+                status="success",
+                total_steps=3,
+                final_answer="Artificial intelligence is...",
+                self_corrections=0,
+            )
+
+        monkeypatch.setattr("src.task2_browser.agent.BrowserAgent.run", fake_run)
+
         response = await client.post(
             "/api/v1/browser/execute",
             json={
@@ -103,6 +118,7 @@ class TestTask2Routes:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success"
+        assert data["result"]["total_steps"] == 3
 
 
 class TestTask3Routes:

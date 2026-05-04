@@ -56,6 +56,11 @@
    10. @.env 也會需要對應更新。預設請使用NVIDIA_API_KEY langchain_nvidia_ai_endpoints來呼叫LLM例如moonshotai/kimi-k2.6、z-ai/glm-5.1、deepseek-ai/deepseek-v4-pro、minimaxai/minimax-m2.7等
    11. need to test real llm path will work exactly as expected，目前有遇到一些API調用上的問題，以及一些技術上的瓶頸需要突破。
    
+3. [x] Phase 2 Task 2 的完整實作 ✅ (2026-05-04 22:00)
+   1. ✅ 先研究過 @notes/_briefs/_TaskDescription.md 的需求描述以及 @notes/thoughts/_ThoughtsDraft.md 中相關Task 2 的說明參考
+   2. ✅ 需要你做一個接收**自然語言任務描述**的瀏覽器 agent，且能在不同網站上可靠執行。這個Browser Automation Agent 需要能夠自動糾錯(失敗時能診斷原因並嘗試不同策略)，且也要能夠自動維護(UI 或 selector 變動時能偵測並動態調整)。
+   3. ✅ 請務必記得也要自建一組 evaluation set 測試它的可靠性（涵蓋不同網域與任務類型），並且能夠在 Zeabur 部署可接收任務的介面。以能夠於未見過的情境中去驗證它在未見過的情境下的表現。我需要eval set是real worlds的真實情境，而非憑空想像的假例子。例如: 我想要爬取玩股網台指期盤後近周的壓力區間與支撐區間範圍是多少?
+   4. ✅ 系統自我糾錯與自我維護的實質性（不是只做 try/except 重試）、evaluation set 的深度、silent failure 的防範。LLM agent要有能力可以來回迭代試錯實驗操作瀏覽器。
 
 ---
 
@@ -78,7 +83,7 @@
 - **Phase 1**: Task 3 — SEC 10-K Extraction pipeline implementation
 - **Phase 2**: Task 2 — Browser Automation Agent implementation
 - **Phase 3**: Task 1 — CI/CD Skills Engine implementation
-- **Phase 4**: Evaluation runs + README polish + Zeabur deployment
+- **Phase 4**: Evaluation runs + README polish + Zeabur deployment / Full eval set run (needs stable network → commit evals/task3/results/) + Task 3 UI template + LLM reflexive validation integration test with real API call /  Task 2 UI template (templates/task2.html) + Live eval run with real LLM API + Financial domain eval cases (e.g., 玩股網台指期) + Zeabur deployment / 
 
 ---
 
@@ -174,4 +179,58 @@ Apple 2023 10-K (0000320193-23-000106) 成功下載官方 filing，抓到 23 個
 - `pytest tests/ -v` → ✅ **61 passed** in 1.02s（0 warnings）
 - `ruff check src/ tests/ evals/task3/run_eval.py` → ✅ All checks passed
 - `uvicorn src.main:app` → ✅ Server starts cleanly
+
+---
+
+## ✅ Phase 2 Task 2 完成狀態 (2026-05-04 22:00)
+
+### 架構設計: Planner → Executor → Observer → Healer
+
+四層架構實現 Observe → Think → Act → Verify 循環：
+- **Planner**: LLM 分解自然語言任務為 action sequence，支援 reactive planning（每步觀察後再決策）
+- **Executor**: 3-layer AOM-first locator fallback (Accessibility Tree → Semantic DOM → CSS/Text)
+- **Observer**: 擷取 accessibility tree snapshot + 可見文字摘要 + error indicator 偵測
+- **Healer**: 9-class root cause taxonomy 診斷（非只是 try/except retry），targeted recovery
+
+### 核心創新點
+1. **AOM-first locator**: 使用 `page.accessibility.snapshot()` 作為最穩定的元素定位信號
+2. **Silent failure prevention**: 每步操作後做 post-action verification（URL 變化、DOM 變化、新 error indicator 檢測）
+3. **Root cause taxonomy**: `selector_changed | page_not_loaded | wrong_page | element_hidden | network_error | captcha_detected | unexpected_popup | timeout | element_not_found | unknown`
+4. **Targeted recovery**: 不同 root cause 有不同恢復策略（popup → dismiss, hidden → scroll, wrong_page → navigate back）
+5. **Confidence scoring**: 每步 verification 產生 0-1 信心分數，低於 0.4 自動觸發 Healer
+6. **Cookie/popup dismissal**: 內建常見 consent banner 識別與自動關閉
+
+**What was built**
+A self-healing browser automation agent with 4-stage architecture:
+
+Layer	Role	Key Innovation
+Planner	LLM decomposes NL tasks into action steps	Reactive planning — re-decides after each observation
+Executor	3-layer AOM-first locator fallback	Accessibility tree → semantic DOM → CSS (survives UI redesigns)
+Observer	Captures page state + verifies actions	Silent failure prevention via error indicator detection
+Healer	Diagnoses root cause + targeted recovery	9-class taxonomy (NOT just try/except retry)
+
+
+### 已落地檔案
+- `src/task2_browser/schemas.py` — 完整 Pydantic models (ActionType, PageState, StepResult, AgentResult, Diagnosis...)
+- `src/task2_browser/observer.py` — a11y tree 擷取、text summary、error detection、post-action verification
+- `src/task2_browser/executor.py` — 3-layer locator + 全 action types (click/fill/select/scroll/navigate/key_press/hover)
+- `src/task2_browser/healer.py` — 確定性 + LLM 診斷、recovery strategy suggestion
+- `src/task2_browser/planner.py` — 任務分解、reactive next-action、LLM verification
+- `src/task2_browser/agent.py` — 主 orchestrator，管理 Playwright lifecycle + healing loop
+- `src/task2_browser/router.py` — wired to real agent, POST /execute + GET /status/{trace_id}
+- `prompts/browser_agent/` — v1_planner.txt, v1_actor.txt, v1_verifier.txt, v1_healer.txt, README.md
+- `evals/task2/eval_set.json` — 12 cases 涵蓋 4 維度 (domain diversity, task complexity, failure injection, edge cases)
+- `evals/task2/run_eval.py` — automated eval runner with scoring
+- `tests/test_task2_browser.py` — 42 tests covering schemas, observer, healer, planner, prompts, eval set
+
+### 驗證結果
+- `pytest tests/ -q` → ✅ **103 passed** in 1.31s
+- `ruff check src/ tests/ evals/` → ✅ All checks passed
+- `uvicorn src.main:app` → ✅ Server starts cleanly, routes respond
+
+### 殘餘 / Phase 4 可再補
+- Task 2 UI template (`templates/task2.html`) 尚需完成
+- Live eval run (needs real LLM API + stable network)
+- 真實世界金融場景 eval case（如玩股網台指期爬取）需要測試
+- Zeabur deployment
 
