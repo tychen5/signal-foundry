@@ -53,6 +53,7 @@ class FailureType(str, Enum):
     LOGIC_ERROR = "logic_error"
     CAPTCHA = "captcha"
     SILENT_FAILURE = "silent_failure"
+    TOOL_ERROR = "tool_error"
 
     # Task 3 - SEC
     PARSING_ERROR = "parsing_error"
