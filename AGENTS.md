@@ -7,6 +7,7 @@ Signal-Foundry is a monorepo containing three AI systems demonstrating evaluatio
 2. **Task 2 (Browser Agent)**: Self-healing browser automation with natural language input
 3. **Task 3 (SEC 10-K)**: Hybrid rule+LLM pipeline for structured extraction from SEC filings
 細節目標與詳細需求說明可以參考 @notes/_briefs/_TaskDescription.md
+實作時的一些細節與參考注意事項可以參閱 @notes/thoughts/_ThoughtsDraft.md
 
 ## Repository Layout
 

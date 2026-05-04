@@ -1,0 +1,279 @@
+"""
+LLM Boundary Refiner for SEC 10-K Filings (Stage 2).
+
+Only invoked for low-confidence boundaries detected by rule_parser.
+Uses LLM with ±500 char context window around uncertain boundaries.
+Cost-aware: uses cheaper model first, only escalates when needed.
+
+Prompts are loaded from prompts/sec_extraction/ (versioned files).
+See prompts/sec_extraction/README.md for iteration history.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from typing import Optional
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from src.llm_provider import get_llm
+from src.shared.cost_tracker import get_cost_tracker
+from src.shared.logger import get_logger
+from src.task3_sec.rule_parser import ItemBoundary, ParseResult
+from src.task3_sec.schemas import STANDARD_10K_ITEMS, ExtractionMethod
+
+logger = get_logger("llm_refiner")
+cost_tracker = get_cost_tracker()
+
+# --- Prompt loading from versioned files ---
+_PROMPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "prompts", "sec_extraction",
+)
+
+
+def _load_prompt(filename: str, fallback: str = "") -> str:
+    """Load a prompt from the versioned prompts directory."""
+    filepath = os.path.join(_PROMPTS_DIR, filename)
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        logger.warning("prompt_file_not_found", file=filename, using="fallback")
+        return fallback
+
+
+# Load versioned prompts (v2 — context-window approach)
+BOUNDARY_REFINE_PROMPT = _load_prompt("v2_boundary_refine.txt")
+MISSING_ITEM_PROMPT = _load_prompt("v2_missing_item_detect.txt")
+
+
+async def refine_boundaries(
+    text: str,
+    parse_result: ParseResult,
+    model_name: Optional[str] = None,
+    user_api_key: Optional[str] = None,
+    confidence_threshold: float = 0.7,
+    trace_id: str = "",
+) -> ParseResult:
+    """
+    Stage 2: LLM-based boundary refinement.
+
+    Only processes boundaries with confidence below threshold.
+    Uses ±500 char context windows to minimize token usage.
+
+    Args:
+        text: Full normalized text
+        parse_result: Result from rule_based_parse
+        model_name: LLM model to use
+        user_api_key: User's API key (optional)
+        confidence_threshold: Only refine boundaries below this score
+
+    Returns:
+        Updated ParseResult with refined boundaries
+    """
+    low_confidence = [
+        b for b in parse_result.boundaries
+        if b.confidence < confidence_threshold
+    ]
+
+    if not low_confidence:
+        logger.info("no_refinement_needed", all_above_threshold=confidence_threshold)
+        return parse_result
+
+    logger.info(
+        "refining_boundaries",
+        total=len(parse_result.boundaries),
+        low_confidence=len(low_confidence),
+        threshold=confidence_threshold,
+    )
+
+    # Use cheaper model for refinement when possible
+    refine_model = model_name or "deepseek-ai/deepseek-v4-pro"
+    llm = get_llm(model_name=refine_model, user_openrouter_key=user_api_key, temperature=0.0)
+
+    refined_boundaries = list(parse_result.boundaries)  # Copy
+
+    for boundary in low_confidence:
+        try:
+            refined = await _refine_single_boundary(
+                text, boundary, llm, refine_model, trace_id
+            )
+            if refined:
+                # Replace the boundary in the list
+                for i, b in enumerate(refined_boundaries):
+                    if b.item_number == boundary.item_number and b.start_pos == boundary.start_pos:
+                        refined_boundaries[i] = refined
+                        break
+        except Exception as e:
+            logger.warning(
+                "refinement_failed",
+                item=boundary.item_number,
+                error=str(e),
+            )
+
+    # Check for missing items
+    await _detect_missing_items(
+        text, refined_boundaries, llm, refine_model, user_api_key, trace_id
+    )
+
+    # Re-sort and update end positions
+    refined_boundaries.sort(key=lambda b: b.start_pos)
+    for i, b in enumerate(refined_boundaries):
+        if i + 1 < len(refined_boundaries):
+            b.end_pos = refined_boundaries[i + 1].start_pos
+        else:
+            b.end_pos = len(text)
+
+    avg_conf = (
+        sum(b.confidence for b in refined_boundaries) / len(refined_boundaries)
+        if refined_boundaries else 0.0
+    )
+
+    return ParseResult(
+        boundaries=refined_boundaries,
+        part_boundaries=parse_result.part_boundaries,
+        total_chars=parse_result.total_chars,
+        items_found=len(refined_boundaries),
+        confidence_avg=avg_conf,
+    )
+
+
+async def _refine_single_boundary(
+    text: str,
+    boundary: ItemBoundary,
+    llm,
+    model_name: str,
+    trace_id: str,
+) -> Optional[ItemBoundary]:
+    """Refine a single boundary using LLM with ±500 char context."""
+    # Extract context window
+    ctx_start = max(0, boundary.start_pos - 200)
+    ctx_end = min(len(text), boundary.start_pos + 800)
+    context = text[ctx_start:ctx_end]
+
+    start_time = time.time()
+
+    messages = [
+        SystemMessage(content=BOUNDARY_REFINE_PROMPT),
+        HumanMessage(content=f"Text snippet (position {ctx_start} to {ctx_end}):\n---\n{context}\n---"),
+    ]
+
+    response = await llm.ainvoke(messages)
+    latency_ms = (time.time() - start_time) * 1000
+
+    # Track cost
+    tokens_in = len(BOUNDARY_REFINE_PROMPT + context) // 4  # Rough estimate
+    tokens_out = len(response.content) // 4
+    cost_tracker.record_call(
+        model=model_name,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        latency_ms=latency_ms,
+        task="task3_sec",
+        operation="boundary_refine",
+        trace_id=trace_id,
+    )
+
+    # Parse LLM response
+    try:
+        # Clean JSON from potential markdown wrapping
+        content = response.content.strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[-1].rsplit("```", 1)[0]
+
+        result = json.loads(content)
+
+        if result.get("is_item_heading", False):
+            return ItemBoundary(
+                item_number=result.get("item_number", boundary.item_number).upper(),
+                start_pos=ctx_start + result.get("content_start_offset", boundary.start_pos - ctx_start),
+                heading_text=result.get("item_title", boundary.heading_text),
+                confidence=result.get("confidence", 0.8),
+                source="llm_refined",
+            )
+    except (json.JSONDecodeError, KeyError) as e:
+        logger.warning("llm_parse_failed", error=str(e), raw=response.content[:200])
+
+    return None
+
+
+async def _detect_missing_items(
+    text: str,
+    boundaries: list[ItemBoundary],
+    llm,
+    model_name: str,
+    user_api_key: Optional[str],
+    trace_id: str,
+) -> None:
+    """Check for items that might have been missed between known boundaries."""
+    # Get set of found items
+    found_items = {b.item_number for b in boundaries}
+    expected_items = {item["item_number"] for item in STANDARD_10K_ITEMS}
+    missing = expected_items - found_items
+
+    if not missing:
+        return
+
+    logger.info("checking_missing_items", missing=sorted(missing))
+
+    # For each gap between found items, check if missing items fall there
+    # Only check gaps where missing items are expected by number ordering
+    for i in range(len(boundaries) - 1):
+        curr = boundaries[i]
+        next_b = boundaries[i + 1]
+
+        # Check if any missing items should be between these two
+        curr_num = curr.item_number
+        next_num = next_b.item_number
+
+        gap_text = text[curr.start_pos:next_b.start_pos]
+
+        # Only use LLM for large gaps that might contain items
+        if len(gap_text) > 2000:
+            # Use a smaller context window for efficiency
+            sample = gap_text[:3000]
+
+            try:
+                prompt = MISSING_ITEM_PROMPT.format(
+                    prev_item=curr_num,
+                    next_item=next_num,
+                    text_section=sample,
+                )
+
+                start_time = time.time()
+                messages = [HumanMessage(content=prompt)]
+                response = await llm.ainvoke(messages)
+                latency_ms = (time.time() - start_time) * 1000
+
+                tokens_in = len(prompt) // 4
+                tokens_out = len(response.content) // 4
+                cost_tracker.record_call(
+                    model=model_name,
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
+                    latency_ms=latency_ms,
+                    task="task3_sec",
+                    operation="missing_item_detect",
+                    trace_id=trace_id,
+                )
+
+                content = response.content.strip()
+                if content.startswith("```"):
+                    content = content.split("\n", 1)[-1].rsplit("```", 1)[0]
+
+                items_found = json.loads(content)
+                if isinstance(items_found, list):
+                    for item in items_found:
+                        new_boundary = ItemBoundary(
+                            item_number=item["item_number"].upper(),
+                            start_pos=curr.start_pos + item.get("offset_in_text", 0),
+                            heading_text=item.get("item_title", ""),
+                            confidence=item.get("confidence", 0.7),
+                            source="llm_missing_detect",
+                        )
+                        boundaries.append(new_boundary)
+            except Exception as e:
+                logger.warning("missing_detect_failed", error=str(e))

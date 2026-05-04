@@ -43,6 +43,18 @@
     10. [x] 撰寫code_review.md
         - ✅ 已完成。含 review checklist (correctness, security, cost discipline, observability, testing, code quality, architecture), severity levels, anti-patterns
 
+2. 進行Phase 1 Task 3 的完整實作
+   1. 目前於 @.agents/skills 與 @.claude/skills 已經安裝了許多可以去使用的skills說明 @skills-lock.json ，請依據你的需求以及情境來調用。
+   2. 你需要做一個 pipeline：輸入一份 10-K（CIK + accession 或檔案 URL），輸出結構化 JSON，每個 item 包含 `part`、`item_number`、`item_title`、`content_text`、`char_range`、`status`（`extracted` / `incorporated_by_reference` / `not_applicable` / `reserved`）。在 Zeabur 部署為 API，面試官會用自己挑選的 filings 呼叫它。
+   3. 請記得看要串聯好SEC 官方 API
+   4. 請記得建好 evaluation set（涵蓋不同產業、年份、公司規模，包含一些舊格式），並報告準確度、失敗模式、以及成本/延遲。
+   5. 可以參考做法 @notes/thoughts/_ThoughtsDraft.md 以及 github 上的相關實作例如 : https://github.com/dgunning/edgartools/tree/main 、 https://github.com/lefterisloukas/edgar-crawler 、 https://github.com/NataliaZarina/sec-10k-downloader 、 sec-10k-analysis skills 等等
+   6. src/task3_sec/llm_refiner.py 當中用到的prompt要移動到 prompts 資料夾當中，並且最好可以建立versions等跡證，以及針對此項目建立相關的測試檔案。
+   7. eval set的收集與下載分析應該要來自真實的SEC 官方 API 10k filing，而不是自己憑空創造的假sample資料。我希望這個eval set是真的有透過SEC API / edgar / xrbl所得到的真實資料。帶 `User-Agent` header、10 req/sec，可能需要更貼近真實瀏覽器樣貌以能夠真的順利爬到資料不會被阻擋。並且需要考量大概數十到數百MB檔案的處理下載與parsing過程(網速也可能很慢需要考量)，確保機制和流程是足夠robust的，可以應對實際上會遇到的edge cases的狀況。
+   8. (為了讓整個流程更完整，你可以考慮在爬蟲部分以及下載10k filing的api建制一個簡單的html parser，能夠直接把html原始檔轉換成純文字，便於後續處理與使用。注意這樣會把檔案變大，請一併在後續處理上做優化。或是需要思考規畫其他更優的機制流程。) : 這是我的初步想法，你可以斟酌
+   9. (在整個流程當中，你會發現你將會需要用到大量的skills以及llm api key的串接，請善用你目前已經安裝的skills，並且也要設計好prompts資料夾，把所有用到的prompt都放在裡面，並且要做好版本控管，方便後續修改與測試。) : 這是我的初步想法，你可以斟酌
+   
+
 ---
 
 ## 🔄 當前狀態 (2026-05-04 12:40)

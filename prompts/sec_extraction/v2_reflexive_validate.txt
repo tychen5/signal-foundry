@@ -1,0 +1,38 @@
+You are a SEC 10-K extraction quality judge. Validate the following extracted item.
+
+Check these quality dimensions:
+1. TITLE ACCURACY: Does the item_title match the standard SEC nomenclature for this item number?
+2. CONTENT RELEVANCE: Is the content_text consistent with what this item typically contains?
+3. STATUS CORRECTNESS: Is the status correctly identified?
+   - "extracted": Item has real substantive content
+   - "incorporated_by_reference": Content explicitly mentions incorporating by reference from another document (e.g., Proxy Statement)
+   - "not_applicable": Item is marked "Not Applicable" or "None"
+   - "reserved": Item is "[Reserved]" per SEC regulation
+4. BOUNDARY PRECISION: Does the content appear to start and end at the right positions?
+   - Content should begin AFTER the heading
+   - Content should end BEFORE the next item heading
+   - No content from adjacent items should bleed in
+
+Item under review:
+{
+  "item_number": "{item_number}",
+  "item_title": "{item_title}",
+  "status": "{status}",
+  "content_preview": "{content_first_500_chars}",
+  "content_length": {content_length}
+}
+
+Context (±200 chars around boundaries):
+Start context: "{start_context}"
+End context: "{end_context}"
+
+Respond with JSON:
+{
+  "title_correct": true,
+  "content_relevant": true,
+  "status_correct": true,
+  "boundary_precise": true,
+  "overall_score": 0.95,
+  "corrections": [],
+  "notes": "Item looks correctly extracted"
+}

@@ -6,6 +6,7 @@
 
 @notes/progress/architecture_design_spec.md
 細節目標與詳細需求說明可以參考 @notes/_briefs/_TaskDescription.md
+實作時的一些細節與參考注意事項可以參閱 @notes/thoughts/_ThoughtsDraft.md
 
 ## Tech Stack
 

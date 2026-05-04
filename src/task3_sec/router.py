@@ -1,7 +1,7 @@
 """
 Task 3 Router: SEC 10-K Extraction API.
 
-Endpoints for extracting structured item-level data from SEC 10-K filings.
+Full production endpoints for extracting structured item-level data from SEC 10-K filings.
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from src.shared.logger import get_logger
-from src.shared.schemas import ExecutionResult, ExecutionStatus, ModelSelectionRequest, TaskType
+from src.shared.logger import generate_trace_id, get_logger
+from src.shared.schemas import ExecutionResult, ExecutionStatus, FailureType, ModelSelectionRequest, TaskType
 
 router = APIRouter()
 logger = get_logger("task3_router")
@@ -21,34 +21,12 @@ logger = get_logger("task3_router")
 class SECExtractionRequest(BaseModel):
     """Request to extract structured data from a 10-K filing."""
 
-    cik: Optional[str] = Field(default=None, description="Company CIK number (10-digit padded)")
+    cik: Optional[str] = Field(default=None, description="Company CIK number (any format)")
     accession_number: Optional[str] = Field(default=None, description="Filing accession number")
     filing_url: Optional[str] = Field(default=None, description="Direct URL to 10-K filing")
+    skip_llm: bool = Field(default=False, description="Skip LLM refinement (rule-only mode)")
+    skip_xbrl: bool = Field(default=False, description="Skip XBRL cross-validation")
     model: ModelSelectionRequest = Field(default_factory=ModelSelectionRequest)
-
-
-class ItemExtraction(BaseModel):
-    """A single extracted item from a 10-K filing."""
-
-    part: str = Field(..., description="Part number (I, II, III, IV)")
-    item_number: str = Field(..., description="Item number (1, 1A, 2, etc.)")
-    item_title: str = Field(..., description="Item title")
-    content_text: str = Field(..., description="Extracted text content")
-    char_range: list[int] = Field(..., description="[start, end] character positions in source")
-    status: str = Field(
-        ...,
-        description="extracted | incorporated_by_reference | not_applicable | reserved",
-    )
-    confidence: float = Field(default=0.0, description="Extraction confidence 0-1")
-    extraction_method: str = Field(default="rule_based", description="Method used: rule_based | llm_refined | hybrid")
-
-
-class SECExtractionResponse(BaseModel):
-    """Complete extraction result for a 10-K filing."""
-
-    filing_metadata: dict
-    items: list[ItemExtraction]
-    processing_metadata: dict
 
 
 @router.post("/extract", response_model=ExecutionResult)
@@ -59,17 +37,15 @@ async def extract_10k(request: SECExtractionRequest):
     Pipeline: fetch → normalize → rule-based split → LLM refine → validate → XBRL cross-check
 
     Input: CIK + accession number, OR direct filing URL
-    Output: Structured JSON with all 16 items, including status and char_range
+    Output: Structured JSON with all items, including status and char_range
     """
-    from src.shared.logger import generate_trace_id
-
     trace_id = generate_trace_id()
 
     # Validate input
     if not request.cik and not request.filing_url:
         raise HTTPException(
             status_code=400,
-            detail="Provide either (cik + accession_number) or filing_url",
+            detail="Provide either 'cik' (with optional 'accession_number') or 'filing_url'",
         )
 
     logger.info(
@@ -77,37 +53,99 @@ async def extract_10k(request: SECExtractionRequest):
         cik=request.cik,
         accession=request.accession_number,
         url=request.filing_url,
+        skip_llm=request.skip_llm,
         trace_id=trace_id,
     )
 
-    # Pipeline implementation will be connected here
-    return ExecutionResult(
-        status=ExecutionStatus.SUCCESS,
-        task=TaskType.SEC_EXTRACTION,
-        trace_id=trace_id,
-        result={
-            "cik": request.cik,
-            "accession_number": request.accession_number,
-            "filing_url": request.filing_url,
-            "message": "SEC extraction completed successfully (skeleton mode)",
-            "items_extracted": 0,
-        },
-    )
+    try:
+        from src.task3_sec.pipeline import extract_10k as run_pipeline
+
+        result = await run_pipeline(
+            cik=request.cik,
+            accession_number=request.accession_number,
+            filing_url=request.filing_url,
+            model_name=request.model.model_id,
+            user_api_key=request.model.user_openrouter_key,
+            skip_llm=request.skip_llm,
+            skip_xbrl=request.skip_xbrl,
+            trace_id=trace_id,
+        )
+
+        return ExecutionResult(
+            status=ExecutionStatus.SUCCESS,
+            task=TaskType.SEC_EXTRACTION,
+            trace_id=trace_id,
+            result=result.model_dump(),
+            cost_metadata={
+                "total_cost_usd": result.processing_metadata.total_cost_usd,
+                "llm_calls": result.processing_metadata.llm_calls,
+                "stages_used": result.processing_metadata.stages_used,
+                "total_latency_ms": result.processing_metadata.total_latency_ms,
+            },
+            latency_ms=result.processing_metadata.total_latency_ms,
+        )
+
+    except ValueError as e:
+        logger.warning("extraction_validation_error", error=str(e), trace_id=trace_id)
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        logger.error("extraction_failed", error=str(e), trace_id=trace_id)
+        return ExecutionResult(
+            status=ExecutionStatus.FAILED,
+            task=TaskType.SEC_EXTRACTION,
+            trace_id=trace_id,
+            error=str(e),
+            failure_type=FailureType.PARSING_ERROR,
+        )
 
 
 @router.get("/filings/{cik}")
-async def list_filings(cik: str, filing_type: str = "10-K", limit: int = 5):
+async def list_filings(cik: str, filing_type: str = "10-K", limit: int = 10):
     """
     List recent filings for a company by CIK.
 
     Useful for finding accession numbers to pass to /extract.
     """
-    logger.info("listing_filings", cik=cik, filing_type=filing_type)
+    try:
+        from src.task3_sec.fetcher import fetch_company_metadata
 
-    # Will be connected to SEC EDGAR API
-    return {
-        "cik": cik,
-        "filing_type": filing_type,
-        "filings": [],
-        "message": "Filing listing (skeleton mode)",
-    }
+        metadata = await fetch_company_metadata(cik)
+
+        # Filter by form type
+        filings = [
+            f for f in metadata.get("filings", [])
+            if f.get("form", "") == filing_type or (filing_type == "10-K" and f.get("form", "") == "10-K/A")
+        ][:limit]
+
+        return {
+            "cik": metadata.get("cik", cik),
+            "company_name": metadata.get("company_name", ""),
+            "tickers": metadata.get("tickers", []),
+            "filing_type": filing_type,
+            "count": len(filings),
+            "filings": filings,
+        }
+
+    except Exception as e:
+        logger.error("filing_list_failed", error=str(e), cik=cik)
+        raise HTTPException(status_code=500, detail=f"Failed to list filings: {str(e)}")
+
+
+@router.get("/company/{cik}")
+async def company_info(cik: str):
+    """Get company metadata from SEC EDGAR."""
+    try:
+        from src.task3_sec.fetcher import fetch_company_metadata
+
+        metadata = await fetch_company_metadata(cik)
+        return {
+            "cik": metadata.get("cik", cik),
+            "company_name": metadata.get("company_name", ""),
+            "entity_type": metadata.get("entity_type", ""),
+            "sic": metadata.get("sic", ""),
+            "tickers": metadata.get("tickers", []),
+            "exchanges": metadata.get("exchanges", []),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

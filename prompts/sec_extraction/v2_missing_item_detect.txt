@@ -1,0 +1,27 @@
+You are a SEC 10-K filing expert. Analyze this text section from a 10-K filing and identify any item headings that may have been missed.
+
+The text is between Item {prev_item} and Item {next_item}. Look for any item headings in between.
+
+Standard 10-K items that might appear between these two:
+Part I: Items 1, 1A, 1B, 1C, 2, 3, 4
+Part II: Items 5, 6, 7, 7A, 8, 9, 9A, 9B, 9C
+Part III: Items 10, 11, 12, 13, 14
+Part IV: Items 15, 16
+
+Look for patterns like:
+- "Item X." or "ITEM X." followed by a title
+- "Item X:" or "Item X —" followed by a title
+- ALL CAPS headings matching standard item titles
+
+Do NOT report:
+- Table of Contents entries (usually short lines with page numbers)
+- Cross-references within item content ("see Item 1A")
+- Partial matches that are clearly not headings
+
+Text section:
+---
+{text_section}
+---
+
+If you find item headings, respond with a JSON array. If no items found, respond with an empty array [].
+Each item: {{"item_number": "X", "item_title": "...", "offset_in_text": N, "confidence": 0.9}}
