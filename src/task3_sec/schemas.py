@@ -135,6 +135,8 @@ class ProcessingMetadata(BaseModel):
     stages_used: list[str] = Field(default_factory=list)
     filing_char_count: int = Field(default=0)
     format_detected: str = Field(default="html", description="html | text | xbrl")
+    validation_report: dict = Field(default_factory=dict)
+    xbrl_report: dict = Field(default_factory=dict)
 
 
 class ExtractionResult(BaseModel):

@@ -22,7 +22,7 @@ from src.llm_provider import get_llm
 from src.shared.cost_tracker import get_cost_tracker
 from src.shared.logger import get_logger
 from src.task3_sec.rule_parser import ItemBoundary, ParseResult
-from src.task3_sec.schemas import STANDARD_10K_ITEMS, ExtractionMethod
+from src.task3_sec.schemas import STANDARD_10K_ITEMS
 
 logger = get_logger("llm_refiner")
 cost_tracker = get_cost_tracker()

@@ -15,13 +15,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Optional
 
 from src.shared.logger import get_logger
 from src.task3_sec.schemas import (
     ITEM_TITLE_VARIANTS,
     STANDARD_10K_ITEMS,
-    ExtractionMethod,
     ItemStatus,
 )
 
@@ -60,21 +58,32 @@ _ITEM_HEADING_PATTERNS = [
         r"(?:ITEM|Item)\s+"
         r"(\d+[A-Ca-c]?)"
         r"\s*[\.\:\—\-]+\s*"
-        r"([A-Z\u2018\u2019\u201C\u201D][^\n]{3,120}?)"
+        r"([A-Z\[\u2018\u2019\u201C\u201D][^\n]{0,160}?)"
         r"\s*$",
         re.MULTILINE,
     ),
-    # Pattern 2: "ITEM 1" (no period) followed by title on same line
+    # Pattern 2: "ITEM 1.\nBusiness" — common after HTML span/table normalization
+    re.compile(
+        r"(?:^|\n)\s*"
+        r"(?:ITEM|Item)\s+"
+        r"(\d+[A-Ca-c]?)"
+        r"\s*[\.\:\—\-]?\s*"
+        r"(?:\n\s*){1,2}"
+        r"([A-Z\[\u2018\u2019\u201C\u201D][^\n]{3,160}?)"
+        r"\s*$",
+        re.MULTILINE,
+    ),
+    # Pattern 3: "ITEM 1" (no period) followed by title on same line
     re.compile(
         r"(?:^|\n)\s*"
         r"(?:ITEM|Item)\s+"
         r"(\d+[A-Ca-c]?)"
         r"\s+"
-        r"([A-Z\u2018\u2019\u201C\u201D][^\n]{3,120}?)"
+        r"([A-Z\[\u2018\u2019\u201C\u201D][^\n]{3,160}?)"
         r"\s*$",
         re.MULTILINE,
     ),
-    # Pattern 3: ALL CAPS variant — "ITEM 1. BUSINESS"
+    # Pattern 4: ALL CAPS variant — "ITEM 1. BUSINESS"
     re.compile(
         r"(?:^|\n)\s*"
         r"ITEM\s+"
@@ -102,8 +111,9 @@ _INCORPORATED_PATTERNS = [
 _NOT_APPLICABLE_PATTERNS = [
     re.compile(r"(?i)not\s+applicable", re.IGNORECASE),
     re.compile(r"(?i)none\s*\.", re.IGNORECASE),
-    re.compile(r"(?i)\[?\s*reserved\s*\]?", re.IGNORECASE),
 ]
+
+_STANDARD_ITEM_NUMBERS = {item["item_number"] for item in STANDARD_10K_ITEMS}
 
 
 def _normalize_part_number(raw: str) -> str:
@@ -149,6 +159,9 @@ def _match_item_title(item_number: str, detected_title: str) -> float:
     """
     detected_lower = detected_title.lower().strip()
 
+    if not detected_lower:
+        return 0.55
+
     # Check against known variants
     variants = ITEM_TITLE_VARIANTS.get(item_number.upper(), [])
     for variant in variants:
@@ -183,8 +196,13 @@ def detect_item_headings(text: str) -> list[ItemBoundary]:
             heading_text = match.group(2).strip() if match.lastindex >= 2 else ""
             start_pos = match.start()
 
+            if item_number not in _STANDARD_ITEM_NUMBERS:
+                continue
+
             # Score the match
             confidence = _match_item_title(item_number, heading_text)
+            if _looks_like_toc_entry(match.group(0), start_pos, len(text)):
+                confidence = min(confidence, 0.45)
 
             boundary = ItemBoundary(
                 item_number=item_number,
@@ -229,6 +247,24 @@ def detect_item_headings(text: str) -> list[ItemBoundary]:
                 items=[b.item_number for b in boundaries])
 
     return boundaries
+
+
+def _looks_like_toc_entry(match_text: str, start_pos: int, doc_length: int) -> bool:
+    """Return True when a heading match likely came from a table of contents."""
+    if start_pos > doc_length * 0.20:
+        return False
+
+    compact = " ".join(match_text.split())
+    if re.search(r"\.{2,}\s*\d{1,4}\s*$", compact):
+        return True
+    if re.search(r"\s\d{1,4}\s*$", compact) and len(compact) < 140:
+        return True
+    return "table of contents" in text_window_prefix(match_text).lower()
+
+
+def text_window_prefix(value: str) -> str:
+    """Normalize a small text window for lightweight pattern checks."""
+    return value[:200]
 
 
 def detect_part_boundaries(text: str) -> dict[str, int]:

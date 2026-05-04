@@ -81,6 +81,8 @@ async def extract_10k(request: SECExtractionRequest):
                 "llm_calls": result.processing_metadata.llm_calls,
                 "stages_used": result.processing_metadata.stages_used,
                 "total_latency_ms": result.processing_metadata.total_latency_ms,
+                "validation_overall_valid": result.processing_metadata.validation_report.get("overall_valid"),
+                "xbrl_status": result.processing_metadata.xbrl_report.get("status"),
             },
             latency_ms=result.processing_metadata.total_latency_ms,
         )

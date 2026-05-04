@@ -6,8 +6,6 @@ Endpoints for running GitHub CI/CD skills against repositories.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 

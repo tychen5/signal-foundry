@@ -21,21 +21,20 @@ from src.task3_sec.fetcher import (
     fetch_filing_content,
     find_10k_filing,
     find_proxy_statement,
-    normalize_cik,
+    parse_filing_url_metadata,
 )
 from src.task3_sec.llm_refiner import refine_boundaries
 from src.task3_sec.normalizer import normalize_filing
 from src.task3_sec.rule_parser import (
-    ItemBoundary,
     ParseResult,
     detect_item_status,
     rule_based_parse,
 )
 from src.task3_sec.schemas import (
     STANDARD_10K_ITEMS,
+    ExtractedItem,
     ExtractionMethod,
     ExtractionResult,
-    ExtractedItem,
     FilingMetadata,
     ItemStatus,
     ProcessingMetadata,
@@ -80,10 +79,6 @@ async def extract_10k(
 
     pipeline_start = time.time()
     stages_used: list[str] = []
-    llm_calls = 0
-    total_tokens_in = 0
-    total_tokens_out = 0
-
     logger.info(
         "pipeline_start",
         cik=cik,
@@ -95,12 +90,14 @@ async def extract_10k(
     # ========== FETCH FILING ==========
     if filing_url:
         # Direct URL provided
+        parsed_url_metadata = parse_filing_url_metadata(filing_url)
         filing_info = {
-            "cik": cik or "",
+            "cik": cik or parsed_url_metadata.get("cik", ""),
             "company_name": "",
-            "accession_number": accession_number or "",
+            "accession_number": accession_number or parsed_url_metadata.get("accession_number", ""),
             "filing_date": "",
             "filing_url": filing_url,
+            "primary_document": parsed_url_metadata.get("primary_document", ""),
             "form_type": "10-K",
         }
         raw_content = await fetch_filing_content(filing_url)
@@ -152,12 +149,13 @@ async def extract_10k(
             stages_used.append("llm_refine")
 
             cost_after = cost_tracker.get_session_summary()
-            llm_calls += cost_after["total_calls"] - cost_before["total_calls"]
+            calls_added = cost_after["total_calls"] - cost_before["total_calls"]
 
             logger.info(
                 "stage2_complete",
                 items_found=parse_result.items_found,
                 avg_confidence=round(parse_result.confidence_avg, 3),
+                llm_calls_added=calls_added,
                 duration_ms=round((time.time() - stage2_start) * 1000, 1),
             )
         except Exception as e:
@@ -228,6 +226,8 @@ async def extract_10k(
         stages_used=stages_used,
         filing_char_count=len(normalized_text),
         format_detected=format_type,
+        validation_report=validation_report,
+        xbrl_report=xbrl_report,
     )
 
     logger.info(

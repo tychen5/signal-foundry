@@ -6,85 +6,161 @@
       "cik": "0000320193",
       "accession_number": "0000320193-23-000106"
     },
-    "expected_behavior": "Modern HTML, clean anchors. All 16 items extracted. Part III likely incorporated by reference.",
+    "expected_behavior": "Modern inline-XBRL HTML. Most standard items should extract; Part III commonly incorporates proxy statement material by reference.",
     "difficulty": "normal",
-    "tags": ["large_cap", "tech", "modern", "html"]
+    "tags": ["large_cap", "tech", "modern_html", "inline_xbrl", "incorporated"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000320193.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/320193/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 18,
+      "expected_status_items": {
+        "10": "incorporated_by_reference",
+        "11": "incorporated_by_reference",
+        "12": "incorporated_by_reference"
+      }
+    }
   },
   {
     "case_id": "t3_microsoft_2023",
     "task": "task3_sec",
     "input_data": {
       "cik": "0000789019",
-      "accession_number": "0000789019-23-000069"
+      "accession_number": "0000950170-23-035122"
     },
-    "expected_behavior": "Clean modern filing. Should extract all items with high confidence.",
+    "expected_behavior": "Clean large-cap technology filing with predictable item headings and long Item 1A/7/8 sections.",
     "difficulty": "normal",
-    "tags": ["large_cap", "tech", "modern"]
+    "tags": ["large_cap", "tech", "modern_html", "long_sections"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000789019.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/789019/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 18,
+      "required_items": ["1", "1A", "7", "8", "15"]
+    }
   },
   {
-    "case_id": "t3_jpmorgan_2023",
+    "case_id": "t3_jpmorgan_2025",
     "task": "task3_sec",
     "input_data": {
       "cik": "0000019617",
-      "accession_number": "0000019617-24-000021"
+      "accession_number": "0001628280-26-008131"
     },
-    "expected_behavior": "Financial company — different item patterns, heavy Part III incorporation.",
+    "expected_behavior": "Financial institution filing with dense Item 7/7A/8 content and proxy incorporation in Part III.",
     "difficulty": "normal",
-    "tags": ["large_cap", "finance", "incorporated"]
+    "tags": ["large_cap", "finance", "modern_html", "dense_tables", "incorporated"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000019617.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/19617/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 17,
+      "required_items": ["1", "1A", "7", "7A", "8", "15"]
+    }
   },
   {
     "case_id": "t3_exxon_2023",
     "task": "task3_sec",
     "input_data": {
       "cik": "0000034088",
-      "accession_number": "0000034088-24-000012"
+      "accession_number": "0000034088-24-000018"
     },
-    "expected_behavior": "Energy sector — different risk factors, environmental disclosures.",
+    "expected_behavior": "Energy-sector filing with environmental and reserve-related disclosures; validates industry variation.",
     "difficulty": "normal",
-    "tags": ["large_cap", "energy"]
+    "tags": ["large_cap", "energy", "modern_html", "industry_specific"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000034088.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/34088/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 17,
+      "required_items": ["1", "1A", "2", "7", "8"]
+    }
   },
   {
     "case_id": "t3_tesla_2023",
     "task": "task3_sec",
     "input_data": {
       "cik": "0001318605",
-      "accession_number": "0001318605-24-000006"
+      "accession_number": "0001628280-24-002390"
     },
-    "expected_behavior": "Modern filing with clean structure. All items should extract cleanly.",
+    "expected_behavior": "Modern filing with high public-company formatting consistency; useful latency/cost baseline.",
     "difficulty": "normal",
-    "tags": ["large_cap", "auto", "tech"]
+    "tags": ["large_cap", "auto", "tech", "modern_html"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001318605.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1318605/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 18,
+      "required_items": ["1", "1A", "7", "8", "15"]
+    }
   },
   {
-    "case_id": "t3_small_company",
+    "case_id": "t3_small_company_2024",
     "task": "task3_sec",
     "input_data": {
       "cik": "0001411579",
-      "accession_number": "0001411579-24-000015"
+      "accession_number": "0001411579-24-000021"
     },
-    "expected_behavior": "Smaller company — potentially messier formatting, different structure.",
+    "expected_behavior": "Smaller-company filing with higher formatting risk; expected to expose missing sections, short items, or non-standard headings.",
     "difficulty": "hard",
-    "tags": ["small_cap", "messy_format"]
+    "tags": ["small_cap", "messy_format", "edge_case"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001411579.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1411579/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 12,
+      "allow_missing_recent_items": ["1C", "9C", "16"]
+    }
   },
   {
-    "case_id": "t3_old_filing_2005",
+    "case_id": "t3_apple_2005_old_format",
     "task": "task3_sec",
     "input_data": {
       "cik": "0000320193",
-      "accession_number": "0000320193-05-000014"
+      "accession_number": "0001104659-05-058421"
     },
-    "expected_behavior": "Old Apple filing — may be plain text or minimal HTML. Tests format detection.",
+    "expected_behavior": "Older Apple filing. Exercises pre-inline-XBRL HTML/plain-text normalization and SGML fallback behavior.",
     "difficulty": "edge_case",
-    "tags": ["old_format", "text", "apple"]
+    "tags": ["old_format", "pre_inline_xbrl", "legacy_html", "apple"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000320193.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/320193/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 10,
+      "allow_missing_recent_items": ["1C", "9C"]
+    }
   },
   {
-    "case_id": "t3_healthcare",
+    "case_id": "t3_pfizer_2023_healthcare",
     "task": "task3_sec",
     "input_data": {
       "cik": "0000078003",
-      "accession_number": "0000078003-24-000007"
+      "accession_number": "0000078003-24-000039"
     },
-    "expected_behavior": "Healthcare company — FDA-related risk factors, different item content patterns.",
+    "expected_behavior": "Healthcare/pharmaceutical filing with FDA, patent, product-liability, and clinical risk language.",
     "difficulty": "normal",
-    "tags": ["large_cap", "healthcare"]
+    "tags": ["large_cap", "healthcare", "pharma", "industry_specific"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000078003.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/78003/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 17,
+      "required_items": ["1", "1A", "7", "8", "15"]
+    }
   }
 ]

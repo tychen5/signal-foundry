@@ -13,9 +13,9 @@ Produces clean normalized text while preserving char positions for char_range ma
 from __future__ import annotations
 
 import re
-from typing import Optional
+import warnings
 
-from bs4 import BeautifulSoup, Comment, NavigableString
+from bs4 import BeautifulSoup, Comment, NavigableString, XMLParsedAsHTMLWarning
 
 from src.shared.logger import get_logger
 
@@ -48,6 +48,7 @@ def normalize_filing(content: str) -> tuple[str, str]:
     Returns:
         Tuple of (normalized_text, format_type)
     """
+    content = extract_primary_10k_document(content)
     fmt = detect_format(content)
     logger.info("normalizing_filing", format=fmt, raw_chars=len(content))
 
@@ -58,6 +59,45 @@ def normalize_filing(content: str) -> tuple[str, str]:
 
     logger.info("normalization_complete", format=fmt, normalized_chars=len(normalized))
     return normalized, fmt
+
+
+def extract_primary_10k_document(content: str) -> str:
+    """
+    Extract the primary 10-K document from a raw SEC SGML submission.
+
+    Direct `.txt` Archive URLs can contain multiple `<DOCUMENT>` blocks including
+    exhibits and XBRL files. For item-level parsing we only want the document
+    whose `<TYPE>` is `10-K` or `10-K/A`; if no SGML wrapper is present, return
+    the original content unchanged.
+    """
+    if "<DOCUMENT>" not in content[:10000].upper():
+        return content
+
+    document_pattern = re.compile(r"<DOCUMENT>(?P<document>.*?)</DOCUMENT>", re.IGNORECASE | re.DOTALL)
+    type_pattern = re.compile(r"<TYPE>\s*(?P<type>[^\n\r<]+)", re.IGNORECASE)
+    text_pattern = re.compile(r"<TEXT>(?P<text>.*?)</TEXT>", re.IGNORECASE | re.DOTALL)
+
+    fallback_text = None
+    for match in document_pattern.finditer(content):
+        document = match.group("document")
+        type_match = type_pattern.search(document)
+        filing_type = type_match.group("type").strip().upper() if type_match else ""
+
+        text_match = text_pattern.search(document)
+        document_text = text_match.group("text").strip() if text_match else document.strip()
+
+        if fallback_text is None:
+            fallback_text = document_text
+
+        if filing_type in {"10-K", "10-K/A"}:
+            logger.info("primary_sgml_document_extracted", filing_type=filing_type, chars=len(document_text))
+            return document_text
+
+    if fallback_text:
+        logger.info("sgml_fallback_document_extracted", chars=len(fallback_text))
+        return fallback_text
+
+    return content
 
 
 def _normalize_html(html_content: str) -> str:
@@ -71,7 +111,9 @@ def _normalize_html(html_content: str) -> str:
     4. Preserve meaningful whitespace for heading detection
     """
     try:
-        soup = BeautifulSoup(html_content, "lxml")
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+            soup = BeautifulSoup(html_content, "lxml")
     except Exception:
         soup = BeautifulSoup(html_content, "html.parser")
 

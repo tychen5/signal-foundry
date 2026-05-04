@@ -1,5 +1,4 @@
-"""
-Tests for SEC 10-K Extraction Pipeline (Task 3).
+"""Tests for SEC 10-K Extraction Pipeline (Task 3).
 
 Covers:
 - Normalizer (HTML/text format detection and cleaning)
@@ -10,40 +9,40 @@ Covers:
 """
 
 import pytest
-import re
 
-from src.task3_sec.schemas import (
-    STANDARD_10K_ITEMS,
-    ITEM_TITLE_VARIANTS,
-    ExtractedItem,
-    ExtractionResult,
-    FilingMetadata,
-    ProcessingMetadata,
-    ItemStatus,
-    ExtractionMethod,
+from src.task3_sec.fetcher import (
+    accession_no_dashes,
+    find_10k_filing,
+    normalize_accession,
+    normalize_cik,
+    parse_filing_url_metadata,
 )
 from src.task3_sec.normalizer import (
     detect_format,
-    normalize_filing,
+    extract_primary_10k_document,
     extract_table_of_contents,
+    normalize_filing,
 )
 from src.task3_sec.rule_parser import (
     detect_item_headings,
-    detect_part_boundaries,
     detect_item_status,
+    detect_part_boundaries,
     rule_based_parse,
-    ItemBoundary,
+)
+from src.task3_sec.schemas import (
+    ITEM_TITLE_VARIANTS,
+    STANDARD_10K_ITEMS,
+    ExtractedItem,
+    ExtractionMethod,
+    ExtractionResult,
+    FilingMetadata,
+    ItemStatus,
+    ProcessingMetadata,
 )
 from src.task3_sec.validator import (
-    validate_extraction,
     fix_common_issues,
+    validate_extraction,
 )
-from src.task3_sec.fetcher import (
-    normalize_cik,
-    accession_no_dashes,
-    normalize_accession,
-)
-
 
 # ========== FIXTURES ==========
 
@@ -283,6 +282,28 @@ class TestNormalizer:
         # Should find some ToC-style entries
         assert isinstance(toc, list)
 
+    def test_extract_primary_10k_document_from_sgml(self):
+        """Raw SEC SGML submissions should select the primary 10-K document."""
+        sgml = """
+<SEC-DOCUMENT>
+<DOCUMENT>
+<TYPE>EX-21
+<TEXT>
+Exhibit content that should not be parsed.
+</TEXT>
+</DOCUMENT>
+<DOCUMENT>
+<TYPE>10-K
+<TEXT>
+<html><body><h1>Item 1. Business</h1><p>Primary filing content.</p></body></html>
+</TEXT>
+</DOCUMENT>
+</SEC-DOCUMENT>
+"""
+        extracted = extract_primary_10k_document(sgml)
+        assert "Primary filing content" in extracted
+        assert "Exhibit content" not in extracted
+
 
 # ========== RULE PARSER TESTS ==========
 
@@ -330,6 +351,33 @@ There are risks.
         found = {b.item_number for b in boundaries}
         assert "1" in found
         assert "1A" in found
+
+    def test_detect_split_line_heading(self):
+        """Headings split across lines after HTML normalization should be detected."""
+        text = """
+PART I
+
+Item 1A.
+Risk Factors
+
+There are risks.
+
+Item 1B.
+Unresolved Staff Comments
+
+None.
+"""
+        boundaries = detect_item_headings(text)
+        found = {b.item_number for b in boundaries}
+        assert "1A" in found
+        assert "1B" in found
+
+    def test_detect_reserved_heading(self):
+        """Item headings with [Reserved] title should be detected."""
+        boundaries = detect_item_headings("Item 6. [Reserved]\n\nItem 7. Management's Discussion\nBody")
+        found = {b.item_number for b in boundaries}
+        assert "6" in found
+        assert "7" in found
 
     def test_detect_part_boundaries(self):
         """Part I, II, III, IV boundaries should be detected."""
@@ -444,6 +492,42 @@ class TestFetcher:
     def test_normalize_accession_strips(self):
         """Accession normalization should strip whitespace."""
         assert normalize_accession("  0000320193-23-000106  ") == "0000320193-23-000106"
+
+    def test_parse_filing_url_metadata(self):
+        """SEC Archives filing URLs should expose CIK/accession/document metadata."""
+        metadata = parse_filing_url_metadata(
+            "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm"
+        )
+        assert metadata["cik"] == "0000320193"
+        assert metadata["accession_number"] == "0000320193-23-000106"
+        assert metadata["primary_document"] == "aapl-20230930.htm"
+
+    async def test_find_10k_specific_accession_does_not_fallback_to_latest(self, monkeypatch):
+        """A requested accession must not silently fall back to the latest 10-K."""
+        async def fake_metadata(cik):
+            return {
+                "cik": "0000000001",
+                "company_name": "Example Co",
+                "filings": [
+                    {
+                        "form": "10-K",
+                        "filing_date": "2026-01-01",
+                        "accession_number": "0000000001-26-000001",
+                        "primary_document": "latest.htm",
+                        "description": "10-K",
+                    }
+                ],
+                "filing_files": [],
+            }
+
+        async def fake_archive(cik, accession_number):
+            return None
+
+        monkeypatch.setattr("src.task3_sec.fetcher.fetch_company_metadata", fake_metadata)
+        monkeypatch.setattr("src.task3_sec.fetcher.resolve_filing_from_archive", fake_archive)
+
+        with pytest.raises(ValueError, match="not found"):
+            await find_10k_filing("1", accession_number="0000000001-20-000001")
 
 
 # ========== VALIDATOR TESTS ==========

@@ -12,8 +12,6 @@ Post-extraction validation:
 from __future__ import annotations
 
 import re
-import time
-from typing import Optional
 
 from src.shared.logger import get_logger
 from src.task3_sec.schemas import (
@@ -112,7 +110,7 @@ def _validate_item(item: ExtractedItem, source_text: str) -> list[dict]:
                 issues.append({
                     "check": "char_range_content_mismatch",
                     "severity": "warning",
-                    "message": f"Content start doesn't match source at char_range",
+                    "message": "Content start doesn't match source at char_range",
                 })
 
     # Check content quality
