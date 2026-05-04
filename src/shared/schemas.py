@@ -6,7 +6,7 @@ Common data models used across all three tasks.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
@@ -68,7 +68,7 @@ class ModelSelectionRequest(BaseModel):
     """User's model selection, optionally with their own API key."""
 
     model_id: str = Field(
-        default="openai/gpt-5.5",
+        default="moonshotai/kimi-k2.6",
         description="Model identifier from the registry",
     )
     user_openrouter_key: Optional[str] = Field(
@@ -88,7 +88,7 @@ class ExecutionResult(BaseModel):
     failure_type: Optional[FailureType] = None
     cost_metadata: Optional[dict] = None
     latency_ms: float = 0.0
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class EvalCase(BaseModel):

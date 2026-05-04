@@ -43,7 +43,7 @@
     10. [x] 撰寫code_review.md
         - ✅ 已完成。含 review checklist (correctness, security, cost discipline, observability, testing, code quality, architecture), severity levels, anti-patterns
 
-2. 進行Phase 1 Task 3 的完整實作
+2. [] 進行Phase 1 Task 3 的完整實作
    1. 目前於 @.agents/skills 與 @.claude/skills 已經安裝了許多可以去使用的skills說明 @skills-lock.json ，請依據你的需求以及情境來調用。
    2. 你需要做一個 pipeline：輸入一份 10-K（CIK + accession 或檔案 URL），輸出結構化 JSON，每個 item 包含 `part`、`item_number`、`item_title`、`content_text`、`char_range`、`status`（`extracted` / `incorporated_by_reference` / `not_applicable` / `reserved`）。在 Zeabur 部署為 API，面試官會用自己挑選的 filings 呼叫它。
    3. 請記得看要串聯好SEC 官方 API
@@ -54,6 +54,7 @@
    8. (為了讓整個流程更完整，你可以考慮在爬蟲部分以及下載10k filing的api建制一個簡單的html parser，能夠直接把html原始檔轉換成純文字，便於後續處理與使用。注意這樣會把檔案變大，請一併在後續處理上做優化。或是需要思考規畫其他更優的機制流程。) : 這是我的初步想法，你可以斟酌
    9. (在整個流程當中，你會發現你將會需要用到大量的skills以及llm api key的串接，請善用你目前已經安裝的skills，並且也要設計好prompts資料夾，把所有用到的prompt都放在裡面，並且要做好版本控管，方便後續修改與測試。) : 這是我的初步想法，你可以斟酌
    10. @.env 也會需要對應更新。預設請使用NVIDIA_API_KEY langchain_nvidia_ai_endpoints來呼叫LLM例如moonshotai/kimi-k2.6、z-ai/glm-5.1、deepseek-ai/deepseek-v4-pro、minimaxai/minimax-m2.7等
+   11. need to test real llm path will work exactly as expected，目前有遇到一些API調用上的問題，以及一些技術上的瓶頸需要突破。
    
 
 ---
@@ -154,6 +155,23 @@ Apple 2023 10-K (0000320193-23-000106) 成功下載官方 filing，抓到 23 個
 ### 殘餘風險 / Phase 4 可再補
 - `templates/task3.html` 尚未做成完整 Task 3 UI，目前 API 已可用。
 - Full eval set 需要在穩定網路下跑完並 commit `evals/task3/results/` 的代表性報告。
-- 2026-05-04 17:29 已用 SEC submissions metadata 校正 eval accessions，並補上「指定 accession 不可 silent fallback 到最新 filing」測試。
-- Pydantic `datetime.utcnow()` deprecation warning 來自 shared schema，行為不受影響，可在 polish phase 改成 timezone-aware timestamp。
-- LLM流程判斷機制需要強化並且實務檢驗，以及與相關的eval set需要建立
+- LLM reflexive validation prompt (`v2_reflexive_validate.txt`) 需要整合測試 with real LLM call。
+
+---
+
+## 🔧 Phase 1 Task 3 補強修正 (2026-05-04 17:55)
+
+### 本次修正項目
+1. ✅ `.env` DEFAULT_MODEL 改為 `moonshotai/kimi-k2.6`（NVIDIA AI Endpoints）
+2. ✅ `src/config.py` default_model 同步改為 `moonshotai/kimi-k2.6`
+3. ✅ `src/shared/schemas.py` ModelSelectionRequest default 同步改為 `moonshotai/kimi-k2.6`
+4. ✅ `.env.example` DEFAULT_MODEL 同步更新
+5. ✅ `.gitignore` 取消 `notes/_briefs/` 的註解，確保敏感資料不會被 commit
+6. ✅ `src/shared/schemas.py` 修復 `datetime.utcnow()` deprecation → `datetime.now(timezone.utc)`
+7. ✅ `src/task3_sec/rule_parser.py` 修正 `detect_item_status()` 判斷順序：Reserved → Incorporated → Not Applicable
+
+### 驗證結果
+- `pytest tests/ -v` → ✅ **61 passed** in 1.02s（0 warnings）
+- `ruff check src/ tests/ evals/task3/run_eval.py` → ✅ All checks passed
+- `uvicorn src.main:app` → ✅ Server starts cleanly
+

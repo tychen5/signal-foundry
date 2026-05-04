@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     # LLM Providers
     openrouter_api_key: str = Field(default="", description="OpenRouter API key")
     nvidia_api_key: str = Field(default="", description="NVIDIA AI Endpoints API key")
-    default_model: str = Field(default="openai/gpt-5.5", description="Default LLM model")
+    default_model: str = Field(default="moonshotai/kimi-k2.6", description="Default LLM model")
 
     # GitHub (Task 1)
     github_token: str = Field(default="", description="GitHub Personal Access Token")
