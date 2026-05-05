@@ -178,6 +178,33 @@ async def dashboard(request: Request):
     )
 
 
+@app.get("/task1", response_class=HTMLResponse, tags=["UI"])
+async def task1_page(request: Request):
+    """CI/CD Skills runner UI."""
+    models = list_available_models()
+    if templates:
+        return templates.TemplateResponse(request, "task1.html", {"models": models})
+    return HTMLResponse("<h1>task1.html not found</h1>", status_code=404)
+
+
+@app.get("/task2", response_class=HTMLResponse, tags=["UI"])
+async def task2_page(request: Request):
+    """Browser Agent runner UI."""
+    models = list_available_models()
+    if templates:
+        return templates.TemplateResponse(request, "task2.html", {"models": models})
+    return HTMLResponse("<h1>task2.html not found</h1>", status_code=404)
+
+
+@app.get("/task3", response_class=HTMLResponse, tags=["UI"])
+async def task3_page(request: Request):
+    """SEC 10-K extraction UI."""
+    models = list_available_models()
+    if templates:
+        return templates.TemplateResponse(request, "task3.html", {"models": models})
+    return HTMLResponse("<h1>task3.html not found</h1>", status_code=404)
+
+
 # --- Task Routers (will be imported as modules are built) ---
 
 # Task 1: CI/CD Skills

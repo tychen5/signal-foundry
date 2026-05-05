@@ -8,6 +8,7 @@ and PyPI for outdated versions. Satisfies the "no install attempts" boundary.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import sys

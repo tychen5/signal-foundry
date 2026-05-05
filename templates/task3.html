@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEC 10-K Extraction — Signal-Foundry</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .task-form { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .form-group.full { grid-column: 1 / -1; }
+        label { font-size: 0.85rem; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        input[type="text"], input[type="url"], select { background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; padding: 0.6rem 0.8rem; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
+        input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+        .hint { font-size: 0.78rem; color: #475569; margin-top: 0.25rem; }
+        .hint code { background: #0f172a; padding: 1px 4px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; }
+        .options-row { display: flex; gap: 1.5rem; align-items: center; }
+        .checkbox-item { display: flex; align-items: center; gap: 0.5rem; }
+        .checkbox-item label { text-transform: none; letter-spacing: 0; font-size: 0.9rem; color: #cbd5e1; }
+        input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: #3b82f6; cursor: pointer; }
+        .run-btn { background: linear-gradient(135deg, #0ea5e9, #3b82f6); color: white; border: none; border-radius: 8px; padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; transition: opacity 0.2s; }
+        .run-btn:hover:not(:disabled) { opacity: 0.9; }
+        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .result-panel { display: none; }
+        .result-panel.visible { display: block; }
+        .filing-header { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
+        .filing-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+        .meta-field label { font-size: 0.75rem; color: #475569; display: block; margin-bottom: 0.25rem; }
+        .meta-field span { font-size: 0.95rem; color: #e2e8f0; font-weight: 500; }
+        .items-panel { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
+        .items-panel h4 { font-size: 0.85rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+        .items-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .items-table th { background: #0f172a; color: #64748b; padding: 0.5rem 0.75rem; text-align: left; font-weight: 500; white-space: nowrap; }
+        .items-table td { padding: 0.5rem 0.75rem; border-top: 1px solid #1e293b; color: #cbd5e1; }
+        .items-table tr:hover td { background: rgba(59,130,246,0.05); cursor: pointer; }
+        .items-table tr.expanded td { background: rgba(59,130,246,0.08); }
+        .status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 500; }
+        .status-extracted { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .status-incorporated_by_reference { background: rgba(234,179,8,0.15); color: #eab308; }
+        .status-incorporated_and_resolved { background: rgba(99,102,241,0.15); color: #818cf8; }
+        .status-not_applicable { background: rgba(100,116,139,0.15); color: #94a3b8; }
+        .status-reserved { background: rgba(100,116,139,0.1); color: #64748b; }
+        .confidence-bar { width: 60px; height: 4px; background: #334155; border-radius: 2px; display: inline-block; vertical-align: middle; margin-left: 4px; }
+        .confidence-fill { height: 100%; border-radius: 2px; background: #3b82f6; }
+        .item-content { display: none; background: #0f172a; border-radius: 0 0 6px 6px; padding: 1rem 1.25rem; font-size: 0.8rem; line-height: 1.7; color: #94a3b8; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; }
+        .item-content.visible { display: block; }
+        .char-range { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #475569; }
+        .method-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.7rem; }
+        .method-rule_based { background: rgba(34,197,94,0.1); color: #4ade80; }
+        .method-hybrid { background: rgba(59,130,246,0.1); color: #60a5fa; }
+        .method-llm_refined { background: rgba(139,92,246,0.1); color: #a78bfa; }
+        .cost-panel { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
+        .cost-panel h4 { font-size: 0.85rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+        .cost-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; }
+        .cost-item label { font-size: 0.75rem; color: #475569; display: block; margin-bottom: 0.25rem; }
+        .cost-item span { font-size: 1rem; font-weight: 600; color: #e2e8f0; }
+        .error-box { background: rgba(239,68,68,0.08); border-left: 3px solid #ef4444; border-radius: 0 6px 6px 0; padding: 1rem; font-size: 0.9rem; color: #fca5a5; font-family: 'JetBrains Mono', monospace; margin-bottom: 1.25rem; }
+        .raw-toggle { background: none; border: 1px solid #334155; color: #64748b; border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 0.8rem; cursor: pointer; }
+        .raw-toggle:hover { border-color: #475569; color: #94a3b8; }
+        .raw-json { display: none; background: #0f172a; border-radius: 6px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #94a3b8; white-space: pre-wrap; overflow-x: auto; max-height: 400px; overflow-y: auto; margin-top: 0.5rem; }
+        .raw-json.visible { display: block; }
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .examples-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+        .example-btn { background: #1e293b; border: 1px solid #334155; color: #94a3b8; border-radius: 4px; padding: 4px 10px; font-size: 0.8rem; cursor: pointer; }
+        .example-btn:hover { border-color: #475569; color: #e2e8f0; }
+        .or-divider { text-align: center; color: #475569; font-size: 0.85rem; padding: 0.5rem 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="/" style="color:#64748b;font-size:0.85rem;text-decoration:none;">← Dashboard</a>
+            <h1>📊 SEC 10-K Extraction</h1>
+            <p>Hybrid rule+LLM pipeline: item-level structured extraction with XBRL cross-validation and incorporated-by-reference resolution.</p>
+        </header>
+
+        <div class="task-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>CIK Number</label>
+                    <input type="text" id="cik" placeholder="0000320193" value="0000320193">
+                    <div class="hint">10-digit padded CIK from SEC EDGAR</div>
+                </div>
+                <div class="form-group">
+                    <label>Accession Number</label>
+                    <input type="text" id="accession" placeholder="0000320193-23-000106" value="0000320193-23-000106">
+                    <div class="hint">Format: <code>XXXXXXXXXX-YY-ZZZZZZ</code></div>
+                </div>
+            </div>
+            <div class="or-divider">— OR —</div>
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>Filing URL (alternative)</label>
+                    <input type="url" id="file-url" placeholder="https://www.sec.gov/Archives/edgar/data/...">
+                </div>
+            </div>
+            <div class="examples-row">
+                <span style="font-size:0.8rem;color:#475569;">Examples: </span>
+                <button class="example-btn" onclick="setExample('0000320193','0000320193-23-000106')">Apple FY2023</button>
+                <button class="example-btn" onclick="setExample('0000789019','0000789019-23-007654')">Microsoft FY2023</button>
+                <button class="example-btn" onclick="setExample('0000001800','0000001800-23-000004')">Abbott Labs</button>
+            </div>
+            <div class="form-row" style="margin-top:1rem;">
+                <div class="form-group">
+                    <label>LLM Model</label>
+                    <select id="model-select">
+                        {% for model in models %}
+                        <option value="{{ model.id }}">{{ model.display_name }} ({{ model.provider }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>OpenRouter API Key (optional)</label>
+                    <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>Pipeline Options</label>
+                    <div class="options-row">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="skip-llm">
+                            <label for="skip-llm">Skip LLM (rule-only, $0 cost)</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="skip-xbrl">
+                            <label for="skip-xbrl">Skip XBRL cross-validation</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="run-btn" id="run-btn" onclick="extractFiling()">Extract Filing</button>
+        </div>
+
+        <div class="result-panel" id="result-panel">
+            <div id="error-section"></div>
+
+            <div class="filing-header" id="filing-header" style="display:none">
+                <div class="filing-meta">
+                    <div class="meta-field"><label>Company</label><span id="meta-company">—</span></div>
+                    <div class="meta-field"><label>CIK</label><span id="meta-cik">—</span></div>
+                    <div class="meta-field"><label>Filing Date</label><span id="meta-date">—</span></div>
+                    <div class="meta-field"><label>Accession</label><span id="meta-accession" style="font-family:monospace;font-size:0.85rem">—</span></div>
+                </div>
+            </div>
+
+            <div class="items-panel" id="items-panel" style="display:none">
+                <h4>Extracted Items</h4>
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Part</th>
+                            <th>Item</th>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Method</th>
+                            <th>Confidence</th>
+                            <th>Chars</th>
+                        </tr>
+                    </thead>
+                    <tbody id="items-body"></tbody>
+                </table>
+            </div>
+
+            <div class="cost-panel" id="cost-panel" style="display:none">
+                <h4>Processing Metadata</h4>
+                <div class="cost-grid">
+                    <div class="cost-item"><label>LLM Calls</label><span id="cost-llm-calls">—</span></div>
+                    <div class="cost-item"><label>Tokens In</label><span id="cost-tokens-in">—</span></div>
+                    <div class="cost-item"><label>Tokens Out</label><span id="cost-tokens-out">—</span></div>
+                    <div class="cost-item"><label>Total Cost</label><span id="cost-total">—</span></div>
+                    <div class="cost-item"><label>Rule-Only</label><span id="cost-rule-pct">—</span></div>
+                    <div class="cost-item"><label>Latency</label><span id="cost-latency">—</span></div>
+                </div>
+            </div>
+
+            <button class="raw-toggle" id="raw-toggle" onclick="toggleRaw()" style="display:none">Show raw JSON</button>
+            <div class="raw-json" id="raw-json"></div>
+        </div>
+    </div>
+
+    <script>
+        function setExample(cik, accession) {
+            document.getElementById('cik').value = cik;
+            document.getElementById('accession').value = accession;
+            document.getElementById('file-url').value = '';
+        }
+
+        async function extractFiling() {
+            const btn = document.getElementById('run-btn');
+            const panel = document.getElementById('result-panel');
+            const cik = document.getElementById('cik').value.trim();
+            const accession = document.getElementById('accession').value.trim();
+            const fileUrl = document.getElementById('file-url').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const apiKey = document.getElementById('user-api-key').value.trim();
+            const skipLlm = document.getElementById('skip-llm').checked;
+            const skipXbrl = document.getElementById('skip-xbrl').checked;
+
+            if (!cik && !fileUrl) { alert('Please enter a CIK number or filing URL.'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Extracting...';
+            panel.classList.add('visible');
+            document.getElementById('error-section').innerHTML = '';
+            document.getElementById('filing-header').style.display = 'none';
+            document.getElementById('items-panel').style.display = 'none';
+            document.getElementById('cost-panel').style.display = 'none';
+            document.getElementById('raw-toggle').style.display = 'none';
+
+            const payload = {
+                model: { model_id: modelId },
+                skip_llm: skipLlm,
+                skip_xbrl: skipXbrl
+            };
+            if (fileUrl) {
+                payload.file_url = fileUrl;
+            } else {
+                payload.cik = cik;
+                if (accession) payload.accession_number = accession;
+            }
+            if (apiKey) payload.model.user_openrouter_key = apiKey;
+
+            try {
+                const resp = await fetch('/api/v1/sec/extract', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (resp.status >= 400) {
+                    showError(data.detail || JSON.stringify(data));
+                } else {
+                    renderExtraction(data);
+                }
+            } catch (err) {
+                showError(String(err));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Extract Filing';
+            }
+        }
+
+        function renderExtraction(data) {
+            // Filing metadata
+            const meta = data.filing_metadata || {};
+            document.getElementById('meta-company').textContent = meta.company_name || '—';
+            document.getElementById('meta-cik').textContent = meta.cik || '—';
+            document.getElementById('meta-date').textContent = meta.filing_date || '—';
+            document.getElementById('meta-accession').textContent = meta.accession_number || '—';
+            document.getElementById('filing-header').style.display = 'block';
+
+            // Items
+            const items = data.items || [];
+            const tbody = document.getElementById('items-body');
+            tbody.innerHTML = '';
+            items.forEach((item, idx) => {
+                const charLen = item.char_range ? (item.char_range[1] - item.char_range[0]).toLocaleString() : '—';
+                const conf = item.confidence ?? 1;
+                const method = item.extraction_method || 'rule_based';
+                const statusCls = 'status-' + (item.status || 'extracted').replace(/ /g, '_');
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${escHtml(item.part || '—')}</td>
+                    <td>${escHtml(item.item_number || '—')}</td>
+                    <td>${escHtml(item.item_title || '—')}</td>
+                    <td><span class="status-pill ${statusCls}">${escHtml(item.status || 'extracted')}</span></td>
+                    <td><span class="method-badge method-${escHtml(method)}">${escHtml(method)}</span></td>
+                    <td>
+                        <span style="font-size:0.8rem">${Math.round(conf * 100)}%</span>
+                        <span class="confidence-bar"><span class="confidence-fill" style="width:${Math.round(conf*100)}%"></span></span>
+                    </td>
+                    <td class="char-range">${charLen}</td>
+                `;
+                tr.onclick = () => toggleItemContent(idx, item, tr);
+                tbody.appendChild(tr);
+
+                // Expandable content row
+                const contentTr = document.createElement('tr');
+                const contentTd = document.createElement('td');
+                contentTd.colSpan = 7;
+                contentTd.style.padding = 0;
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'item-content';
+                contentDiv.id = `item-content-${idx}`;
+                contentDiv.textContent = item.content_text || '(no content)';
+                contentTd.appendChild(contentDiv);
+                contentTr.appendChild(contentTd);
+                tbody.appendChild(contentTr);
+            });
+            document.getElementById('items-panel').style.display = 'block';
+
+            // Cost metadata
+            const proc = data.processing_metadata || {};
+            document.getElementById('cost-llm-calls').textContent = proc.llm_calls ?? '—';
+            document.getElementById('cost-tokens-in').textContent = (proc.total_tokens_in ?? '—').toLocaleString();
+            document.getElementById('cost-tokens-out').textContent = (proc.total_tokens_out ?? '—').toLocaleString();
+            document.getElementById('cost-total').textContent = proc.total_cost_usd !== undefined ? '$' + proc.total_cost_usd.toFixed(6) : '—';
+            const ruleOnly = proc.rule_only_items !== undefined && items.length
+                ? Math.round(proc.rule_only_items / items.length * 100) + '%'
+                : '—';
+            document.getElementById('cost-rule-pct').textContent = ruleOnly;
+            document.getElementById('cost-latency').textContent = proc.total_latency_ms ? Math.round(proc.total_latency_ms) + 'ms' : '—';
+            document.getElementById('cost-panel').style.display = 'block';
+
+            document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+            document.getElementById('raw-toggle').style.display = 'inline-block';
+        }
+
+        function toggleItemContent(idx, item, tr) {
+            const content = document.getElementById(`item-content-${idx}`);
+            const isVisible = content.classList.contains('visible');
+            // Close all others
+            document.querySelectorAll('.item-content.visible').forEach(el => el.classList.remove('visible'));
+            document.querySelectorAll('.items-table tr.expanded').forEach(el => el.classList.remove('expanded'));
+            if (!isVisible) {
+                content.classList.add('visible');
+                tr.classList.add('expanded');
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('error-section').innerHTML = `<div class="error-box">${escHtml(msg)}</div>`;
+        }
+
+        function toggleRaw() {
+            const raw = document.getElementById('raw-json');
+            raw.classList.toggle('visible');
+            document.getElementById('raw-toggle').textContent = raw.classList.contains('visible') ? 'Hide raw JSON' : 'Show raw JSON';
+        }
+
+        function escHtml(str) {
+            return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+    </script>
+</body>
+</html>

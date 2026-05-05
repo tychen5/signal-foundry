@@ -11,11 +11,8 @@ with *** in all log messages — never appears in logs.
 
 from __future__ import annotations
 
-import asyncio
 import re
-import time
 from typing import Optional
-from urllib.parse import urlparse
 
 from src.shared.logger import get_logger
 from src.task1_cicd.sandbox import SandboxConfig, run_command
@@ -311,7 +308,6 @@ async def _get_tag_sha(
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    ref = tag.lstrip("v")
     api_url = f"https://api.github.com/repos/{owner}/{repo}/git/ref/tags/{tag}"
 
     async with httpx.AsyncClient(timeout=15) as client:

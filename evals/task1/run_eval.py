@@ -132,9 +132,9 @@ async def _run_case_direct(
 ) -> dict[str, Any]:
     """Run one case by importing the skill engine directly (no HTTP server required)."""
     from src.shared.logger import generate_trace_id
+    from src.shared.schemas import ModelSelectionRequest
     from src.task1_cicd.schemas import SkillRunRequest
     from src.task1_cicd.skill_engine import run_skill
-    from src.shared.schemas import ModelSelectionRequest
 
     inp = case["input_data"]
     trace_id = generate_trace_id()
@@ -234,8 +234,8 @@ def _write_markdown_report(
         f"**Scenarios**: {payload['eval_set']}",
         "",
         "## Summary",
-        f"| Metric | Value |",
-        f"|--------|-------|",
+        "| Metric | Value |",
+        "|--------|-------|",
         f"| Cases | {s['cases']} |",
         f"| Passed | {s['passed']} / {s['cases']} |",
         f"| Success Rate | {s['success_rate']:.1%} |",

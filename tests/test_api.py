@@ -66,7 +66,25 @@ class TestTask1Routes:
         data = response.json()
         assert len(data["skills"]) == 4
 
-    async def test_run_skill(self, client):
+    async def test_run_skill(self, client, monkeypatch):
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+
+        async def mock_engine(request, trace_id):
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={
+                    "skill": "lint-and-test",
+                    "repo_url": request.repo_url,
+                    "branch": "main",
+                    "commit_sha": "abc123",
+                    "summary": "All lint checks passed, 10 tests ran successfully.",
+                },
+            )
+
+        monkeypatch.setattr("src.task1_cicd.skill_engine.run_skill", mock_engine)
+
         response = await client.post(
             "/api/v1/skills/run",
             json={

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI/CD Skills — Signal-Foundry</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .skill-form { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .form-group.full { grid-column: 1 / -1; }
+        label { font-size: 0.85rem; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        input[type="text"], input[type="url"], select { background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; padding: 0.6rem 0.8rem; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
+        input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+        .dry-run-row { display: flex; align-items: center; gap: 0.8rem; padding: 0.75rem; background: #0f172a; border-radius: 6px; border: 1px solid #334155; }
+        .dry-run-row.danger { border-color: #ef4444; background: rgba(239,68,68,0.08); }
+        .dry-run-row label { font-size: 0.9rem; text-transform: none; letter-spacing: 0; color: #e2e8f0; margin: 0; }
+        .dry-run-row .warn { color: #ef4444; font-size: 0.8rem; margin-left: auto; display: none; }
+        .dry-run-row.danger .warn { display: block; }
+        input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: #3b82f6; cursor: pointer; }
+        .run-btn { background: linear-gradient(135deg, #3b82f6, #6366f1); color: white; border: none; border-radius: 8px; padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; transition: opacity 0.2s, transform 0.1s; }
+        .run-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .result-panel { display: none; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; }
+        .result-panel.visible { display: block; }
+        .result-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
+        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .status-badge.success { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+        .status-badge.failed { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+        .meta-row { display: flex; gap: 2rem; font-size: 0.85rem; color: #64748b; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .meta-item strong { color: #94a3b8; }
+        .summary-box { background: #0f172a; border-left: 3px solid #3b82f6; border-radius: 0 6px 6px 0; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; line-height: 1.6; color: #cbd5e1; }
+        .error-box { background: rgba(239,68,68,0.08); border-left: 3px solid #ef4444; border-radius: 0 6px 6px 0; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; color: #fca5a5; font-family: 'JetBrains Mono', monospace; }
+        .skill-detail { margin-bottom: 1.25rem; }
+        .skill-detail h4 { font-size: 0.85rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
+        .issues-table, .findings-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .issues-table th, .findings-table th { background: #0f172a; color: #64748b; padding: 0.5rem 0.75rem; text-align: left; font-weight: 500; }
+        .issues-table td, .findings-table td { padding: 0.5rem 0.75rem; border-top: 1px solid #1e293b; color: #cbd5e1; }
+        .issues-table tr:hover td, .findings-table tr:hover td { background: rgba(59,130,246,0.05); }
+        .sev-critical { color: #ef4444; font-weight: 600; }
+        .sev-high { color: #f97316; font-weight: 600; }
+        .sev-medium { color: #eab308; }
+        .sev-low { color: #22c55e; }
+        .test-counts { display: flex; gap: 1.5rem; }
+        .count-item { text-align: center; padding: 0.75rem 1.25rem; background: #0f172a; border-radius: 8px; }
+        .count-item .count { font-size: 1.5rem; font-weight: 700; }
+        .count-item .label { font-size: 0.75rem; color: #64748b; }
+        .count-pass .count { color: #22c55e; }
+        .count-fail .count { color: #ef4444; }
+        .count-warn .count { color: #eab308; }
+        .count-neutral .count { color: #94a3b8; }
+        .changelog-box { background: #0f172a; border-radius: 6px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #cbd5e1; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+        .confirm-release-btn { background: #ef4444; color: white; border: none; border-radius: 6px; padding: 0.6rem 1.25rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; margin-top: 0.75rem; }
+        .confirm-release-btn:hover { background: #dc2626; }
+        .raw-toggle { background: none; border: 1px solid #334155; color: #64748b; border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 0.8rem; cursor: pointer; margin-top: 0.75rem; }
+        .raw-toggle:hover { border-color: #475569; color: #94a3b8; }
+        .raw-json { display: none; background: #0f172a; border-radius: 6px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #94a3b8; white-space: pre-wrap; overflow-x: auto; max-height: 400px; overflow-y: auto; margin-top: 0.5rem; }
+        .raw-json.visible { display: block; }
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .cve-link { color: #60a5fa; text-decoration: none; font-size: 0.8rem; }
+        .cve-link:hover { text-decoration: underline; }
+        .no-issues { color: #22c55e; font-size: 0.9rem; padding: 0.5rem 0; }
+        .cost-row { font-size: 0.8rem; color: #475569; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #1e293b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="/" style="color:#64748b;font-size:0.85rem;text-decoration:none;">← Dashboard</a>
+            <h1>📋 CI/CD Skills Engine</h1>
+            <p>GitHub CI/CD workflows as reusable Claude Skills — sandbox execution, idempotency, dry-run safety.</p>
+        </header>
+
+        <div class="skill-form">
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>GitHub Repository URL</label>
+                    <input type="url" id="repo-url" placeholder="https://github.com/owner/repo" value="https://github.com/tychen5/signal-foundry">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Branch</label>
+                    <input type="text" id="branch" value="main" placeholder="main">
+                </div>
+                <div class="form-group">
+                    <label>Skill</label>
+                    <select id="skill-select">
+                        <option value="lint-and-test">lint-and-test — Run ruff + pytest / eslint + jest</option>
+                        <option value="dependency-audit">dependency-audit — Check CVEs via OSV.dev</option>
+                        <option value="security-scan">security-scan — Secret detection + Bandit SAST</option>
+                        <option value="build-and-release">build-and-release — Analyze commits, generate changelog</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>LLM Model</label>
+                    <select id="model-select">
+                        {% for model in models %}
+                        <option value="{{ model.id }}">{{ model.display_name }} ({{ model.provider }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>OpenRouter API Key (optional)</label>
+                    <input type="text" id="user-api-key" placeholder="sk-or-v1-... (uses your own tokens)">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>Execution Mode</label>
+                    <div class="dry-run-row" id="dry-run-row">
+                        <input type="checkbox" id="dry-run" checked>
+                        <label for="dry-run">Dry-run mode (preview only — no GitHub releases created)</label>
+                        <span class="warn">⚠️ LIVE MODE — will create GitHub tags/releases</span>
+                    </div>
+                </div>
+            </div>
+            <button class="run-btn" id="run-btn" onclick="runSkill()">Run Skill</button>
+        </div>
+
+        <div class="result-panel" id="result-panel">
+            <div class="result-header">
+                <span class="status-badge" id="status-badge">—</span>
+                <strong id="result-title">—</strong>
+            </div>
+            <div class="meta-row" id="meta-row"></div>
+            <div id="summary-section"></div>
+            <div id="skill-detail-section"></div>
+            <div class="cost-row" id="cost-row"></div>
+            <button class="raw-toggle" onclick="toggleRaw()">Show raw JSON</button>
+            <div class="raw-json" id="raw-json"></div>
+        </div>
+    </div>
+
+    <script>
+        let _lastResult = null;
+
+        document.getElementById('dry-run').addEventListener('change', function() {
+            const row = document.getElementById('dry-run-row');
+            row.classList.toggle('danger', !this.checked);
+        });
+
+        document.getElementById('skill-select').addEventListener('change', function() {
+            const dryRunGroup = document.getElementById('dry-run-row').parentElement.parentElement;
+            dryRunGroup.style.display = (this.value === 'build-and-release') ? 'grid' : 'none';
+        });
+        // Initially hide dry-run for non-release skills
+        document.getElementById('skill-select').dispatchEvent(new Event('change'));
+
+        async function runSkill() {
+            const btn = document.getElementById('run-btn');
+            const panel = document.getElementById('result-panel');
+            const repoUrl = document.getElementById('repo-url').value.trim();
+            const branch = document.getElementById('branch').value.trim() || 'main';
+            const skill = document.getElementById('skill-select').value;
+            const modelId = document.getElementById('model-select').value;
+            const apiKey = document.getElementById('user-api-key').value.trim();
+            const dryRun = document.getElementById('dry-run').checked;
+
+            if (!repoUrl) { alert('Please enter a GitHub repository URL.'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Running skill...';
+            panel.classList.remove('visible');
+
+            const payload = {
+                repo_url: repoUrl,
+                branch: branch,
+                skill_name: skill,
+                dry_run: (skill === 'build-and-release') ? dryRun : true,
+                model: { model_id: modelId }
+            };
+            if (apiKey) payload.model.user_openrouter_key = apiKey;
+
+            try {
+                const resp = await fetch('/api/v1/skills/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                _lastResult = data;
+                renderResult(data, resp.status);
+            } catch (err) {
+                renderError(String(err));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Run Skill';
+            }
+        }
+
+        function renderResult(data, httpStatus) {
+            const panel = document.getElementById('result-panel');
+            const badge = document.getElementById('status-badge');
+            const title = document.getElementById('result-title');
+            const metaRow = document.getElementById('meta-row');
+            const summarySection = document.getElementById('summary-section');
+            const detailSection = document.getElementById('skill-detail-section');
+            const costRow = document.getElementById('cost-row');
+            const rawJson = document.getElementById('raw-json');
+
+            if (httpStatus >= 400 || data.status === 'failed') {
+                badge.className = 'status-badge failed';
+                badge.textContent = 'FAILED';
+                const errorMsg = data.detail || data.error || 'Unknown error';
+                title.textContent = 'Skill execution failed';
+                metaRow.innerHTML = '';
+                summarySection.innerHTML = `<div class="error-box">${escHtml(errorMsg)}</div>`;
+                detailSection.innerHTML = '';
+                costRow.innerHTML = '';
+            } else {
+                const r = data.result || {};
+                badge.className = 'status-badge success';
+                badge.textContent = 'SUCCESS';
+                badge.textContent += r.cache_hit ? ' (cached)' : '';
+                title.textContent = r.skill || data.result?.skill || '—';
+
+                const lang = r.language ? `<span><strong>Language:</strong> ${escHtml(r.language)}</span>` : '';
+                const sha = r.commit_sha ? `<span><strong>Commit:</strong> <code>${escHtml(r.commit_sha)}</code></span>` : '';
+                const branch = r.branch ? `<span><strong>Branch:</strong> ${escHtml(r.branch)}</span>` : '';
+                const lat = data.latency_ms ? `<span><strong>Latency:</strong> ${Math.round(data.latency_ms)}ms</span>` : '';
+                const conf = r.match_confidence ? `<span><strong>Match:</strong> ${Math.round(r.match_confidence * 100)}%</span>` : '';
+                metaRow.innerHTML = [lang, sha, branch, lat, conf].filter(Boolean).join('');
+
+                if (r.summary) {
+                    summarySection.innerHTML = `<div class="summary-box">${escHtml(r.summary)}</div>`;
+                }
+
+                detailSection.innerHTML = renderSkillDetail(r);
+
+                const cost = (data.cost_metadata || {}).cost_usd;
+                const tokens = (data.cost_metadata || {}).tokens_in;
+                costRow.innerHTML = cost !== undefined
+                    ? `Cost: $${cost.toFixed(6)} | Tokens in: ${tokens || '—'}`
+                    : '';
+            }
+
+            rawJson.textContent = JSON.stringify(data, null, 2);
+            rawJson.classList.remove('visible');
+            panel.classList.add('visible');
+        }
+
+        function renderSkillDetail(r) {
+            const skill = r.skill || '';
+            if (skill === 'lint-and-test') return renderLintAndTest(r);
+            if (skill === 'dependency-audit') return renderDependencyAudit(r);
+            if (skill === 'security-scan') return renderSecurityScan(r);
+            if (skill === 'build-and-release') return renderBuildAndRelease(r);
+            return '';
+        }
+
+        function renderLintAndTest(r) {
+            let html = '<div class="skill-detail">';
+            const lintOk = r.lint_passed !== false;
+            const testOk = r.tests_passed !== false;
+            html += '<h4>Test Counts</h4><div class="test-counts">';
+            html += `<div class="count-item count-${testOk ? 'pass' : 'fail'}"><div class="count">${r.tests_pass ?? '—'}</div><div class="label">Passed</div></div>`;
+            html += `<div class="count-item count-fail"><div class="count">${r.tests_fail ?? 0}</div><div class="label">Failed</div></div>`;
+            html += `<div class="count-item count-warn"><div class="count">${r.tests_error ?? 0}</div><div class="label">Errors</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${r.tests_skipped ?? 0}</div><div class="label">Skipped</div></div>`;
+            html += '</div>';
+            const issues = r.lint_issues || [];
+            html += '<h4 style="margin-top:1rem;">Lint Issues</h4>';
+            if (!issues.length) {
+                html += '<p class="no-issues">✓ No lint issues found</p>';
+            } else {
+                html += '<table class="issues-table"><thead><tr><th>File</th><th>Line</th><th>Code</th><th>Message</th></tr></thead><tbody>';
+                issues.slice(0, 50).forEach(i => {
+                    html += `<tr><td>${escHtml(i.filename || '')}</td><td>${i.row || ''}:${i.col || ''}</td><td>${escHtml(i.code || '')}</td><td>${escHtml(i.message || '')}</td></tr>`;
+                });
+                if (issues.length > 50) html += `<tr><td colspan="4" style="color:#64748b;text-align:center;">... ${issues.length - 50} more issues</td></tr>`;
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderDependencyAudit(r) {
+            let html = '<div class="skill-detail">';
+            const vulns = r.vulnerabilities || [];
+            const outdated = r.outdated_packages || [];
+            html += `<div class="test-counts" style="margin-bottom:1rem;">`;
+            html += `<div class="count-item count-${vulns.length ? 'fail' : 'pass'}"><div class="count">${vulns.length}</div><div class="label">CVEs Found</div></div>`;
+            html += `<div class="count-item count-${outdated.length ? 'warn' : 'pass'}"><div class="count">${outdated.length}</div><div class="label">Outdated</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${r.packages_scanned ?? '—'}</div><div class="label">Scanned</div></div>`;
+            html += '</div>';
+            if (vulns.length) {
+                html += '<h4>Vulnerabilities</h4><table class="findings-table"><thead><tr><th>Package</th><th>Version</th><th>CVE</th><th>Severity</th><th>Fixed</th></tr></thead><tbody>';
+                vulns.forEach(v => {
+                    const sevClass = 'sev-' + (v.severity || 'low').toLowerCase();
+                    html += `<tr><td>${escHtml(v.package_name || '')}</td><td>${escHtml(v.installed_version || '')}</td>`;
+                    html += `<td><a class="cve-link" href="https://osv.dev/vulnerability/${escHtml(v.vuln_id || '')}" target="_blank">${escHtml(v.vuln_id || '')}</a></td>`;
+                    html += `<td class="${sevClass}">${(v.severity || '').toUpperCase()}</td><td>${escHtml(v.fixed_version || 'none')}</td></tr>`;
+                });
+                html += '</tbody></table>';
+            } else {
+                html += '<p class="no-issues">✓ No known vulnerabilities found</p>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderSecurityScan(r) {
+            let html = '<div class="skill-detail">';
+            const findings = r.findings || [];
+            const critical = findings.filter(f => f.severity === 'critical').length;
+            const high = findings.filter(f => f.severity === 'high').length;
+            html += `<div class="test-counts" style="margin-bottom:1rem;">`;
+            html += `<div class="count-item count-${critical ? 'fail' : 'neutral'}"><div class="count">${critical}</div><div class="label">Critical</div></div>`;
+            html += `<div class="count-item count-${high ? 'fail' : 'neutral'}"><div class="count">${high}</div><div class="label">High</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${findings.length - critical - high}</div><div class="label">Lower</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${r.files_scanned ?? '—'}</div><div class="label">Files Scanned</div></div>`;
+            html += '</div>';
+            if (findings.length) {
+                html += '<h4>Findings</h4><table class="findings-table"><thead><tr><th>Severity</th><th>Type</th><th>File</th><th>Line</th><th>Recommendation</th></tr></thead><tbody>';
+                findings.slice(0, 30).forEach(f => {
+                    const sevClass = 'sev-' + (f.severity || 'low').toLowerCase();
+                    html += `<tr><td class="${sevClass}">${(f.severity || '').toUpperCase()}</td><td>${escHtml(f.finding_type || '')}</td>`;
+                    html += `<td style="font-family:monospace;font-size:0.8rem">${escHtml(f.file_path || '')}</td><td>${f.line_number || '—'}</td>`;
+                    html += `<td style="font-size:0.8rem">${escHtml(f.recommendation || '')}</td></tr>`;
+                });
+                if (findings.length > 30) html += `<tr><td colspan="5" style="color:#64748b;text-align:center;">... ${findings.length - 30} more findings</td></tr>`;
+                html += '</tbody></table>';
+            } else {
+                html += '<p class="no-issues">✓ No secrets or SAST issues found</p>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderBuildAndRelease(r) {
+            let html = '<div class="skill-detail">';
+            html += `<div class="test-counts" style="margin-bottom:1rem;">`;
+            html += `<div class="count-item count-neutral"><div class="count">${escHtml(r.current_version || 'none')}</div><div class="label">Current</div></div>`;
+            html += `<div class="count-item count-pass"><div class="count">${escHtml(r.next_version || '—')}</div><div class="label">Next</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${escHtml(r.version_bump || '—')}</div><div class="label">Bump</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${r.commits_analyzed ?? 0}</div><div class="label">Commits</div></div>`;
+            html += '</div>';
+            if (r.changelog) {
+                html += '<h4>Changelog Preview</h4>';
+                html += `<div class="changelog-box">${escHtml(r.changelog)}</div>`;
+            }
+            if (r.dry_run) {
+                html += `<p style="font-size:0.85rem;color:#64748b;margin-top:0.75rem;">Dry-run mode — no tag created. Uncheck "Dry-run mode" and re-run to create the release.</p>`;
+            } else if (r.release_url) {
+                html += `<p style="margin-top:0.75rem;"><a href="${escHtml(r.release_url)}" target="_blank" style="color:#22c55e;">✓ Release created: ${escHtml(r.next_version || '')}</a></p>`;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderError(msg) {
+            document.getElementById('status-badge').className = 'status-badge failed';
+            document.getElementById('status-badge').textContent = 'ERROR';
+            document.getElementById('result-title').textContent = 'Request failed';
+            document.getElementById('meta-row').innerHTML = '';
+            document.getElementById('summary-section').innerHTML = `<div class="error-box">${escHtml(msg)}</div>`;
+            document.getElementById('skill-detail-section').innerHTML = '';
+            document.getElementById('cost-row').innerHTML = '';
+            document.getElementById('result-panel').classList.add('visible');
+        }
+
+        function toggleRaw() {
+            const raw = document.getElementById('raw-json');
+            raw.classList.toggle('visible');
+            document.querySelector('.raw-toggle').textContent = raw.classList.contains('visible') ? 'Hide raw JSON' : 'Show raw JSON';
+        }
+
+        function escHtml(str) {
+            return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // Show dry-run only for build-and-release
+        document.getElementById('skill-select').addEventListener('change', function() {
+            const isRelease = this.value === 'build-and-release';
+            const dryRunGroup = document.getElementById('dry-run-row').closest('.form-group');
+            dryRunGroup.style.display = isRelease ? 'flex' : 'none';
+        });
+    </script>
+</body>
+</html>

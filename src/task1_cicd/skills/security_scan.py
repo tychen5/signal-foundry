@@ -16,7 +16,6 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Optional
 
 from src.shared.logger import get_logger
 from src.task1_cicd.sandbox import SandboxConfig, run_command

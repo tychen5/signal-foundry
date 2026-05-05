@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from src.shared.logger import get_logger, generate_trace_id
-from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+from src.shared.logger import generate_trace_id, get_logger
+from src.shared.schemas import ExecutionResult, ExecutionStatus, FailureType, TaskType
 from src.task1_cicd.schemas import SkillListResponse, SkillRunRequest
 
 router = APIRouter()
@@ -61,8 +61,8 @@ async def run_skill(request: SkillRunRequest):
     Skills run in dry-run mode by default. The build-and-release skill
     requires dry_run=false to actually create a GitHub release.
     """
-    from src.task1_cicd.skill_engine import run_skill as engine_run_skill
     from src.task1_cicd.github_client import FastFailError
+    from src.task1_cicd.skill_engine import run_skill as engine_run_skill
 
     trace_id = generate_trace_id()
     logger.info(
@@ -75,7 +75,13 @@ async def run_skill(request: SkillRunRequest):
     )
 
     try:
-        return await engine_run_skill(request, trace_id)
+        result = await engine_run_skill(request, trace_id)
+        # Skill-name mismatch is a client error — surface as 400 for clear HTTP semantics
+        if result.status == ExecutionStatus.FAILED and result.failure_type == FailureType.SKILL_MISMATCH:
+            raise HTTPException(status_code=400, detail=result.error or "Unknown skill")
+        return result
+    except HTTPException:
+        raise
     except FastFailError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

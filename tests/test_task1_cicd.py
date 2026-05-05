@@ -134,9 +134,8 @@ class TestGitHubClient:
 
     @pytest.mark.asyncio
     async def test_validate_repo_not_found(self):
-        from src.task1_cicd.github_client import FastFailError, validate_repo
 
-        import httpx
+        from src.task1_cicd.github_client import FastFailError, validate_repo
 
         class FakeResp:
             status_code = 404
@@ -721,10 +720,10 @@ class TestSkillEngine:
 
     def test_dispatch_routes_correctly(self):
         """Verify _dispatch imports the right module for each skill."""
-        from src.task1_cicd import skill_engine
-
         # Just test that the dispatch function exists and routes are correct
         import inspect
+
+        from src.task1_cicd import skill_engine
         src = inspect.getsource(skill_engine._dispatch)
         assert "lint_and_test" in src
         assert "dependency_audit" in src
@@ -812,6 +811,7 @@ class TestAPIRoutes:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from src.main import app
         return TestClient(app)
 

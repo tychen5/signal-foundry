@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Agent — Signal-Foundry</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .task-form { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .form-group.full { grid-column: 1 / -1; }
+        label { font-size: 0.85rem; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        input[type="text"], input[type="url"], textarea, select { background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; padding: 0.6rem 0.8rem; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
+        textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+        .run-btn { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 8px; padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; transition: opacity 0.2s; }
+        .run-btn:hover:not(:disabled) { opacity: 0.9; }
+        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .result-panel { display: none; }
+        .result-panel.visible { display: block; }
+        .status-banner { display: flex; align-items: center; gap: 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .status-badge.success { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+        .status-badge.failed { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+        .status-badge.partial { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); }
+        .status-badge.running { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+        .answer-box { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
+        .answer-box h4 { font-size: 0.85rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
+        .answer-text { font-size: 0.95rem; line-height: 1.7; color: #e2e8f0; }
+        .steps-panel { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
+        .steps-panel h4 { font-size: 0.85rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+        .step-item { border-left: 2px solid #334155; padding: 0.75rem 1rem; margin-bottom: 0.75rem; }
+        .step-item.success { border-left-color: #22c55e; }
+        .step-item.failed { border-left-color: #ef4444; }
+        .step-item.partial { border-left-color: #eab308; }
+        .step-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.4rem; }
+        .step-num { font-size: 0.75rem; font-weight: 600; color: #64748b; min-width: 2rem; }
+        .step-action { font-size: 0.85rem; font-weight: 600; color: #cbd5e1; font-family: 'JetBrains Mono', monospace; background: #0f172a; padding: 2px 6px; border-radius: 4px; }
+        .step-desc { font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }
+        .step-confidence { margin-left: auto; font-size: 0.75rem; }
+        .conf-bar { width: 60px; height: 4px; background: #334155; border-radius: 2px; margin-top: 2px; }
+        .conf-fill { height: 100%; border-radius: 2px; }
+        .root-cause { margin-top: 0.4rem; font-size: 0.8rem; color: #f97316; font-style: italic; }
+        .stats-row { display: flex; gap: 1.5rem; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .stat-item { text-align: center; }
+        .stat-val { font-size: 1.25rem; font-weight: 700; color: #e2e8f0; }
+        .stat-label { font-size: 0.75rem; color: #64748b; }
+        .failure-modes { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem; }
+        .failure-modes h4 { color: #f87171; font-size: 0.85rem; margin-bottom: 0.5rem; }
+        .failure-tag { display: inline-block; padding: 2px 8px; background: rgba(239,68,68,0.15); border-radius: 4px; font-size: 0.8rem; color: #fca5a5; margin: 2px; }
+        .raw-toggle { background: none; border: 1px solid #334155; color: #64748b; border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 0.8rem; cursor: pointer; }
+        .raw-toggle:hover { border-color: #475569; color: #94a3b8; }
+        .raw-json { display: none; background: #0f172a; border-radius: 6px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #94a3b8; white-space: pre-wrap; overflow-x: auto; max-height: 400px; overflow-y: auto; margin-top: 0.5rem; }
+        .raw-json.visible { display: block; }
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .examples { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+        .example-btn { background: #1e293b; border: 1px solid #334155; color: #94a3b8; border-radius: 4px; padding: 4px 10px; font-size: 0.8rem; cursor: pointer; }
+        .example-btn:hover { border-color: #475569; color: #e2e8f0; }
+        .cost-row { font-size: 0.8rem; color: #475569; margin-top: 0.75rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="/" style="color:#64748b;font-size:0.85rem;text-decoration:none;">← Dashboard</a>
+            <h1>🌐 Browser Automation Agent</h1>
+            <p>Self-healing browser agent with AOM-first locators, 9-class root cause taxonomy, and silent failure prevention.</p>
+        </header>
+
+        <div class="task-form">
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>Task Description (natural language)</label>
+                    <textarea id="task-desc" placeholder="e.g. Go to Wikipedia and find the population of Tokyo"></textarea>
+                    <div class="examples">
+                        <button class="example-btn" onclick="setTask('Go to en.wikipedia.org and find the current population of Tokyo, Japan')">Wikipedia lookup</button>
+                        <button class="example-btn" onclick="setTask('Search for Python on PyPI and return the latest version number')">PyPI search</button>
+                        <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story')">HN top story</button>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Start URL (optional hint)</label>
+                    <input type="url" id="target-url" placeholder="https://... (leave blank to let agent navigate)">
+                </div>
+                <div class="form-group">
+                    <label>Max Steps</label>
+                    <select id="max-steps">
+                        <option value="5">5 steps (fast)</option>
+                        <option value="10" selected>10 steps (default)</option>
+                        <option value="20">20 steps (complex tasks)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>LLM Model</label>
+                    <select id="model-select">
+                        {% for model in models %}
+                        <option value="{{ model.id }}">{{ model.display_name }} ({{ model.provider }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>OpenRouter API Key (optional)</label>
+                    <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
+                </div>
+            </div>
+            <button class="run-btn" id="run-btn" onclick="executeTask()">Execute Task</button>
+        </div>
+
+        <div class="result-panel" id="result-panel">
+            <div class="status-banner">
+                <span class="status-badge running" id="status-badge">RUNNING</span>
+                <span id="status-text">Executing browser task...</span>
+            </div>
+
+            <div class="stats-row" id="stats-row" style="display:none">
+                <div class="stat-item"><div class="stat-val" id="stat-steps">—</div><div class="stat-label">Steps</div></div>
+                <div class="stat-item"><div class="stat-val" id="stat-corrections">—</div><div class="stat-label">Self-Corrections</div></div>
+                <div class="stat-item"><div class="stat-val" id="stat-healer">—</div><div class="stat-label">Healer Activations</div></div>
+                <div class="stat-item"><div class="stat-val" id="stat-latency">—</div><div class="stat-label">Latency</div></div>
+                <div class="stat-item"><div class="stat-val" id="stat-cost">—</div><div class="stat-label">Cost</div></div>
+            </div>
+
+            <div class="answer-box" id="answer-box" style="display:none">
+                <h4>Final Answer</h4>
+                <div class="answer-text" id="final-answer"></div>
+            </div>
+
+            <div id="failure-section"></div>
+
+            <div class="steps-panel" id="steps-panel" style="display:none">
+                <h4>Execution Trace</h4>
+                <div id="steps-list"></div>
+            </div>
+
+            <button class="raw-toggle" id="raw-toggle" onclick="toggleRaw()" style="display:none">Show raw JSON</button>
+            <div class="raw-json" id="raw-json"></div>
+        </div>
+    </div>
+
+    <script>
+        function setTask(text) {
+            document.getElementById('task-desc').value = text;
+        }
+
+        async function executeTask() {
+            const btn = document.getElementById('run-btn');
+            const panel = document.getElementById('result-panel');
+            const taskDesc = document.getElementById('task-desc').value.trim();
+            const targetUrl = document.getElementById('target-url').value.trim();
+            const maxSteps = parseInt(document.getElementById('max-steps').value);
+            const modelId = document.getElementById('model-select').value;
+            const apiKey = document.getElementById('user-api-key').value.trim();
+
+            if (!taskDesc) { alert('Please enter a task description.'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Executing...';
+
+            // Reset result panel to running state
+            setStatus('running', 'RUNNING', 'Executing browser task...');
+            document.getElementById('stats-row').style.display = 'none';
+            document.getElementById('answer-box').style.display = 'none';
+            document.getElementById('failure-section').innerHTML = '';
+            document.getElementById('steps-panel').style.display = 'none';
+            document.getElementById('steps-list').innerHTML = '';
+            document.getElementById('raw-toggle').style.display = 'none';
+            document.getElementById('raw-json').classList.remove('visible');
+            panel.classList.add('visible');
+
+            const payload = {
+                task_description: taskDesc,
+                max_steps: maxSteps,
+                model: { model_id: modelId }
+            };
+            if (targetUrl) payload.target_url = targetUrl;
+            if (apiKey) payload.model.user_openrouter_key = apiKey;
+
+            try {
+                const resp = await fetch('/api/v1/browser/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                renderAgentResult(data);
+            } catch (err) {
+                setStatus('failed', 'ERROR', String(err));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Execute Task';
+            }
+        }
+
+        function renderAgentResult(data) {
+            const status = data.status || 'failed';
+            const isSuccess = status === 'success';
+            const isPartial = status === 'partial';
+
+            setStatus(
+                isSuccess ? 'success' : isPartial ? 'partial' : 'failed',
+                status.toUpperCase(),
+                isSuccess ? 'Task completed successfully' : isPartial ? 'Task partially completed' : 'Task failed'
+            );
+
+            // Stats
+            document.getElementById('stat-steps').textContent = data.total_steps ?? '—';
+            document.getElementById('stat-corrections').textContent = data.self_corrections ?? '—';
+            document.getElementById('stat-healer').textContent = data.healer_activations ?? '—';
+            document.getElementById('stat-latency').textContent = data.total_duration_ms ? Math.round(data.total_duration_ms) + 'ms' : '—';
+            document.getElementById('stat-cost').textContent = data.cost_usd !== undefined ? '$' + data.cost_usd.toFixed(4) : '—';
+            document.getElementById('stats-row').style.display = 'flex';
+
+            // Final answer
+            if (data.final_answer) {
+                document.getElementById('final-answer').textContent = data.final_answer;
+                document.getElementById('answer-box').style.display = 'block';
+            }
+
+            // Failure modes
+            const failureModes = data.failure_modes || [];
+            if (failureModes.length) {
+                const html = `<div class="failure-modes"><h4>Failure Modes Encountered</h4>${failureModes.map(f => `<span class="failure-tag">${escHtml(f)}</span>`).join('')}</div>`;
+                document.getElementById('failure-section').innerHTML = html;
+            }
+
+            // Step trace
+            const steps = data.steps || [];
+            if (steps.length) {
+                const list = document.getElementById('steps-list');
+                list.innerHTML = steps.map((s, i) => {
+                    const conf = s.confidence ?? 1;
+                    const confColor = conf >= 0.8 ? '#22c55e' : conf >= 0.6 ? '#eab308' : '#ef4444';
+                    const stepStatus = s.success === false ? 'failed' : s.confidence < 0.6 ? 'partial' : 'success';
+                    return `<div class="step-item ${stepStatus}">
+                        <div class="step-header">
+                            <span class="step-num">#${i + 1}</span>
+                            <span class="step-action">${escHtml(s.action || '—')}</span>
+                            <div class="step-confidence" style="text-align:right">
+                                <span style="font-size:0.75rem;color:${confColor}">${Math.round(conf * 100)}%</span>
+                                <div class="conf-bar"><div class="conf-fill" style="width:${Math.round(conf*100)}%;background:${confColor}"></div></div>
+                            </div>
+                        </div>
+                        <div class="step-desc">${escHtml(s.description || s.intent || '')}</div>
+                        ${s.root_cause ? `<div class="root-cause">Root cause: ${escHtml(s.root_cause)}</div>` : ''}
+                    </div>`;
+                }).join('');
+                document.getElementById('steps-panel').style.display = 'block';
+            }
+
+            document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+            document.getElementById('raw-toggle').style.display = 'inline-block';
+        }
+
+        function setStatus(cls, label, text) {
+            document.getElementById('status-badge').className = `status-badge ${cls}`;
+            document.getElementById('status-badge').textContent = label;
+            document.getElementById('status-text').textContent = text;
+        }
+
+        function toggleRaw() {
+            const raw = document.getElementById('raw-json');
+            raw.classList.toggle('visible');
+            document.getElementById('raw-toggle').textContent = raw.classList.contains('visible') ? 'Hide raw JSON' : 'Show raw JSON';
+        }
+
+        function escHtml(str) {
+            return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+    </script>
+</body>
+</html>
