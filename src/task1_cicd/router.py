@@ -7,63 +7,50 @@ Endpoints for running GitHub CI/CD skills against repositories.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
-from src.shared.logger import get_logger
-from src.shared.schemas import ExecutionResult, ExecutionStatus, ModelSelectionRequest, TaskType
+from src.shared.logger import get_logger, generate_trace_id
+from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+from src.task1_cicd.schemas import SkillListResponse, SkillRunRequest
 
 router = APIRouter()
 logger = get_logger("task1_router")
 
-
-class SkillRunRequest(BaseModel):
-    """Request to run a CI/CD skill against a repository."""
-
-    repo_url: str = Field(..., description="GitHub repository URL")
-    branch: str = Field(default="main", description="Branch to analyze")
-    skill_name: str = Field(
-        ..., description="Skill to run: lint-and-test, build-and-release, dependency-audit, security-scan"
-    )
-    dry_run: bool = Field(default=True, description="Run in preview mode (no side effects)")
-    model: ModelSelectionRequest = Field(default_factory=ModelSelectionRequest)
-
-
-class SkillListResponse(BaseModel):
-    """Available skills listing."""
-
-    skills: list[dict]
+_SKILL_CATALOG = [
+    {
+        "name": "lint-and-test",
+        "description": "Run linting and test suites on a GitHub repository",
+        "trigger_phrases": ["test this", "run tests", "check code quality", "lint", "run ci"],
+        "scope": "read-only",
+        "languages": ["python", "javascript"],
+    },
+    {
+        "name": "build-and-release",
+        "description": "Analyze git history, determine next version, and optionally create a GitHub release",
+        "trigger_phrases": ["release", "ship it", "deploy", "publish", "new version"],
+        "scope": "gated-write",
+        "dry_run_default": True,
+    },
+    {
+        "name": "dependency-audit",
+        "description": "Audit dependencies for CVEs and outdated packages via OSV.dev",
+        "trigger_phrases": ["audit deps", "check vulnerabilities", "CVE check", "outdated packages"],
+        "scope": "read-only",
+        "data_sources": ["OSV.dev", "PyPI", "npm"],
+    },
+    {
+        "name": "security-scan",
+        "description": "Scan source code for hardcoded secrets and SAST vulnerabilities",
+        "trigger_phrases": ["scan for secrets", "SAST", "find leaked keys", "security audit"],
+        "scope": "read-only",
+        "tools": ["regex-secret-detection", "bandit (Python SAST)"],
+    },
+]
 
 
 @router.get("/list", response_model=SkillListResponse)
 async def list_skills():
-    """List all available CI/CD skills with their descriptions."""
-    skills = [
-        {
-            "name": "lint-and-test",
-            "description": "Run linting and test suites on a GitHub repository",
-            "trigger_phrases": ["test this", "run tests", "check code quality", "lint"],
-            "scope": "read-only",
-        },
-        {
-            "name": "build-and-release",
-            "description": "Build artifacts and manage GitHub releases",
-            "trigger_phrases": ["release", "ship it", "deploy", "publish"],
-            "scope": "gated-write",
-        },
-        {
-            "name": "dependency-audit",
-            "description": "Audit dependencies for vulnerabilities and outdated packages",
-            "trigger_phrases": ["audit deps", "check vulnerabilities", "update packages"],
-            "scope": "read-only",
-        },
-        {
-            "name": "security-scan",
-            "description": "Scan for hardcoded secrets and security vulnerabilities",
-            "trigger_phrases": ["scan for secrets", "SAST", "check CVEs"],
-            "scope": "read-only",
-        },
-    ]
-    return SkillListResponse(skills=skills)
+    """List all available CI/CD skills with their descriptions and trigger phrases."""
+    return SkillListResponse(skills=_SKILL_CATALOG)
 
 
 @router.post("/run", response_model=ExecutionResult)
@@ -71,10 +58,11 @@ async def run_skill(request: SkillRunRequest):
     """
     Execute a CI/CD skill against a GitHub repository.
 
-    All skills run in dry-run mode by default. Write operations
-    (build-and-release) require explicit dry_run=false.
+    Skills run in dry-run mode by default. The build-and-release skill
+    requires dry_run=false to actually create a GitHub release.
     """
-    from src.shared.logger import generate_trace_id
+    from src.task1_cicd.skill_engine import run_skill as engine_run_skill
+    from src.task1_cicd.github_client import FastFailError
 
     trace_id = generate_trace_id()
     logger.info(
@@ -86,24 +74,15 @@ async def run_skill(request: SkillRunRequest):
         trace_id=trace_id,
     )
 
-    valid_skills = {"lint-and-test", "build-and-release", "dependency-audit", "security-scan"}
-    if request.skill_name not in valid_skills:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown skill: {request.skill_name}. Valid: {sorted(valid_skills)}",
+    try:
+        return await engine_run_skill(request, trace_id)
+    except FastFailError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("skill_run_unhandled_error", error=str(e), trace_id=trace_id)
+        return ExecutionResult(
+            status=ExecutionStatus.FAILED,
+            task=TaskType.CICD_SKILLS,
+            trace_id=trace_id,
+            error=f"Internal error: {e}",
         )
-
-    # Skill engine implementation will be connected here
-    # For now, return a structured placeholder showing the architecture works
-    return ExecutionResult(
-        status=ExecutionStatus.SUCCESS,
-        task=TaskType.CICD_SKILLS,
-        trace_id=trace_id,
-        result={
-            "skill": request.skill_name,
-            "repo_url": request.repo_url,
-            "branch": request.branch,
-            "dry_run": request.dry_run,
-            "message": f"Skill '{request.skill_name}' executed successfully (skeleton mode)",
-        },
-    )
