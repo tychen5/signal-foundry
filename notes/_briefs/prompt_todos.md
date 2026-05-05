@@ -45,3 +45,8 @@ npm run setup)
 
 
 接碼商: https://5sim.net/zh/manual / https://play.google.com/store/apps/details?id=sms.message.safe.sim.safesim&hl=zh_TW / https://www.binance.com/zh-TC/square/post/29545003154826 
+
+
+請先徹底了解目前repo的所有進度、實作與狀況等等( 撰寫於 @notes/thoughts/ 中的 implementation_plan-*.md 、 task-*.md 、 walkthrough-*.md 當中 )，包含了解 @notes/_briefs/_TaskDescription.md 目標與需求，以及 @notes/thoughts/_ThoughtsDraft.md 中的一些想法概念參考(僅做為提供初步思維)。 另外 @notes/progress/progress_notes.md 會是我與你共同維護的文件，當你確認完成一個項目就記得將checkbox打x，如果有其他建議的代辦事項也會需要你進行列點補充，並且要附上你的相關證明與附註說明、意見/建議於底下，你也可以用這份文件來撰寫你的疑問或困難或是目前開發進度、還欠缺什麼沒落地、接下來的todos等等，或用來跟我進行雙向溝通/說明/確認tasks實作方向或是其他開發細節、更新進度、筆記待完成事項、紀錄思考做法等等。 你也有相當多的skills 於 @.agents/ @.claude/ 可以參考可以怎麼加入相關best practice於repo當中，以讓開發更加robust且更可以考慮到各種edge cases。
+需要你思考看看目前的 @AGENTS.md 與 @CLAUDE.md 是否有需要加強或是優化修改的地方，並且也請檢閱 @notes/progress/architecture_design_spec.md 看看可以怎麼加強，以及 @README.md 可以怎麼來寫跟補強(凸顯超過面試官預期有多做多思考的機制跟演算法等等)。 同時你也需要去檢閱根據 @notes/progress/progress_notes.md 與對應 @notes/_briefs/_TaskDescription.md @notes/thoughts/_ThoughtsDraft.md 思考看看目前的實作(包含所有phases與tasks)還有哪些需要再補強跟優化。 
+除了上述事項需要優化強化以外，接下來你也同步會需要繼續完成實作Phase 3 Task 1繼續根據目前repo現況來落地執行開發看可以如何根據題目一的需求好好地將所有GitHub CI/CD 工作流程封裝為幾個可重用的 Claude Skills。

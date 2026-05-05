@@ -62,6 +62,15 @@
    3. ✅ 請務必記得也要自建一組 evaluation set 測試它的可靠性（涵蓋不同網域與任務類型），並且能夠在 Zeabur 部署可接收任務的介面。以能夠於未見過的情境中去驗證它在未見過的情境下的表現。我需要eval set是real worlds的真實情境，而非憑空想像的假例子。例如: 我想要爬取玩股網台指期盤後近周的壓力區間與支撐區間範圍是多少?
    4. ✅ 系統自我糾錯與自我維護的實質性（不是只做 try/except 重試）、evaluation set 的深度、silent failure 的防範。LLM agent要有能力可以來回迭代試錯實驗操作瀏覽器。
 
+4. [] Phase 3 Task 1 的完整實作
+   1. 思考什麼是真正的 CI/CD skills Engine，不只是把 lint/test/build/deploy 串接起來，要把常見的 GitHub CI/CD 工作流程封裝為幾個可重用的 Claude Skills（例如 lint-and-test、build-and-release、dependency-audit、security-scan）。每個 Skill 應有清楚的輸入輸出、安全邊界、錯誤處理。 請參考 @notes/thoughts/_ThoughtsDraft.md 、 @notes/thoughts/implementation_plan-1.md 、 @notes/thoughts/task-1.md 的一些靈感與想法，看看哪些合適。
+   2. 並且要能夠可以在 Zeabur 部署一個 demo（Web UI 或 API），能夠demo看到 Skills 在真實 repo 上實際跑起來。並且需要有完整的 documentation 說明如何使用。
+   3. 請著重於Skill 邊界切得好不好、認證與安全意識、idempotency、Skill description 能否被 Claude 精準 trigger。
+   4. (給 Claude 一個 GitHub repo，要求執行完整的 CI/CD 流程：從 checkout -> dependency install -> build -> test -> lint -> security audit -> (optional) release/deploy，並回傳結果報告。) : 請思考如何真正落實以及應用到真實情境中，例如：你自己的 Signal Foundry repo、。並且必須要能夠在Zeabur上demo。這是我的初步想法，你可以斟酌。
+   5. (要能夠涵蓋 github app, gha tokens, gha workflows, action (以及其他github相關機制)) : 並且最好是可以直接運用 github 的 API / GraphQL 直接對 github api 做操作，而非僅僅是透過 bash script 來做操作。並且要考慮到權限管理以及安全性的問題。這是我的初步想法，你可以斟酌。
+   6. (針對此項目建立完整的 evals 測試集。你必須實際的透過 API 來驗證以及測試這些 Skill)。 : 包含在不同 repo 下的實際測試，以及不同 github 相關機制下的實際測試。這是我的初步想法，你可以斟酌。
+   
+
 ---
 
 ## 🔄 當前狀態 (2026-05-04 12:40)
@@ -83,7 +92,7 @@
 - **Phase 1**: Task 3 — SEC 10-K Extraction pipeline implementation
 - **Phase 2**: Task 2 — Browser Automation Agent implementation
 - **Phase 3**: Task 1 — CI/CD Skills Engine implementation
-- **Phase 4**: Evaluation runs + README polish + Zeabur deployment / Full eval set run (needs stable network → commit evals/task3/results/) + Task 3 UI template + LLM reflexive validation integration test with real API call /  Task 2 UI template (templates/task2.html) + Live eval run with real LLM API + Financial domain eval cases (e.g., 玩股網台指期) + Zeabur deployment / 
+- **Phase 4**: Evaluation runs + README polish + Zeabur deployment / Full eval set run (needs stable network → commit evals/task3/results/) + Task 3 UI template Build the Task 3 web UI page (`templates/task3.html`) and deploy it to Zeabur + LLM reflexive validation integration test with real API call /  Task 2 UI template (templates/task2.html) + Live eval run with real LLM API + Financial domain eval cases (e.g., 玩股網台指期) + Zeabur deployment / 
 
 ---
 
