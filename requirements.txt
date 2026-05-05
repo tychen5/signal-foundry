@@ -39,6 +39,8 @@ structlog>=24.4.0
 
 # --- GitHub API (Task 1) ---
 PyGithub>=2.5.0
+bandit>=1.7.9
+semver>=3.0.2
 
 # --- Utilities ---
 tenacity>=9.0.0
