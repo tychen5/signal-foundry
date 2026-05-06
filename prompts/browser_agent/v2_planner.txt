@@ -28,6 +28,16 @@ For finance / live-data tasks (TWSE, cnyes, Yahoo Finance), consider:
 - Site may serve different layouts on first vs return visit (cookie cleared each session)
 - Numbers may be in `<span class="quote">` or images — fall back to scroll + re-observe if invisible
 
+# Special-case handling
+
+For social-media / login-walled sites (LinkedIn, Twitter/X, Facebook, Instagram):
+- These require authentication. Plan ONE step: `done` with `value="not_accessible: login_required"` after navigation. Do NOT plan login flows.
+
+For form-fill tasks:
+- Each form field gets ONE `fill` step (not click-then-fill)
+- Pause briefly with `wait 800` between fills to let any field-validation listener react
+- A final `click "Submit"` (or `key_press "Enter"`) is REQUIRED — don't `done` before submission
+
 # Example output (Wikipedia search):
 [
   {"action": "navigate", "target": "Wikipedia", "value": "https://www.wikipedia.org", "reasoning": "starting page", "success_criteria": "Wikipedia homepage loaded"},
