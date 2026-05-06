@@ -167,5 +167,91 @@
       "min_items_extracted": 17,
       "required_items": ["1", "1A", "7", "8", "15"]
     }
+  },
+  {
+    "case_id": "t3_gamestop_2024_meme",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001326380",
+      "accession_number": "0001326380-24-000012"
+    },
+    "expected_behavior": "Meme-stock-era filing with high-attention risk factors (short squeeze references, retail trading dynamics). Smaller market cap relative to mega-cap baselines. Validates that the parser handles dense Item 1A risk content without truncating.",
+    "difficulty": "edge_case",
+    "tags": ["mid_cap", "retail", "meme_stock", "high_volatility", "modern_html"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001326380.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1326380/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 17,
+      "required_items": ["1", "1A", "7", "8", "15"]
+    }
+  },
+  {
+    "case_id": "t3_berkshire_2024_unusual_format",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001067983",
+      "accession_number": "0000950170-24-019719"
+    },
+    "expected_behavior": "Berkshire Hathaway has an unusually narrative filing style — long Item 1 with subsidiary-by-subsidiary descriptions, Buffett's signature plain-prose style, and minimal incorporation-by-reference. Validates that the rule parser does not falsely truncate long Item 1 sections and that single not-found items don't crash the pipeline.",
+    "difficulty": "edge_case",
+    "tags": ["large_cap", "conglomerate", "narrative_style", "long_item_1"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001067983.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1067983/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 18,
+      "required_items": ["1", "1A", "7", "8", "15"],
+      "allow_missing_recent_items": ["1C", "9C", "16"]
+    }
+  },
+  {
+    "case_id": "t3_costco_2024_52week_fiscal",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000909832",
+      "accession_number": "0000909832-24-000049"
+    },
+    "expected_behavior": "Costco uses a 52/53-week fiscal year ending late August / early September, NOT December. Validates that the fiscal-year extractor and XBRL cross-validation handle non-calendar fiscal years correctly. Heavy on incorporation-by-reference for Part III.",
+    "difficulty": "edge_case",
+    "tags": ["large_cap", "retail", "non_calendar_fiscal_year", "incorporated_heavy"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000909832.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/909832/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 17,
+      "required_items": ["1", "1A", "7", "8", "15"],
+      "expected_status_items": {
+        "10": "incorporated_by_reference",
+        "11": "incorporated_by_reference",
+        "12": "incorporated_by_reference"
+      }
+    }
+  },
+  {
+    "case_id": "t3_boeing_2024_aerospace",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000012927",
+      "accession_number": "0000012927-24-000010"
+    },
+    "expected_behavior": "Boeing's filing has extensive Item 1A risk-factor content (737 MAX legacy, supply chain, defence regulations) and dense Item 3 legal proceedings. Industry-specific risk taxonomy validates that the parser handles long, multi-paragraph risk sections without merging them with adjacent items.",
+    "difficulty": "edge_case",
+    "tags": ["large_cap", "aerospace", "extensive_risk_factors", "regulated_industry"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000012927.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/12927/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 17,
+      "required_items": ["1", "1A", "3", "7", "8", "15"]
+    }
   }
 ]

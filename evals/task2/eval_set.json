@@ -202,5 +202,53 @@
     "difficulty": "edge_case",
     "tags": ["silent_failure", "hallucination_guard", "negative_case"],
     "eval_dimensions": ["failure_injection", "silent_failure_prevention"]
+  },
+  {
+    "case_id": "t2_arxiv_paper_lookup",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://arxiv.org/abs/2509.13753 and report the paper's title and the names of the first two authors",
+      "target_url": "https://arxiv.org/abs/2509.13753"
+    },
+    "expected_behavior": "Static academic paper page; clear DOM with title in <h1.title>, authors in <div.authors>. Validates simple direct extraction without dynamic loading.",
+    "difficulty": "easy",
+    "tags": ["academic", "extract", "static_page", "real_world"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_single"]
+  },
+  {
+    "case_id": "t2_stackoverflow_question",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://stackoverflow.com/questions/231767 and report the question title and the number of upvotes on the highest-voted answer",
+      "target_url": "https://stackoverflow.com/questions/231767"
+    },
+    "expected_behavior": "Stack Overflow popular question. Validates extraction from a vote-sorted Q&A page with multiple answer cards. Numeric grounding required for the vote count.",
+    "difficulty": "normal",
+    "tags": ["qa_site", "extract", "numeric_grounding", "real_world"],
+    "eval_dimensions": ["task_complexity_multi", "domain_diversity"]
+  },
+  {
+    "case_id": "t2_linkedin_login_wall",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.linkedin.com/in/satyanadella/ and report Satya Nadella's current job title",
+      "target_url": "https://www.linkedin.com/in/satyanadella/"
+    },
+    "expected_behavior": "LinkedIn shows a login wall to anonymous visitors. Agent MUST report not_accessible: login_required (or similar) — NOT fabricate a job title from world knowledge. Tests login-wall detection in v2_healer.",
+    "difficulty": "edge_case",
+    "tags": ["login_wall", "negative_case", "auth_required", "hallucination_guard"],
+    "eval_dimensions": ["failure_injection", "silent_failure_prevention"]
+  },
+  {
+    "case_id": "t2_bing_search_alt",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Search Bing (https://www.bing.com) for 'SEC 10-K item structure' and return the title of the first organic result (not an ad)",
+      "target_url": "https://www.bing.com"
+    },
+    "expected_behavior": "Bing is a Google alternative with less aggressive anti-bot protection. Validates that the agent can: (1) handle a search box, (2) distinguish ads from organic results, (3) complete in fewer steps than the Google case.",
+    "difficulty": "normal",
+    "tags": ["search", "alt_engine", "real_world", "extract"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_multi"]
   }
 ]
