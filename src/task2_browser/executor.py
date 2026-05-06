@@ -414,24 +414,50 @@ async def dismiss_popups(page: Page) -> bool:
     """
     dismissed = False
 
-    # Common cookie/consent button patterns
+    # Common cookie/consent button patterns + multilingual variants.
+    # Order matters: try the most specific (button:has-text) before fallbacks.
     consent_patterns = [
-        'button:has-text("Accept")',
+        # English buttons
         'button:has-text("Accept All")',
+        'button:has-text("Accept all cookies")',
+        'button:has-text("Accept")',
         'button:has-text("Accept Cookies")',
         'button:has-text("I Agree")',
+        'button:has-text("Agree")',
         'button:has-text("OK")',
         'button:has-text("Got it")',
         'button:has-text("Allow")',
         'button:has-text("Consent")',
         'button:has-text("Continue")',
+        'button:has-text("Allow all")',
+        'button:has-text("Confirm")',
+        # Chinese (Traditional + Simplified) — common on TWSE, cnyes, Yahoo TW
+        'button:has-text("接受")',
+        'button:has-text("同意")',
+        'button:has-text("確定")',
+        'button:has-text("我同意")',
+        'button:has-text("接受全部")',
+        # Japanese
+        'button:has-text("同意する")',
+        'button:has-text("承諾")',
+        # GDPR-style links/divs
         '[id*="accept" i]',
         '[id*="consent" i]',
-        '[class*="accept" i]',
-        '[class*="consent" i]',
+        '[class*="accept-cookies" i]',
+        '[class*="cookie-accept" i]',
+        '[class*="consent-button" i]',
         '[aria-label*="accept" i]',
         '[aria-label*="cookie" i]',
         '[aria-label*="close" i]',
+        '[aria-label*="dismiss" i]',
+        # Newsletter/modal close buttons
+        'button[aria-label*="close" i]',
+        'button[aria-label*="dismiss" i]',
+        'button.close',
+        # OneTrust (very common on US news sites)
+        '#onetrust-accept-btn-handler',
+        '#truste-consent-button',
+        '.osano-cm-accept-all',
     ]
 
     for pattern in consent_patterns:

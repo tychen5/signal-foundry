@@ -478,6 +478,35 @@ class TestSilentFailureGuard:
         agent._guard_against_silent_success(result)
         assert result.status == "success"
 
+    def test_login_wall_marked_not_found(self) -> None:
+        """v2 prompt's structured marker `not_accessible: <reason>` should
+        flip status to not_found via the expanded phrase list."""
+        agent = self._make_agent()
+        result = self._make_result(
+            "not_accessible: LinkedIn profile is behind an authwall requiring login"
+        )
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+        assert "hedged_answer" in result.failure_modes
+
+    def test_404_marker_marked_not_found(self) -> None:
+        """A 404 reply should also be marked not_found, not silently success."""
+        agent = self._make_agent()
+        result = self._make_result(
+            "The page does not exist (404 not found)."
+        )
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+
+    def test_captcha_or_anti_bot_marked_not_found(self) -> None:
+        """Anti-bot CAPTCHA pages should also flip to not_found."""
+        agent = self._make_agent()
+        result = self._make_result(
+            "Unable to retrieve: Cloudflare anti-bot CAPTCHA challenge is blocking access."
+        )
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+
 
 # ==============================================================================
 # Planner Tests

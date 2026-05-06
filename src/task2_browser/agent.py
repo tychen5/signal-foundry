@@ -51,6 +51,7 @@ _VERIFICATION_THRESHOLD = 0.4
 # When the final_answer matches one of these, downgrade status to "not_found"
 # instead of claiming "success" — this is the silent-failure guard.
 _NOT_FOUND_PHRASES = (
+    # English: information genuinely missing
     "i cannot find",
     "i could not find",
     "i was unable to find",
@@ -64,11 +65,37 @@ _NOT_FOUND_PHRASES = (
     "cannot be found",
     "this page does not have",
     "no information about",
+    "unable to retrieve",
+    "unable to extract",
+    "could not be retrieved",
+    "no contact information",
+    "no information is available",
+    # English: structured not-found / not-accessible markers (v2 actor prompt)
+    "not_found:",
+    "not_accessible:",
+    "not accessible:",
+    # English: site-blocking / protection
+    "blocked by",
+    "behind a paywall",
+    "behind an authwall",
+    "behind a login wall",
+    "authwall requiring",
+    "captcha challenge",
+    "anti-bot",
+    "verification iframe",
+    "press & hold to confirm",
+    "404 not found",
+    "page does not exist",
+    "404 error",
+    # Chinese
     "未能找到",
     "找不到",
     "無法找到",
     "無法取得",
     "頁面沒有",
+    "頁面不存在",
+    "需要登入",
+    "需要登錄",
 )
 
 _NUMBER_TOKEN = re.compile(r"\d{2,}(?:[.,]\d+)?")
