@@ -130,15 +130,26 @@ async def run_eval(
     results_dir: Path,
     model_name: str | None = None,
     skip_hard: bool = False,
+    inter_case_delay: float = 5.0,
 ) -> dict[str, Any]:
-    """Run all Task 2 eval cases."""
+    """Run all Task 2 eval cases.
+
+    Args:
+        inter_case_delay: Seconds to sleep between cases to avoid rate-limiting.
+            NVIDIA NIM kimi-k2.6 allows ~4 calls/min on free tier; 5 s gap helps.
+            Set to 0 for no delay (may hit 429 on batch runs).
+    """
+    import asyncio as _asyncio
+
     cases = _load_cases(eval_set)
     if skip_hard:
         cases = [c for c in cases if c.get("difficulty") != "hard"]
 
     scores = []
-    for case in cases:
+    for i, case in enumerate(cases):
         scores.append(await _run_case(case, model_name))
+        if inter_case_delay > 0 and i < len(cases) - 1:
+            await _asyncio.sleep(inter_case_delay)
 
     run_at = datetime.now(timezone.utc).isoformat()
     payload = {
@@ -163,9 +174,17 @@ def main() -> None:
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--model", type=str, default=None, help="LLM model override")
     parser.add_argument("--skip-hard", action="store_true")
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=5.0,
+        help="Seconds between cases to avoid rate-limiting (default: 5.0)",
+    )
     args = parser.parse_args()
 
-    payload = asyncio.run(run_eval(args.eval_set, args.results_dir, args.model, args.skip_hard))
+    payload = asyncio.run(
+        run_eval(args.eval_set, args.results_dir, args.model, args.skip_hard, args.delay)
+    )
     sys.stdout.write(json.dumps(payload["summary"], indent=2) + "\n")
 
 

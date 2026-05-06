@@ -48,15 +48,16 @@ async def observe(page: Page, screenshot_dir: str = "") -> PageState:
         logger.warning("observe_metadata_failed", error=str(e))
 
     # Accessibility tree snapshot (Layer 1 — most stable signal)
+    # Playwright ≥1.46 removed the old accessibility snapshot API; the new
+    # aria_snapshot() method lives on Locator, not on the Page object directly.
     try:
-        a11y_snapshot = await page.accessibility.snapshot()
-        if a11y_snapshot:
-            state.accessibility_tree = _format_a11y_tree(a11y_snapshot)
-            state.has_buttons = "button" in state.accessibility_tree.lower()
-            state.has_input_fields = (
-                "textbox" in state.accessibility_tree.lower() or "searchbox" in state.accessibility_tree.lower()
-            )
-            state.has_links = "link" in state.accessibility_tree.lower()
+        a11y_text: str = await page.locator("body").aria_snapshot()
+        if a11y_text:
+            state.accessibility_tree = a11y_text[:_MAX_A11Y_CHARS]
+            lower = a11y_text.lower()
+            state.has_buttons = "button" in lower
+            state.has_input_fields = "textbox" in lower or "searchbox" in lower
+            state.has_links = "link" in lower
     except Exception as e:
         logger.warning("a11y_snapshot_failed", error=str(e))
 

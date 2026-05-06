@@ -1,0 +1,701 @@
+{
+  "run_at": "2026-05-06T15:49:40.336807+00:00",
+  "eval_set": "/mnt/c/Users/leoqa/Documents/signal-foundry/evals/task2/eval_set.json",
+  "summary": {
+    "cases": 17,
+    "passed": 17,
+    "success_rate": 1.0,
+    "avg_latency_ms": 20754.4,
+    "total_cost_usd": 0.06406,
+    "avg_self_corrections": 0.24
+  },
+  "scores": [
+    {
+      "case_id": "t2_wikipedia_search",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "353 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 4
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 4
+        }
+      ],
+      "status": "success",
+      "steps_taken": 4,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Artificial intelligence (AI) is intelligence\u2014perceiving, synthesizing, and inferring information\u2014demonstrated by machines, as opposed to intelligence displayed by non-human animals or by humans. Examp",
+      "failure_modes": [],
+      "latency_ms": 26505.8,
+      "cost_usd": 0.0043,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_google_search",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "306 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "success",
+      "steps_taken": 5,
+      "self_corrections": 2,
+      "healer_activations": 2,
+      "final_answer_preview": "Unable to complete the search due to a Google security verification (CAPTCHA) page blocking access. The page displays: 'Our systems have detected unusual traffic from your computer network. This page ",
+      "failure_modes": [],
+      "latency_ms": 212272.0,
+      "cost_usd": 0.036982,
+      "llm_calls": 6
+    },
+    {
+      "case_id": "t2_form_fill_httpbin",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "402 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 7
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 7
+        }
+      ],
+      "status": "success",
+      "steps_taken": 7,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "The form was submitted successfully. The response from https://httpbin.org/post shows the form data was received with: custname='555-1234', size='medium', topping='mushroom'. However, note that the cu",
+      "failure_modes": [],
+      "latency_ms": 23328.9,
+      "cost_usd": 0.011914,
+      "llm_calls": 3
+    },
+    {
+      "case_id": "t2_multi_step_hackernews",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "243 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "success",
+      "steps_taken": 5,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "The top story on Hacker News is 'Show HN: Red Squares \u2013 GitHub outages as contributions' (cian.lol) with 144 comments. The task asked to click on the top story to read comments and report the number o",
+      "failure_modes": [],
+      "latency_ms": 19208.3,
+      "cost_usd": 0.00876,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_github_trending",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 3
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 3
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 3,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 16124.6,
+      "cost_usd": 0.002104,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_pypi_search",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 4503.9,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_error_recovery_404",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 4164.6,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_cookie_banner_news",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "success",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [],
+      "latency_ms": 3770.4,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_multi_tab_comparison",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 4209.3,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_sec_edgar_lookup",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 3632.6,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_spa_navigation",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 4026.4,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_table_extraction",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 4779.6,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_wantgoo_tx_pivots",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 4411.1,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_twse_company_lookup",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 3735.5,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_cnyes_taiex_quote",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 3945.0,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_yahoo_finance_aapl_options",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 10586.0,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_anuse_silent_failure_guard",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 1
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 1
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 1,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Decision failed: Error code: 429 - {'status': 429, 'title': 'Too Many Requests'}",
+      "failure_modes": [
+        "ungrounded_numbers:['429', '429']"
+      ],
+      "latency_ms": 3620.0,
+      "cost_usd": 0.0,
+      "llm_calls": 2
+    }
+  ]
+}

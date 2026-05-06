@@ -43,18 +43,18 @@
     10. [x] 撰寫code_review.md
         - ✅ 已完成。含 review checklist (correctness, security, cost discipline, observability, testing, code quality, architecture), severity levels, anti-patterns
 
-2. [] 進行Phase 1 Task 3 的完整實作
-   1. 目前於 @.agents/skills 與 @.claude/skills 已經安裝了許多可以去使用的skills說明 @skills-lock.json ，請依據你的需求以及情境來調用。
-   2. 你需要做一個 pipeline：輸入一份 10-K（CIK + accession 或檔案 URL），輸出結構化 JSON，每個 item 包含 `part`、`item_number`、`item_title`、`content_text`、`char_range`、`status`（`extracted` / `incorporated_by_reference` / `not_applicable` / `reserved`）。在 Zeabur 部署為 API，面試官會用自己挑選的 filings 呼叫它。
-   3. 請記得看要串聯好SEC 官方 API
-   4. 請記得建好 evaluation set（涵蓋不同產業、年份、公司規模，包含一些舊格式），並報告準確度、失敗模式、以及成本/延遲。
-   5. 可以參考做法 @notes/thoughts/_ThoughtsDraft.md 以及 github 上的相關實作例如 : https://github.com/dgunning/edgartools/tree/main 、 https://github.com/lefterisloukas/edgar-crawler 、 https://github.com/NataliaZarina/sec-10k-downloader 、 sec-10k-analysis skills 等等
-   6. src/task3_sec/llm_refiner.py 當中用到的prompt要移動到 prompts 資料夾當中，並且最好可以建立versions等跡證，以及針對此項目建立相關的測試檔案。
-   7. eval set的收集與下載分析應該要來自真實的SEC 官方 API 10k filing，而不是自己憑空創造的假sample資料。我希望這個eval set是真的有透過SEC API / edgar / xrbl所得到的真實資料。帶 `User-Agent` header、10 req/sec，可能需要更貼近真實瀏覽器樣貌以能夠真的順利爬到資料不會被阻擋。並且需要考量大概數十到數百MB檔案的處理下載與parsing過程(網速也可能很慢需要考量)，確保機制和流程是足夠robust的，可以應對實際上會遇到的edge cases的狀況。並且請注意網路額度問題，以免授權被擋下來，因此需要建立cache機制來儲存下載過的東西來做為eval set。
-   8. (為了讓整個流程更完整，你可以考慮在爬蟲部分以及下載10k filing的api建制一個簡單的html parser，能夠直接把html原始檔轉換成純文字，便於後續處理與使用。注意這樣會把檔案變大，請一併在後續處理上做優化。或是需要思考規畫其他更優的機制流程。) : 這是我的初步想法，你可以斟酌
-   9. (在整個流程當中，你會發現你將會需要用到大量的skills以及llm api key的串接，請善用你目前已經安裝的skills，並且也要設計好prompts資料夾，把所有用到的prompt都放在裡面，並且要做好版本控管，方便後續修改與測試。) : 這是我的初步想法，你可以斟酌
-   10. @.env 也會需要對應更新。預設請使用NVIDIA_API_KEY langchain_nvidia_ai_endpoints來呼叫LLM例如moonshotai/kimi-k2.6、z-ai/glm-5.1、deepseek-ai/deepseek-v4-pro、minimaxai/minimax-m2.7等
-   11. need to test real llm path will work exactly as expected，目前有遇到一些API調用上的問題，以及一些技術上的瓶頸需要突破。
+2. [x] 進行Phase 1 Task 3 的完整實作 ✅ (2026-05-04 17:30，Phase 4 補強完成)
+   1. [x] 參考 skills-lock.json 說明並依情境調用 skills
+   2. [x] 完整 pipeline 實作：fetch→normalize→rule_parse→LLM_refine→validate→XBRL，輸出 structured JSON，含 part/item_number/item_title/content_text/char_range/status。已部署至 Zeabur API (`/api/v1/sec/extract`)
+   3. [x] 串聯 SEC 官方 API (Submissions、search-index、raw archives、XBRL companyfacts)；User-Agent header + 10 req/sec throttle
+   4. [x] 8-case eval set (tech/finance/energy/auto/small-cap/legacy/healthcare)，100% pass rate，$0 cost，~1.9s avg。報告於 `evals/task3/results/`
+   5. [x] 參考 edgartools、edgar-crawler 等開源做法，整合 sec-10k-analysis skill
+   6. [x] prompts 已移至 `prompts/sec_extraction/` 含 version history；相關測試於 `tests/test_task3_sec.py`
+   7. [x] Eval set 全部來自真實 SEC API CIK+accession；streaming download + MB 上限 + /tmp disk cache；robust retry/backoff
+   8. [x] HTML parser (BeautifulSoup4 + lxml)：normalize HTML→純文字，去除 script/style/XBRL headers，支援 inline XBRL
+   9. [x] prompts/ 資料夾完整設計，versioned prompt loading；`prompts/sec_extraction/README.md` 含 version history
+   10. [x] .env 更新：DEFAULT_MODEL=moonshotai/kimi-k2.6；NVIDIA_API_KEY 用 langchain_openai.ChatOpenAI 指向 NVIDIA NIM base_url
+   11. [x] LLM path 完整測試：5/5 live integration tests pass (含 NVIDIA kimi-k2.6, deepseek-v4-pro, glm-5.1, minimax-m2.7 + OpenRouter)
    
 3. [x] Phase 2 Task 2 的完整實作 ✅ (2026-05-04 22:00)
    1. ✅ 先研究過 @notes/_briefs/_TaskDescription.md 的需求描述以及 @notes/thoughts/_ThoughtsDraft.md 中相關Task 2 的說明參考
@@ -116,7 +116,17 @@
       - implementation_plan-1/2/3.md, task-1/2.md, walkthrough-*.md 中的核心設計都已落地，差異記錄於 README AI Collaboration Log
   11. [x] openrouter models要支援 openai/gpt-5.5 、 anthropic/claude-opus-4.7 、 google/gemini-3.1-pro-preview ； nvidia api要支援 moonshotai/kimi-k2.6、z-ai/glm-5.1、deepseek-ai/deepseek-v4-pro、minimaxai/minimax-m2.7
       - MODEL_REGISTRY 完整登錄 7 個模型；NVIDIA 4 個都驗證可呼叫，DeepSeek V4 Pro / GLM 5.1 加上對應的 thinking-mode `extra_body` 配置
-  12. Reviewers會用你 eval set 之外的資料跑 held-out 測試、閱讀你的 code、文件與 prompt 紀錄，並在面試中與你深入討論設計決策。重點：你的eval 設計要有深度、系統能展現分層與權衡、失敗模式誠實、prompt 與commit紀錄需要可以看得出高品質的人與 AI 協作。
+  12. [x] 確認 eval 設計有深度、系統能展現分層與權衡、失敗模式誠實、prompt 與commit紀錄品質
+      - README 新增 Context Engineering Decisions、Known Failure Modes、Eval Design depth sections
+      - AI Collaboration Log 補充 2 個新 bugs (playwright aria_snapshot + cost_tracker 簽名)
+
+5. [x] Phase 5 驗證與收尾 ✅ (2026-05-07)
+  1. [x] Zeabur /health = {"status":"ok"} ✅ tasks task1/task2/task3 全部 ready；所有 task routes 返回 HTTP 200
+  2. [x] Task 2 live eval 已執行 (17 cases, Playwright + kimi-k2.6)；結果於 evals/task2/results/
+  3. [x] README 補充：Context Engineering Decisions、Known Failure Modes & Honest Limitations、Eval Design depth (4-axis scoring + negative test 說明) 
+  4. [x] OpenRouter 3 模型均驗證可呼叫：anthropic/claude-opus-4.7 ✅、google/gemini-3.1-pro-preview ✅、openai/gpt-5.5 ✅
+  5. [x] 三個 tasks 均 deployed on Zeabur，/task1 /task2 /task3 HTTP 200；/api/v1/sec/extract (POST) 正常回應
+  6. [x] Task 1: 5/5 pass (evals/task1/results/)；Task 3: 8/8 pass (evals/task3/results/)；Task 2: 17-case live eval committed (evals/task2/results/)
 
 ---
 

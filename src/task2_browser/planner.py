@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -90,6 +91,7 @@ async def plan_task(
         context += f"Starting URL: {target_url}\n"
 
     try:
+        _t0 = time.time()
         response = await llm.ainvoke(
             [
                 SystemMessage(content=PLANNER_PROMPT),
@@ -101,7 +103,9 @@ async def plan_task(
             model=model_name or "default",
             tokens_in=len(PLANNER_PROMPT + context) // 4,
             tokens_out=len(_resp_text(response)) // 4,
-            task="browser_planner",
+            latency_ms=round((time.time() - _t0) * 1000, 1),
+            task="task2_browser",
+            operation="plan",
             trace_id=trace_id,
         )
 
@@ -159,6 +163,7 @@ async def decide_next_action(
     )
 
     try:
+        _t0 = time.time()
         response = await llm.ainvoke(
             [
                 SystemMessage(content=ACTOR_PROMPT),
@@ -170,7 +175,9 @@ async def decide_next_action(
             model=model_name or "default",
             tokens_in=len(ACTOR_PROMPT + context) // 4,
             tokens_out=len(_resp_text(response)) // 4,
-            task="browser_actor",
+            latency_ms=round((time.time() - _t0) * 1000, 1),
+            task="task2_browser",
+            operation="decide_action",
             trace_id=trace_id,
         )
 
@@ -219,6 +226,7 @@ async def verify_with_llm(
     )
 
     try:
+        _t0 = time.time()
         response = await llm.ainvoke(
             [
                 SystemMessage(content=VERIFIER_PROMPT),
@@ -230,7 +238,9 @@ async def verify_with_llm(
             model=model_name or "default",
             tokens_in=len(VERIFIER_PROMPT + context) // 4,
             tokens_out=len(_resp_text(response)) // 4,
-            task="browser_verifier",
+            latency_ms=round((time.time() - _t0) * 1000, 1),
+            task="task2_browser",
+            operation="verify",
             trace_id=trace_id,
         )
 

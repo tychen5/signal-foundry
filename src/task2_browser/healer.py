@@ -18,6 +18,7 @@ Root cause taxonomy:
 from __future__ import annotations
 
 import os
+import time
 from typing import Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -230,6 +231,7 @@ async def diagnose_with_llm(
             f"Error indicators on page: {page_state.error_indicators}\n"
         )
 
+        _t0 = time.time()
         response = await llm.ainvoke(
             [
                 SystemMessage(content=HEALER_PROMPT),
@@ -242,7 +244,9 @@ async def diagnose_with_llm(
             model=model_name or "deepseek-ai/deepseek-v4-pro",
             tokens_in=len(context) // 4,
             tokens_out=len(text) // 4,
-            task="browser_healer",
+            latency_ms=round((time.time() - _t0) * 1000, 1),
+            task="task2_browser",
+            operation="heal",
             trace_id=trace_id,
         )
 

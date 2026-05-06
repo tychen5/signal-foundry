@@ -36,7 +36,6 @@ from src.task2_browser.schemas import (
     ActionType,
     AgentResult,
     BrowserAction,
-    PageState,
     StepResult,
 )
 

@@ -670,3 +670,64 @@ class TestEvalSet:
         assert "search" in all_tags
         assert "form" in all_tags or "fill" in all_tags
         assert "navigation" in all_tags or "multi_step" in all_tags
+
+
+# ==============================================================================
+# Regression Tests — bugs found by running the live path
+# ==============================================================================
+
+
+class TestRegressions:
+    """Regression tests for bugs that only surfaced during live runs."""
+
+    def test_observer_does_not_use_removed_page_accessibility(self) -> None:
+        """observer.observe() must not reference page.accessibility (removed in Playwright ≥1.46)."""
+        import inspect
+
+        from src.task2_browser import observer
+
+        source = inspect.getsource(observer.observe)
+        assert "page.accessibility" not in source, (
+            "page.accessibility was removed in Playwright ≥1.46 — use page.locator('body').aria_snapshot()"
+        )
+        assert "aria_snapshot" in source, "observe() should use locator.aria_snapshot()"
+
+    def test_cost_tracker_record_call_has_latency_and_operation(self) -> None:
+        """All record_call() call sites in planner.py must pass latency_ms and operation."""
+        import inspect
+
+        from src.task2_browser import planner
+
+        source = inspect.getsource(planner)
+        # Verify all record_call sites include required keyword args
+        assert "latency_ms=" in source, "planner.py record_call() missing latency_ms="
+        assert "operation=" in source, "planner.py record_call() missing operation="
+        # Verify old wrong task labels are gone
+        assert "browser_planner" not in source, "task= should be 'task2_browser', not 'browser_planner'"
+        assert "browser_actor" not in source, "task= should be 'task2_browser', not 'browser_actor'"
+        assert "browser_verifier" not in source, "task= should be 'task2_browser', not 'browser_verifier'"
+
+    def test_healer_record_call_has_latency_and_operation(self) -> None:
+        """healer.py record_call() must pass latency_ms and operation."""
+        import inspect
+
+        from src.task2_browser import healer
+
+        source = inspect.getsource(healer)
+        assert "latency_ms=" in source, "healer.py record_call() missing latency_ms="
+        assert "operation=" in source, "healer.py record_call() missing operation="
+        assert "browser_healer" not in source, "task= should be 'task2_browser', not 'browser_healer'"
+
+    def test_cost_tracker_record_call_signature(self) -> None:
+        """CostTracker.record_call requires latency_ms and operation (not optional)."""
+        import inspect
+
+        from src.shared.cost_tracker import CostTracker
+
+        sig = inspect.signature(CostTracker.record_call)
+        params = list(sig.parameters.keys())
+        assert "latency_ms" in params, "CostTracker.record_call missing latency_ms param"
+        assert "operation" in params, "CostTracker.record_call missing operation param"
+        # Both should be required (no default value)
+        assert sig.parameters["latency_ms"].default is inspect.Parameter.empty
+        assert sig.parameters["operation"].default is inspect.Parameter.empty
