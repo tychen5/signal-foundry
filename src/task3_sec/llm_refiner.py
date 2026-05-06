@@ -11,6 +11,7 @@ See prompts/sec_extraction/README.md for iteration history.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -91,11 +92,20 @@ async def refine_boundaries(
         threshold=confidence_threshold,
     )
 
-    # Use cheaper model for refinement when possible
-    refine_model = model_name or "deepseek-ai/deepseek-v4-pro"
+    # Boundary refinement is a small, focused task — use a fast non-thinking
+    # model. deepseek-v4-pro is excellent quality but its thinking-mode
+    # responses can take 200+ seconds per call, which is unacceptable when
+    # there are 15 boundaries to refine. kimi-k2.6 is fast (~3 s) and accurate
+    # enough for the ±500-char heading-detection task.
+    refine_model = model_name or "moonshotai/kimi-k2.6"
     llm = get_llm(model_name=refine_model, user_openrouter_key=user_api_key, temperature=0.0)
 
     refined_boundaries = list(parse_result.boundaries)  # Copy
+
+    # Inter-call delay to avoid 429 from NVIDIA NIM free-tier rate limit (~4 calls/min).
+    # 1.5 s gap = ~40 calls/min, well under the limit.
+    rate_delay_s = float(os.environ.get("LLM_REFINER_DELAY_S", "1.5"))
+    consecutive_429 = 0
 
     for boundary in low_confidence:
         try:
@@ -108,12 +118,27 @@ async def refine_boundaries(
                     if b.item_number == boundary.item_number and b.start_pos == boundary.start_pos:
                         refined_boundaries[i] = refined
                         break
+            consecutive_429 = 0
         except Exception as e:
+            err_str = str(e)
             logger.warning(
                 "refinement_failed",
                 item=boundary.item_number,
-                error=str(e),
+                error=err_str,
             )
+            # Exponential back-off if hitting rate limits repeatedly
+            if "429" in err_str or "Too Many Requests" in err_str:
+                consecutive_429 += 1
+                if consecutive_429 >= 3:
+                    logger.warning(
+                        "rate_limit_circuit_break",
+                        consecutive_429=consecutive_429,
+                        message="3+ consecutive 429s — abandoning further refinement",
+                    )
+                    break
+                await asyncio.sleep(min(30.0, 5.0 * consecutive_429))
+        # pace requests
+        await asyncio.sleep(rate_delay_s)
 
     # Check for missing items
     await _detect_missing_items(

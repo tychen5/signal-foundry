@@ -56,7 +56,17 @@ def _load_prompt(filename: str) -> str:
         return ""
 
 
-HEALER_PROMPT = _load_prompt("v1_healer.txt")
+def _load_prompt_versioned(stem: str) -> str:
+    """Load latest prompt version (v2 preferred, v1 fallback)."""
+    for version in ("v2", "v1"):
+        text = _load_prompt(f"{version}_{stem}.txt")
+        if text:
+            return text
+    return ""
+
+
+# v2 healer adds rate_limit_429 / login_wall / paywall / frame_detached classes.
+HEALER_PROMPT = _load_prompt_versioned("healer")
 
 
 def diagnose_deterministic(

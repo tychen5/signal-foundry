@@ -76,11 +76,15 @@ def _extract_values(fact_data: dict, fiscal_year: Optional[int] = None) -> Optio
             entries = units[unit_key]
 
             if fiscal_year:
-                # Filter to specific fiscal year
+                # Filter to specific fiscal year. SEC's `fy` field is an int
+                # (e.g. 2023), so coerce both sides to str before substring
+                # checks — the previous form crashed with `TypeError: argument
+                # of type 'int' is not iterable`.
+                year_str = str(fiscal_year)
                 year_entries = [
                     e for e in entries
-                    if str(fiscal_year) in e.get("fy", str(fiscal_year))
-                    or str(fiscal_year) in e.get("end", "")
+                    if year_str == str(e.get("fy", ""))
+                    or year_str in str(e.get("end", ""))
                 ]
                 if year_entries:
                     latest = year_entries[-1]

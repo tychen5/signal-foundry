@@ -1,29 +1,58 @@
 # Browser Agent Prompts — Version Ledger
 
-## Current: v1 (2026-05-04)
+## Active: v2 (2026-05-07)
 
-### v1_planner.txt
-- **Purpose**: Decompose natural language task into JSON action sequence
-- **Key design**: Uses semantic element descriptions (not CSS selectors)
-- **Output**: JSON array of step objects with action, target, value, reasoning, success_criteria
+The agent loads `v2_*.txt` first; falls back to `v1_*.txt` if absent. Both versions are kept on disk as the AI-collaboration audit trail.
 
-### v1_actor.txt
-- **Purpose**: Decide next action reactively from current page state
-- **Key design**: Reads accessibility tree to find interactive elements
-- **Output**: Single JSON action object
+### v2_planner.txt — what changed vs v1
+- Added explicit anti-hallucination rules (numeric answers must be quotable from page text)
+- Added planning-time popup/cookie-banner anticipation (saves a healer round trip on EU + news sites)
+- Added SPA wait guidance (`wait 2000` after async-triggering clicks)
+- Cap at 12 steps (loop / runaway prevention)
+- Added explicit "predict failure points" section for live-data finance tasks (TWSE, cnyes, Yahoo)
 
-### v1_verifier.txt
-- **Purpose**: Check if the task has been completed
-- **Key design**: Strict verification with confidence scoring (0-1)
-- **Output**: JSON with complete, answer, confidence
+### v2_actor.txt — what changed vs v1
+- "Anti-hallucination rules (CRITICAL)" section: extracted answers MUST be quotable from `visible_text` or accessibility_tree
+- For numeric answers, the EXACT number must appear on the observed page (no approximations)
+- Explicit not-found handling: `done` with `value="not_found: <reason>"` rather than guessing
+- Login-wall / paywall / 404 → `done` with `value="not_accessible: <category>"` rather than retrying
 
-### v1_healer.txt
-- **Purpose**: Diagnose failure root cause and suggest recovery
-- **Key design**: 9-class root cause taxonomy (not just "retry")
-- **Output**: Root cause classification + specific recovery strategy
+### v2_verifier.txt — what changed vs v1
+- Re-cast as a STRICT verifier (the bar for `complete=true` is high)
+- Numeric grounding requirement: exact number must appear in visible_text
+- Negative-result honesty: `complete=true, answer="not_found"` is correct, not failure
+- Multi-field tasks require ALL requested fields before complete=true
+- Examples for each anti-hallucination case
 
-## Design Rationale
-- **AOM-first**: Prompts instruct LLM to use accessibility tree roles/names, not CSS selectors
-- **Semantic descriptions**: "the search button" instead of "#btn-search" — survives UI redesigns
-- **Confidence scoring**: Enables automated decision-making about when to heal vs. proceed
-- **Structured output**: JSON format for reliable parsing (with fallback text parsing)
+### v2_healer.txt — what changed vs v1
+Added 4 new root cause categories on top of v1's 9-class taxonomy:
+- `rate_limit_429` — 429 from upstream LLM API → wait + retry, or mark degraded
+- `login_wall` — sign-in required → set should_retry=false, mark not_accessible
+- `paywall` — pay-to-read overlay → set should_retry=false, mark not_accessible
+- `frame_detached` — "Target page closed" / "Frame detached" mid-action → re-observe (navigation may have completed)
+
+The structured output schema is now stricter (`should_retry` boolean tells the agent whether to stop completely).
+
+### Why v2 was needed
+v1 was too lenient about the `done` action. The Task 2 live eval surfaced:
+- 5/17 cases where the LLM was happy to mark a task complete when it had no real answer
+- Numeric tasks (TWSE 實收資本額, cnyes 加權指數) where the model would output a plausible-looking number not actually on the page
+- Login-wall pages getting infinite retry instead of being correctly marked unreachable
+
+v2 hardens these boundaries with explicit rules and few-shot examples for the failure modes.
+
+## v1 Archive (2026-05-04)
+
+Kept on disk for auditability:
+- v1_planner.txt — Original plan decomposition prompt
+- v1_actor.txt — Original reactive next-action prompt
+- v1_verifier.txt — Original task-completion verifier
+- v1_healer.txt — Original 9-class root cause diagnoser
+
+## Design Rationale (cross-cutting)
+
+- **AOM-first**: All prompts instruct LLM to use accessibility-tree roles/names, never CSS selectors
+- **Semantic descriptions**: "the search button" not "#btn-search" — survives UI redesigns
+- **Confidence scoring**: Enables the agent to decide when to heal vs. proceed
+- **Structured JSON output**: With deterministic fallback parsing if JSON fails
+- **Anti-hallucination > completion-rate**: The cost of a fabricated answer is much higher than the cost of an extra step or honest "not_found"

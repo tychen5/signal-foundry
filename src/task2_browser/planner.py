@@ -54,9 +54,20 @@ def _load_prompt(filename: str) -> str:
         return ""
 
 
-PLANNER_PROMPT = _load_prompt("v1_planner.txt")
-ACTOR_PROMPT = _load_prompt("v1_actor.txt")
-VERIFIER_PROMPT = _load_prompt("v1_verifier.txt")
+def _load_prompt_versioned(stem: str) -> str:
+    """Load latest prompt version (v2 preferred, v1 fallback). Audit-trail kept."""
+    for version in ("v2", "v1"):
+        text = _load_prompt(f"{version}_{stem}.txt")
+        if text:
+            return text
+    return ""
+
+
+# v2 prompts add explicit anti-hallucination + numeric grounding rules.
+# Falls back to v1 if v2 not present.
+PLANNER_PROMPT = _load_prompt_versioned("planner")
+ACTOR_PROMPT = _load_prompt_versioned("actor")
+VERIFIER_PROMPT = _load_prompt_versioned("verifier")
 
 
 async def plan_task(
