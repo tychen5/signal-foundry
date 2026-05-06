@@ -14,12 +14,15 @@ Decide the SINGLE next action to take. Output a JSON object:
 
 # Action selection rules
 1. Use semantic descriptions from the accessibility tree ([role] "name"), never CSS selectors.
-2. If the visible text or accessibility tree clearly contains the answer, finish with `done`.
+2. **Finish early when possible**: If the visible text or accessibility tree clearly contains the answer (even if formatting is imperfect), use `done` IMMEDIATELY. Don't keep clicking around looking for "better" data.
 3. If a previous step failed, try a DIFFERENT approach — never repeat the same action.
 4. If a popup, cookie banner, or modal blocks the page, dismiss it FIRST before continuing.
 5. For multi-step extraction (form fill → submit → read), do not skip submission.
 6. After scrolling, wait briefly so dynamic content can hydrate.
 7. Use `wait` (with value as ms) when a click triggers async loading and the new content is not yet visible.
+8. **Step budget awareness**: After 6+ steps without progress, use `done` with the best partial answer you have. A partial-but-grounded answer ranks higher than running out of steps with nothing.
+9. **For data tables / financial data**: After scrolling once and seeing the relevant rows, extract immediately. Don't keep scrolling to find "more complete" data — if the top entries are visible, that's enough.
+10. **For SPA / async sites (Yahoo Finance, MOPS, cnyes)**: Numbers may be inside `<span>` or rendered post-hydration. If you see numerical data in visible_text that matches the task, use it — don't insist on perfect formatting.
 
 # Anti-hallucination rules (CRITICAL)
 8. For `done` action with extracted data: the answer in `value` MUST be quotable from the visible_text or accessibility_tree. If the data is not present, do NOT invent it — use `done` with value="not_found: <reason>" instead.
