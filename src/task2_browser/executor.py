@@ -356,13 +356,29 @@ async def _execute_scroll(page: Page, action: BrowserAction) -> tuple[bool, Opti
 
 
 async def _execute_wait(page: Page, action: BrowserAction) -> tuple[bool, Optional[LocatorStrategy], Optional[str]]:
-    """Wait for a condition or fixed duration."""
+    """Wait for a condition or fixed duration.
+
+    The prompt instructs the LLM to pass `value` in milliseconds. Some
+    LLMs interpret this literally (`"2000"`) and some pass seconds
+    (`"2"`). We auto-detect: anything >= 100 is treated as ms.
+    """
     wait_time = 2.0  # Default 2 seconds
 
     try:
-        wait_val = float(action.value) if action.value else 2.0
-        wait_time = min(wait_val, 10.0)  # Cap at 10 seconds
+        if action.value:
+            wait_val = float(action.value)
+            if wait_val >= 100:
+                wait_val = wait_val / 1000.0
+            wait_time = max(0.1, min(wait_val, 10.0))
     except (ValueError, TypeError):
+        pass
+
+    # When agent issues a `wait`, also try `wait_for_load_state` to
+    # ride out async hydration. Don't fail if it times out — the fixed
+    # sleep below is the floor.
+    try:
+        await page.wait_for_load_state("networkidle", timeout=int(wait_time * 1000))
+    except Exception:
         pass
 
     await asyncio.sleep(wait_time)

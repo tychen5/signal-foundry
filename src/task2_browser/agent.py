@@ -100,6 +100,26 @@ _NOT_FOUND_PHRASES = (
 
 _NUMBER_TOKEN = re.compile(r"\d{2,}(?:[.,]\d+)?")
 
+# URL substring markers that indicate the final page is NOT the requested
+# content. These are deterministic — no LLM needed. If any appear in the
+# final URL, the silent-failure guard flips status to not_found.
+_BLOCKED_URL_MARKERS = (
+    "/authwall",          # LinkedIn auth redirect
+    "/login?",            # generic login redirect
+    "/login/",
+    "accounts.google.com/signin",
+    "accounts.google.com/v3/signin",
+    "/checkpoint/challenge",   # Facebook
+    "/recaptcha",
+    "/cf-chl",            # Cloudflare challenge
+    "/captcha",
+    "/sso/login",
+    "/oauth/authorize",
+    "/access-denied",
+    "/blocked",
+    "edgar/error",        # SEC EDGAR error page
+)
+
 
 class BrowserAgent:
     """
@@ -313,17 +333,33 @@ class BrowserAgent:
         Why this matters: the spec explicitly calls out silent-failure
         prevention. The verifier and planner can both produce a confident
         "I found X = 42" reply when in reality the page returned an error or
-        the LLM hallucinated. We catch two patterns here:
+        the LLM hallucinated. We catch THREE patterns here:
 
-        1. Hedging/refusal phrases — convert to status="not_found" so a
+        1. Final URL is a known auth-wall / paywall / error redirect —
+           deterministic check via URL path, doesn't rely on LLM honesty.
+        2. Hedging/refusal phrases — convert to status="not_found" so a
            caller can distinguish "no such data exists" from "succeeded".
-        2. Numeric answers whose digits don't appear in any observed page
+        3. Numeric answers whose digits don't appear in any observed page
            text — flag as status="unverified" with a reason. This is a
            cheap deterministic check that catches the most common
            hallucination mode for finance scraping tasks.
         """
         if result.status != "success" or not result.final_answer:
             return
+
+        # CHECK 1: deterministic URL-based detection of auth wall / paywall.
+        # If the agent ended up on a /login, /authwall, or known anti-bot
+        # redirect path, we don't trust an LLM "task complete" answer.
+        last_url = ""
+        if result.steps:
+            last_state = result.steps[-1].after_state or result.steps[-1].before_state
+            if last_state:
+                last_url = (last_state.url or "").lower()
+        for marker in _BLOCKED_URL_MARKERS:
+            if marker in last_url:
+                result.status = "not_found"
+                result.failure_modes.append(f"blocked_url:{marker}")
+                return
 
         answer = result.final_answer.strip()
         answer_lower = answer.lower()

@@ -507,6 +507,56 @@ class TestSilentFailureGuard:
         agent._guard_against_silent_success(result)
         assert result.status == "not_found"
 
+    def test_url_authwall_redirect_marked_not_found(self) -> None:
+        """Deterministic URL-based check: if final URL contains /authwall,
+        flip to not_found regardless of what the LLM answered. This is the
+        defense against hedge-evasion hallucinations."""
+        agent = self._make_agent()
+        result = AgentResult(
+            status="success",
+            final_answer="Satya Nadella is the CEO of Microsoft.",
+            total_steps=5,
+            self_corrections=0,
+            healer_activations=0,
+            failure_modes=[],
+        )
+        # Simulate the agent ending up on LinkedIn's authwall after redirect
+        step = StepResult(
+            step_number=1,
+            action=BrowserAction(action_type=ActionType.NAVIGATE, target_description="x"),
+            after_state=PageState(
+                url="https://www.linkedin.com/authwall?trk=bf",
+                visible_text_summary="Sign in to LinkedIn",
+            ),
+        )
+        result.steps.append(step)
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+        assert any("blocked_url" in fm for fm in result.failure_modes)
+
+    def test_url_google_signin_redirect_marked_not_found(self) -> None:
+        """Google sign-in redirect should also be caught."""
+        agent = self._make_agent()
+        result = AgentResult(
+            status="success",
+            final_answer="The first result is about XYZ.",
+            total_steps=3,
+            self_corrections=0,
+            healer_activations=0,
+            failure_modes=[],
+        )
+        step = StepResult(
+            step_number=1,
+            action=BrowserAction(action_type=ActionType.NAVIGATE, target_description="x"),
+            after_state=PageState(
+                url="https://accounts.google.com/v3/signin/identifier?continue=...",
+                visible_text_summary="Sign in",
+            ),
+        )
+        result.steps.append(step)
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+
 
 # ==============================================================================
 # Planner Tests
