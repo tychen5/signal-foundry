@@ -102,12 +102,13 @@
                     <label>LLM Model</label>
                     <select id="model-select">
                         {% for model in models %}
-                        <option value="{{ model.id }}">{{ model.display_name }} ({{ model.provider }})</option>
+                        <option value="{{ model.id }}">{{ model.display_name }}</option>
                         {% endfor %}
                     </select>
+                    <small style="color:#888">NVIDIA = free with rate limits; OpenRouter = paid (use your own key)</small>
                 </div>
                 <div class="form-group">
-                    <label>OpenRouter API Key (optional)</label>
+                    <label>OpenRouter API Key (only required if you select an OpenRouter model)</label>
                     <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
                 </div>
             </div>

@@ -31,36 +31,21 @@ class LLMProvider(str, Enum):
 # chat-completion mode that returns just the answer text — which is what every
 # downstream task in this repo expects.
 MODEL_REGISTRY: dict[str, dict] = {
-    # OpenRouter models
-    "openai/gpt-5.5": {
-        "provider": LLMProvider.OPENROUTER,
-        "model_name": "openai/gpt-5.5",
-        "display_name": "GPT-5.5 (OpenAI)",
-        "max_tokens": 16384,
-    },
-    "anthropic/claude-opus-4.7": {
-        "provider": LLMProvider.OPENROUTER,
-        "model_name": "anthropic/claude-opus-4.7",
-        "display_name": "Claude Opus 4.7 (Anthropic)",
-        "max_tokens": 16384,
-    },
-    "google/gemini-3.1-pro-preview": {
-        "provider": LLMProvider.OPENROUTER,
-        "model_name": "google/gemini-3.1-pro-preview",
-        "display_name": "Gemini 3.1 Pro (Google)",
-        "max_tokens": 16384,
-    },
-    # NVIDIA AI Endpoints models
+    # ==================================================================
+    # NVIDIA NIM (free tier — DEFAULT for reviewers without their own key)
+    # ==================================================================
+    # kimi-k2.6 is first because it's the recommended default: free,
+    # fast (no thinking-mode latency tax), reliable structured output.
     "moonshotai/kimi-k2.6": {
         "provider": LLMProvider.NVIDIA,
         "model_name": "moonshotai/kimi-k2.6",
-        "display_name": "Kimi K2.6 (Moonshot)",
+        "display_name": "Kimi K2.6 (NVIDIA, free) — DEFAULT",
         "max_tokens": 16384,
     },
     "z-ai/glm-5.1": {
         "provider": LLMProvider.NVIDIA,
         "model_name": "z-ai/glm-5.1",
-        "display_name": "GLM 5.1 (Zhipu AI)",
+        "display_name": "GLM 5.1 (NVIDIA, free, thinking)",
         "max_tokens": 16384,
         # GLM 5.1 thinking-mode toggles use different keys than DeepSeek.
         # `enable_thinking=True` keeps reasoning available;
@@ -76,20 +61,44 @@ MODEL_REGISTRY: dict[str, dict] = {
     "deepseek-ai/deepseek-v4-pro": {
         "provider": LLMProvider.NVIDIA,
         "model_name": "deepseek-ai/deepseek-v4-pro",
-        "display_name": "DeepSeek V4 Pro",
+        "display_name": "DeepSeek V4 Pro (NVIDIA, free, thinking)",
         "max_tokens": 16384,
         # Default thinking=True: empirically gives noticeably better answers on
         # the structured-extraction prompts in this repo (skill matching,
         # 10-K boundary refinement, browser action planning), at the cost of
-        # extra reasoning tokens. Final answer still lands in .content;
-        # reasoning_content is captured separately and ignored downstream.
+        # extra reasoning tokens (200+ s per call). Final answer still lands
+        # in .content; reasoning_content is captured separately and ignored
+        # downstream. Use this for hard tasks where latency is acceptable.
         "extra_body": {"chat_template_kwargs": {"thinking": True}},
     },
     "minimaxai/minimax-m2.7": {
         "provider": LLMProvider.NVIDIA,
         "model_name": "minimaxai/minimax-m2.7",
-        "display_name": "MiniMax M2.7",
+        "display_name": "MiniMax M2.7 (NVIDIA, free)",
         "max_tokens": 8192,
+    },
+    # ==================================================================
+    # OpenRouter (paid tier — reviewers should supply their own key)
+    # ==================================================================
+    # Gemini 3.1 Pro Preview is first because it's the recommended paid
+    # fallback: cheap ($0.00125/1K in, $0.005/1K out), high-quality, fast.
+    "google/gemini-3.1-pro-preview": {
+        "provider": LLMProvider.OPENROUTER,
+        "model_name": "google/gemini-3.1-pro-preview",
+        "display_name": "Gemini 3.1 Pro (OpenRouter, paid)",
+        "max_tokens": 16384,
+    },
+    "anthropic/claude-opus-4.7": {
+        "provider": LLMProvider.OPENROUTER,
+        "model_name": "anthropic/claude-opus-4.7",
+        "display_name": "Claude Opus 4.7 (OpenRouter, paid, premium)",
+        "max_tokens": 16384,
+    },
+    "openai/gpt-5.5": {
+        "provider": LLMProvider.OPENROUTER,
+        "model_name": "openai/gpt-5.5",
+        "display_name": "GPT-5.5 (OpenRouter, paid)",
+        "max_tokens": 16384,
     },
 }
 
