@@ -22,7 +22,14 @@ class LLMProvider(str, Enum):
 
 
 # --- Model Registry ---
-# Maps model identifiers to their provider and actual model name
+# Maps model identifiers to their provider and actual model name.
+#
+# `extra_body` is forwarded to ChatNVIDIA on construction. NVIDIA NIM exposes
+# some "thinking" models (DeepSeek V4 Pro, Kimi K2 Thinking) where reasoning
+# content is wrapped separately from the answer. Setting
+# {"chat_template_kwargs": {"thinking": False}} switches them into a plain
+# chat-completion mode that returns just the answer text — which is what every
+# downstream task in this repo expects.
 MODEL_REGISTRY: dict[str, dict] = {
     # OpenRouter models
     "openai/gpt-5.5": {
@@ -48,19 +55,35 @@ MODEL_REGISTRY: dict[str, dict] = {
         "provider": LLMProvider.NVIDIA,
         "model_name": "moonshotai/kimi-k2.6",
         "display_name": "Kimi K2.6 (Moonshot)",
-        "max_tokens": 8192,
+        "max_tokens": 16384,
     },
     "z-ai/glm-5.1": {
         "provider": LLMProvider.NVIDIA,
         "model_name": "z-ai/glm-5.1",
         "display_name": "GLM 5.1 (Zhipu AI)",
-        "max_tokens": 8192,
+        "max_tokens": 16384,
+        # GLM 5.1 thinking-mode toggles use different keys than DeepSeek.
+        # `enable_thinking=True` keeps reasoning available;
+        # `clear_thinking=False` keeps the answer text in `content` so we
+        # don't have to reassemble it from `reasoning_content`.
+        "extra_body": {
+            "chat_template_kwargs": {
+                "enable_thinking": True,
+                "clear_thinking": False,
+            }
+        },
     },
     "deepseek-ai/deepseek-v4-pro": {
         "provider": LLMProvider.NVIDIA,
         "model_name": "deepseek-ai/deepseek-v4-pro",
         "display_name": "DeepSeek V4 Pro",
         "max_tokens": 16384,
+        # Default thinking=True: empirically gives noticeably better answers on
+        # the structured-extraction prompts in this repo (skill matching,
+        # 10-K boundary refinement, browser action planning), at the cost of
+        # extra reasoning tokens. Final answer still lands in .content;
+        # reasoning_content is captured separately and ignored downstream.
+        "extra_body": {"chat_template_kwargs": {"thinking": True}},
     },
     "minimaxai/minimax-m2.7": {
         "provider": LLMProvider.NVIDIA,

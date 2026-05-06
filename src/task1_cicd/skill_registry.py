@@ -172,7 +172,6 @@ async def _llm_match(
     Returns (skill_name, confidence, reasoning).
     """
     from src.llm_provider import get_llm
-    from src.shared.schemas import ModelSelectionRequest
 
     prompt_path = PROMPT_DIR / "v1_skill_match.txt"
     if not prompt_path.exists():
@@ -181,11 +180,13 @@ async def _llm_match(
     prompt_template = prompt_path.read_text(encoding="utf-8")
     prompt = prompt_template.replace("{user_input}", raw)
 
-    model_req = ModelSelectionRequest(
-        model_id=model_name or "moonshotai/kimi-k2.6",
+    resolved_model = model_name or "moonshotai/kimi-k2.6"
+    llm = get_llm(
+        model_name=resolved_model,
         user_openrouter_key=user_api_key,
+        temperature=0.0,
+        max_tokens=500,
     )
-    llm = get_llm(model_req, temperature=0.0)
 
     start = time.monotonic()
     response = await llm.ainvoke(prompt)
@@ -218,7 +219,7 @@ async def _llm_match(
     tokens_in = len(prompt) // 4  # rough estimate: ~4 chars per token
     tokens_out = len(response_text) // 4
     tracker.record_call(
-        model=model_req.model_id,
+        model=resolved_model,
         tokens_in=tokens_in,
         tokens_out=tokens_out,
         latency_ms=latency_ms,
@@ -243,7 +244,6 @@ async def llm_summarize(
     Called once per skill execution, always tracked in cost_tracker.
     """
     from src.llm_provider import get_llm
-    from src.shared.schemas import ModelSelectionRequest
 
     prompt_path = PROMPT_DIR / "v1_result_summary.txt"
     if not prompt_path.exists():
@@ -264,11 +264,13 @@ async def llm_summarize(
         .replace("{result_json}", result_str)
     )
 
-    model_req = ModelSelectionRequest(
-        model_id=model_name or "moonshotai/kimi-k2.6",
+    resolved_model = model_name or "moonshotai/kimi-k2.6"
+    llm = get_llm(
+        model_name=resolved_model,
         user_openrouter_key=user_api_key,
+        temperature=0.3,
+        max_tokens=400,
     )
-    llm = get_llm(model_req, temperature=0.3)
 
     start = time.monotonic()
     try:
@@ -284,7 +286,7 @@ async def llm_summarize(
     tokens_in = len(prompt) // 4
     tokens_out = len(summary) // 4
     tracker.record_call(
-        model=model_req.model_id,
+        model=resolved_model,
         tokens_in=tokens_in,
         tokens_out=tokens_out,
         latency_ms=latency_ms,
