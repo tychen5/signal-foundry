@@ -341,14 +341,19 @@ def suggest_alternative_action(
         )
 
     if cause in (FailureRootCause.SELECTOR_CHANGED, FailureRootCause.ELEMENT_NOT_FOUND):
-        # Retry the same action with modified target description
-        # The executor will try different locator layers
+        # If the LLM suggested an alternative target (e.g. "the [button] 'Submit'
+        # instead of 'Search'"), use that as the new target_description. This
+        # is the substantive part of self-correction — not just retrying the
+        # same target with a cleared selector.
+        new_target = _extract_target_from_recovery(
+            diagnosis.recovery_strategy, original_action.target_description, page_state
+        )
         return BrowserAction(
             action_type=original_action.action_type,
-            target_description=original_action.target_description,
+            target_description=new_target,
             value=original_action.value,
             selector="",  # Clear CSS selector to force AOM/semantic retry
-            reasoning=f"Retrying with alternative locators after: {diagnosis.explanation[:80]}",
+            reasoning=f"Retrying with alternative locator '{new_target}' after: {diagnosis.explanation[:80]}",
             success_criteria=original_action.success_criteria,
         )
 
@@ -362,3 +367,41 @@ def suggest_alternative_action(
         )
 
     return None
+
+
+def _extract_target_from_recovery(
+    recovery_strategy: str,
+    fallback_target: str,
+    page_state: PageState,
+) -> str:
+    """Extract a usable target description from the LLM's recovery suggestion.
+
+    The healer LLM often replies with "Click [button] 'Submit'" or
+    "Try locating element with role=textbox name='Customer Name'". We pull
+    out the role+name pair and return it in a form the executor can locate.
+    Falls back to the original target if no clear alternative is suggested.
+    """
+    if not recovery_strategy:
+        return fallback_target
+
+    text = recovery_strategy.strip()
+    # Pattern 1: [role] "name"
+    import re as _re
+    m = _re.search(r"\[(\w+)\]\s*['\"]([^'\"]+)['\"]", text)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
+    # Pattern 2: role=X name=Y or role=X name='Y'
+    m = _re.search(r"role[=:]\s*(\w+).{0,15}name[=:]\s*['\"]?([^'\"]+?)['\"]?(?:\s|$|,|\.)", text)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
+    # Pattern 3: explicit "the X 'Y'" or "X labelled 'Y'"
+    m = _re.search(r"(button|link|textbox|searchbox|field|input|tab|menuitem)\s+(?:labelled|named|with text)?\s*['\"]([^'\"]+)['\"]", text, _re.IGNORECASE)
+    if m:
+        return f"{m.group(1).lower()} {m.group(2)}"
+    # If recovery describes a different target without quotes (e.g. "Click the Submit button"),
+    # truncate to a usable target description
+    if len(text) < 80 and any(t in text.lower() for t in ("click", "select", "fill", "press")):
+        # Strip leading verb
+        cleaned = _re.sub(r"^(click|tap|select|fill|press)\s+(?:the\s+)?", "", text, flags=_re.IGNORECASE)
+        return cleaned[:60]
+    return fallback_target

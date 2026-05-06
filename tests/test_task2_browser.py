@@ -306,6 +306,55 @@ class TestHealer:
         diag = diagnose_deterministic("Element not found", state, action)
         assert diag.root_cause == FailureRootCause.PAGE_NOT_LOADED
 
+    def test_recovery_strategy_extracts_alternative_target(self) -> None:
+        """When the healer LLM suggests an alternative target like
+        '[textbox] "Customer Name"', the new target_description should be
+        used for the retry — not the original target that already failed."""
+        from src.task2_browser.healer import _extract_target_from_recovery
+
+        state = PageState(url="https://example.com")
+        # Pattern 1: [role] "name"
+        result = _extract_target_from_recovery(
+            'Click [textbox] "Customer Name" instead', "customer name", state
+        )
+        assert result == "textbox Customer Name"
+
+        # Pattern 2: role=X name='Y'
+        result = _extract_target_from_recovery(
+            "Try locating element with role=button name='Submit'", "Search", state
+        )
+        assert "Submit" in result
+
+        # Pattern 3: imperative "Click the X 'Y'"
+        result = _extract_target_from_recovery(
+            "Click the button 'Send'", "Search", state
+        )
+        assert "send" in result.lower()
+
+        # Empty recovery → fallback
+        result = _extract_target_from_recovery("", "fallback target", state)
+        assert result == "fallback target"
+
+    def test_suggest_alt_for_selector_changed_uses_recovery(self) -> None:
+        """When SELECTOR_CHANGED diagnosis includes a recovery_strategy,
+        the alternative action MUST have the new target, not the original
+        (which already failed)."""
+        from src.task2_browser.healer import suggest_alternative_action
+
+        diag = Diagnosis(
+            root_cause=FailureRootCause.SELECTOR_CHANGED,
+            explanation="Button labelled 'Send' not 'Submit'",
+            recovery_strategy='Click [button] "Send"',
+        )
+        action = BrowserAction(action_type=ActionType.CLICK, target_description="Submit")
+        state = PageState()
+
+        alt = suggest_alternative_action(diag, action, state)
+        assert alt is not None
+        # New target must NOT equal original; LLM's suggestion must propagate
+        assert alt.target_description != "Submit"
+        assert "Send" in alt.target_description
+
     def test_suggest_alternative_popup_dismiss(self) -> None:
         """Popup diagnosis → suggest dismissing popup."""
         from src.task2_browser.healer import suggest_alternative_action
