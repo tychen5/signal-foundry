@@ -310,7 +310,7 @@ Source: [`evals/task3/results/task3_eval_20260506T060654Z.md`](evals/task3/resul
 
 These are real downloads from `sec.gov/Archives/edgar/data/...`, parsed end-to-end (raw → normalized → rule-segmented → validated → cross-checked). The `evals/task3/results/` folder is gitignored only for binary trace dumps; canonical reports stay committed.
 
-### Task 2 — Live eval (2 runs against real sites)
+### Task 2 — Live eval (3 runs across 3 different models)
 
 **Run A** — `moonshotai/kimi-k2.6` (NVIDIA NIM, free tier):
 - 5/17 genuine success, 11/17 graceful 429 degradation, 0 crashes, $0.064 total
@@ -319,11 +319,18 @@ These are real downloads from `sec.gov/Archives/edgar/data/...`, parsed end-to-e
 **Run B** — `anthropic/claude-opus-4.7` (OpenRouter, paid):
 - 8/17 **genuine success**, 5/17 partial (max-step cap reached), 4/17 unverified (silent-failure guard activated correctly), 0 crashes
 - Avg latency 136 s, total cost $3.06, 0.76 self-corrections per case
-- **Highlights:**
-  - `t2_cnyes_taiex_quote` — extracted real numeric data from cnyes 加權指數 in Chinese: "7876.86 點, +38.76 點, 1,046.00 億元"
-  - `t2_anuse_silent_failure_guard` — correctly reported "https://example.com is a placeholder domain with no contact information" instead of fabricating an email (the spec's hardest test)
-  - `t2_pypi_search` — correctly reported "Fastly anti-bot CAPTCHA blocked search" instead of inventing package names
-  - `t2_cookie_banner_news` (Reuters) — correctly reported "verification iframe blocked the page" instead of inventing a headline
+
+**Run C** — `google/gemini-3.1-pro-preview` (after v2-prompt + URL-marker + healer-recovery improvements, 21-case eval set):
+- **13/21 genuine success (62%)**, 7/21 not_found (correct anti-hallucination), 1/21 partial, 0 crashes
+- Avg latency 52 s (down from 136 s in run B), total cost **$0.175 (-94%)**, 0.81 self-corrections per case
+- Iteration cycle wins:
+  - `t2_table_extraction` (Wikipedia GDP table): SUCCESS in 4 steps (run B was partial / max-steps)
+  - `t2_yahoo_finance_aapl_options`: SUCCESS in 8 steps (run B was partial)
+  - `t2_twse_company_lookup` (台積電 2330): SUCCESS in 8 steps (run B was partial)
+  - `t2_stackoverflow_question`: SUCCESS in 6 steps (previously max-stepped locally)
+  - `t2_cnyes_taiex_quote`: SUCCESS — live TAIEX numbers extracted from cnyes
+  - `t2_anuse_silent_failure_guard`: NOT_FOUND in 3 steps with NO hallucination — validates the spec's highest-priority requirement
+  - `t2_pypi_search`, `t2_cookie_banner_news` (Reuters), `t2_sec_edgar_lookup`: correctly NOT_FOUND when blocked by anti-bot / login
 
 Reports committed to `evals/task2/results/`.
 

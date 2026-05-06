@@ -1,0 +1,847 @@
+{
+  "run_at": "2026-05-06T22:00:06.910057+00:00",
+  "eval_set": "/mnt/c/Users/leoqa/Documents/signal-foundry/evals/task2/eval_set.json",
+  "summary": {
+    "cases": 21,
+    "passed": 21,
+    "success_rate": 1.0,
+    "avg_latency_ms": 52477.8,
+    "total_cost_usd": 0.175429,
+    "avg_self_corrections": 0.81
+  },
+  "scores": [
+    {
+      "case_id": "t2_wikipedia_search",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "46 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "success",
+      "steps_taken": 5,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "```json\n{\n  \"complete\": false,\n  \"answer\": \"\",",
+      "failure_modes": [],
+      "latency_ms": 26047.1,
+      "cost_usd": 0.004135,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_google_search",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "not_found"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "52 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 7
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 7
+        }
+      ],
+      "status": "not_found",
+      "steps_taken": 7,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "not_found: Google CAPTCHA blocked the search results",
+      "failure_modes": [
+        "hedged_answer"
+      ],
+      "latency_ms": 40456.5,
+      "cost_usd": 0.006083,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_form_fill_httpbin",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "partial"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "65 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 15
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 15
+        }
+      ],
+      "status": "partial",
+      "steps_taken": 15,
+      "self_corrections": 2,
+      "healer_activations": 2,
+      "final_answer_preview": "Reached max steps (15). Last page: https://httpbin.org/forms/post",
+      "failure_modes": [],
+      "latency_ms": 141823.8,
+      "cost_usd": 0.033106,
+      "llm_calls": 16
+    },
+    {
+      "case_id": "t2_multi_step_hackernews",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "46 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "success",
+      "steps_taken": 5,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "```json\n{\n  \"complete\": true,\n  \"answer\": \"271",
+      "failure_modes": [],
+      "latency_ms": 25537.6,
+      "cost_usd": 0.004106,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_github_trending",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "501 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 4
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 4
+        }
+      ],
+      "status": "success",
+      "steps_taken": 4,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "1. Hmbown / DeepSeek-TUI: Coding agent for DeepSeek models that runs in your terminal\n2. addyosmani / agent-skills: Production-grade engineering skills for AI coding agents.\n3. PriorLabs / TabPFN: \u26a1 T",
+      "failure_modes": [],
+      "latency_ms": 33275.4,
+      "cost_usd": 0.004643,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_pypi_search",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "not_found"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "30 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 6
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 6
+        }
+      ],
+      "status": "not_found",
+      "steps_taken": 6,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "not_found: CAPTCHA encountered",
+      "failure_modes": [
+        "hedged_answer"
+      ],
+      "latency_ms": 27151.8,
+      "cost_usd": 0.003965,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_error_recovery_404",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "not_found"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "135 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 3
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 3
+        }
+      ],
+      "status": "not_found",
+      "steps_taken": 3,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.",
+      "failure_modes": [
+        "hedged_answer"
+      ],
+      "latency_ms": 16200.8,
+      "cost_usd": 0.003304,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_cookie_banner_news",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "not_found"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "24 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 6
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 6
+        }
+      ],
+      "status": "not_found",
+      "steps_taken": 6,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "not_found: page is empty",
+      "failure_modes": [
+        "hedged_answer"
+      ],
+      "latency_ms": 39242.7,
+      "cost_usd": 0.004738,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_multi_tab_comparison",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "116 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 10
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 10
+        }
+      ],
+      "status": "success",
+      "steps_taken": 10,
+      "self_corrections": 3,
+      "healer_activations": 3,
+      "final_answer_preview": "Could not parse action from LLM response: ```json\n{\n  \"action\": \"scroll\",\n  \"target\": \"body\",\n  \"value\": \"down\",\n  \"",
+      "failure_modes": [],
+      "latency_ms": 110973.7,
+      "cost_usd": 0.021326,
+      "llm_calls": 6
+    },
+    {
+      "case_id": "t2_sec_edgar_lookup",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "not_found"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "93 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "not_found",
+      "steps_taken": 5,
+      "self_corrections": 2,
+      "healer_activations": 2,
+      "final_answer_preview": "not_accessible: SEC.gov blocked the request due to undeclared automated tool / bot protection",
+      "failure_modes": [
+        "hedged_answer"
+      ],
+      "latency_ms": 55158.9,
+      "cost_usd": 0.005929,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_spa_navigation",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "90 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 11
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 11
+        }
+      ],
+      "status": "success",
+      "steps_taken": 11,
+      "self_corrections": 2,
+      "healer_activations": 2,
+      "final_answer_preview": "The Fetch API provides an interface for fetching resources (including across the network).",
+      "failure_modes": [],
+      "latency_ms": 134885.4,
+      "cost_usd": 0.020908,
+      "llm_calls": 7
+    },
+    {
+      "case_id": "t2_table_extraction",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "42 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 4
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 4
+        }
+      ],
+      "status": "success",
+      "steps_taken": 4,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "```json\n{\n  \"complete\": false,\n  \"answer\":",
+      "failure_modes": [],
+      "latency_ms": 40048.5,
+      "cost_usd": 0.004112,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_wantgoo_tx_pivots",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "not_found"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "29 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "not_found",
+      "steps_taken": 5,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "not_found: 404 Page Not Found",
+      "failure_modes": [
+        "hedged_answer"
+      ],
+      "latency_ms": 30352.5,
+      "cost_usd": 0.00378,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_twse_company_lookup",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "41 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 8
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 8
+        }
+      ],
+      "status": "success",
+      "steps_taken": 8,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "```json\n{\n  \"complete\": true,\n  \"answer\":",
+      "failure_modes": [],
+      "latency_ms": 77963.4,
+      "cost_usd": 0.00618,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_cnyes_taiex_quote",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "46 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 6
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 6
+        }
+      ],
+      "status": "success",
+      "steps_taken": 6,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "```json\n{\n  \"complete\": true,\n  \"answer\": \"not",
+      "failure_modes": [],
+      "latency_ms": 32997.7,
+      "cost_usd": 0.004297,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_yahoo_finance_aapl_options",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "122 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 8
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 8
+        }
+      ],
+      "status": "success",
+      "steps_taken": 8,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "Could not parse action from LLM response: ```json\n{\n  \"action\": \"click\",\n  \"target\": \"link \\\"Options\\\"\",\n  \"value\": \"\",\n  ",
+      "failure_modes": [],
+      "latency_ms": 98766.2,
+      "cost_usd": 0.017808,
+      "llm_calls": 6
+    },
+    {
+      "case_id": "t2_anuse_silent_failure_guard",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "not_found"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "83 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 3
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 3
+        }
+      ],
+      "status": "not_found",
+      "steps_taken": 3,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "not_found: example.com is a reserved placeholder domain with no contact information",
+      "failure_modes": [
+        "hedged_answer"
+      ],
+      "latency_ms": 18135.8,
+      "cost_usd": 0.003681,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_arxiv_paper_lookup",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "131 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 4
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 4
+        }
+      ],
+      "status": "success",
+      "steps_taken": 4,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Title: ST-LINK: Spatially-Aware Large Language Models for Spatio-Temporal Forecasting\nFirst two authors: Hyotaek Jeon, Hyunwook Lee",
+      "failure_modes": [],
+      "latency_ms": 20233.7,
+      "cost_usd": 0.004056,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_stackoverflow_question",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "46 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 6
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 6
+        }
+      ],
+      "status": "success",
+      "steps_taken": 6,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "```json\n{\n  \"complete\": false,\n  \"answer\": \"\",",
+      "failure_modes": [],
+      "latency_ms": 45923.1,
+      "cost_usd": 0.006797,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_linkedin_login_wall",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "29 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "success",
+      "steps_taken": 5,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "Chairman and CEO at Microsoft",
+      "failure_modes": [],
+      "latency_ms": 42995.2,
+      "cost_usd": 0.006001,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_bing_search_alt",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "50 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 7
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 7
+        }
+      ],
+      "status": "success",
+      "steps_taken": 7,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "```json\n{\n  \"complete\": false,\n  \"answer\": \"\",\n  \"",
+      "failure_modes": [],
+      "latency_ms": 43863.6,
+      "cost_usd": 0.006474,
+      "llm_calls": 1
+    }
+  ]
+}
