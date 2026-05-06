@@ -327,8 +327,8 @@ class BrowserAgent:
         return result
 
     def _guard_against_silent_success(self, result: AgentResult) -> None:
-        """Downgrade `success` → `not_found` / `unverified` when the final
-        answer doesn't survive a grounding check.
+        """Downgrade `success` / `partial` → `not_found` / `unverified` when
+        the final answer doesn't survive a grounding check.
 
         Why this matters: the spec explicitly calls out silent-failure
         prevention. The verifier and planner can both produce a confident
@@ -337,6 +337,8 @@ class BrowserAgent:
 
         1. Final URL is a known auth-wall / paywall / error redirect —
            deterministic check via URL path, doesn't rely on LLM honesty.
+           Fires for `success` AND `partial` (both can leave the agent on a
+           blocked page).
         2. Hedging/refusal phrases — convert to status="not_found" so a
            caller can distinguish "no such data exists" from "succeeded".
         3. Numeric answers whose digits don't appear in any observed page
@@ -344,12 +346,14 @@ class BrowserAgent:
            cheap deterministic check that catches the most common
            hallucination mode for finance scraping tasks.
         """
-        if result.status != "success" or not result.final_answer:
+        if result.status not in ("success", "partial"):
             return
 
         # CHECK 1: deterministic URL-based detection of auth wall / paywall.
         # If the agent ended up on a /login, /authwall, or known anti-bot
-        # redirect path, we don't trust an LLM "task complete" answer.
+        # redirect path, we don't trust an LLM "task complete" answer (even
+        # for `partial` reaching max-steps — the redirect itself is the
+        # evidence the task can't be completed).
         last_url = ""
         if result.steps:
             last_state = result.steps[-1].after_state or result.steps[-1].before_state
@@ -360,6 +364,12 @@ class BrowserAgent:
                 result.status = "not_found"
                 result.failure_modes.append(f"blocked_url:{marker}")
                 return
+
+        # The remaining checks only apply to `success` with a non-empty
+        # answer (a `partial` result without a hedging phrase or numeric
+        # claim is just an honest "I ran out of steps").
+        if result.status != "success" or not result.final_answer:
+            return
 
         answer = result.final_answer.strip()
         answer_lower = answer.lower()

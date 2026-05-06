@@ -534,6 +534,32 @@ class TestSilentFailureGuard:
         assert result.status == "not_found"
         assert any("blocked_url" in fm for fm in result.failure_modes)
 
+    def test_partial_with_blocked_url_marked_not_found(self) -> None:
+        """A `partial` result that ended on an authwall URL should also be
+        downgraded — the redirect IS the evidence that the task couldn't be
+        completed, regardless of running out of steps."""
+        agent = self._make_agent()
+        result = AgentResult(
+            status="partial",
+            final_answer="Reached max steps (5). Last page: https://www.linkedin.com/authwall?trk=...",
+            total_steps=5,
+            self_corrections=0,
+            healer_activations=0,
+            failure_modes=[],
+        )
+        step = StepResult(
+            step_number=1,
+            action=BrowserAction(action_type=ActionType.NAVIGATE, target_description="x"),
+            after_state=PageState(
+                url="https://www.linkedin.com/authwall?trk=bf",
+                visible_text_summary="Sign in",
+            ),
+        )
+        result.steps.append(step)
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+        assert any("blocked_url" in fm for fm in result.failure_modes)
+
     def test_url_google_signin_redirect_marked_not_found(self) -> None:
         """Google sign-in redirect should also be caught."""
         agent = self._make_agent()
