@@ -156,7 +156,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-#notes/_briefs/
+notes/_briefs/
 
 # Spyder project settings
 .spyderproject
@@ -221,5 +221,7 @@ __marimo__/
 # Claude Code personal overrides
 CLAUDE.local.md
 
-# Eval results (generated, not committed)
-evals/*/results/
+# Eval results: keep canonical reports under evals/*/results/ for the README
+# eval table, but skip raw *.txt traces and any large *.html artefacts.
+evals/*/results/*.txt
+evals/*/results/*.html

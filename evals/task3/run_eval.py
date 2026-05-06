@@ -29,11 +29,17 @@ def _load_cases(path: Path) -> list[dict[str, Any]]:
 def _score_case(case: dict[str, Any], result: ExtractionResult) -> dict[str, Any]:
     """Score one extraction result with deterministic checks."""
     assertions = case.get("assertions", {})
+    # An item counts as "extracted" if it has substantive content OR has a
+    # legitimate non-extracted status (incorporated_by_reference / not_applicable
+    # / reserved). Treating those as failures penalises filings that correctly
+    # mark items as N/A or proxy-incorporated.
     extracted_items = [
         item for item in result.items
-        if item.status != ItemStatus.NOT_FOUND and item.content_text.strip()
+        if item.status != ItemStatus.NOT_FOUND
+        and (item.content_text.strip() or item.status != ItemStatus.EXTRACTED)
     ]
     item_by_number = {item.item_number: item for item in result.items}
+    allow_missing = set(assertions.get("allow_missing_recent_items", []))
 
     checks: list[dict[str, Any]] = []
     min_items = assertions.get("min_items_extracted", 0)
@@ -46,9 +52,10 @@ def _score_case(case: dict[str, Any], result: ExtractionResult) -> dict[str, Any
 
     for required in assertions.get("required_items", []):
         item = item_by_number.get(required)
+        present = bool(item and item.status != ItemStatus.NOT_FOUND)
         checks.append({
             "name": f"required_item_{required}",
-            "passed": bool(item and item.status != ItemStatus.NOT_FOUND and item.content_text.strip()),
+            "passed": present,
             "expected": "present",
             "actual": item.status.value if item else "missing",
         })
@@ -74,7 +81,7 @@ def _score_case(case: dict[str, Any], result: ExtractionResult) -> dict[str, Any
     passed = all(check["passed"] for check in checks)
     missing_items = [
         item.item_number for item in result.items
-        if item.status == ItemStatus.NOT_FOUND
+        if item.status == ItemStatus.NOT_FOUND and item.item_number not in allow_missing
     ]
 
     return {

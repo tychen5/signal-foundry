@@ -115,7 +115,18 @@ class Settings(BaseSettings):
     max_cost_per_request_usd: float = Field(default=2.0, description="Max USD cost per request")
     max_tokens_per_request: int = Field(default=100000, description="Max tokens per request")
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "case_sensitive": False}
+    # Zeabur deployment metadata (optional, surfaced in /health for ops visibility)
+    zeabur_domain: str = Field(default="", description="Public Zeabur domain")
+    zeabur_server_ip: str = Field(default="", description="Zeabur dedicated server IP")
+    zeabur_api_key: str = Field(default="", description="Zeabur control-plane API key")
+    zeabur_cluster_api_key: str = Field(default="", description="Zeabur cluster API key")
+
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False,
+        "extra": "ignore",
+    }
 
     def get_model_info(self, model_id: str) -> dict:
         """Get model configuration by ID. Falls back to default model if not found."""

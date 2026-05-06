@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 
 from src.shared.logger import get_logger
+from src.task3_sec.rule_parser import detect_item_status
 from src.task3_sec.schemas import (
     STANDARD_10K_ITEMS,
     ExtractedItem,
@@ -22,6 +23,12 @@ from src.task3_sec.schemas import (
 )
 
 logger = get_logger("validator")
+
+# Items that were removed or never existed in older filings — never flag as missing.
+# Item 6 ("Selected Financial Data") was eliminated by SEC rule release 33-10890 (2021).
+# Items 1C ("Cybersecurity") and 9C were added in 2023.
+# Item 16 ("Form 10-K Summary") is and always was optional.
+_OPTIONAL_ITEMS = {"1C", "9C", "16", "6"}
 
 
 def validate_extraction(result: ExtractionResult, source_text: str) -> dict:
@@ -76,13 +83,17 @@ def _check_coverage(result: ExtractionResult) -> dict:
     expected = {item["item_number"] for item in STANDARD_10K_ITEMS}
     missing = expected - found
     extra = found - expected
+    missing_required = missing - _OPTIONAL_ITEMS
 
     return {
         "check": "coverage",
-        "passed": len(missing) <= 3,  # Allow some missing (old filings may not have 1C, 9C, etc.)
+        # Pass if every *required* item is present. Optional items (1C/9C/16/6)
+        # may legitimately be absent depending on filing year/regime.
+        "passed": len(missing_required) == 0,
         "found": len(found),
         "expected": len(expected),
         "missing": sorted(missing),
+        "missing_required": sorted(missing_required),
         "extra": sorted(extra),
     }
 
@@ -90,6 +101,11 @@ def _check_coverage(result: ExtractionResult) -> dict:
 def _validate_item(item: ExtractedItem, source_text: str) -> list[dict]:
     """Validate a single extracted item."""
     issues: list[dict] = []
+
+    # NOT_FOUND items use [0, 0] as a placeholder — that's not a real range and
+    # carries no content claim, so don't run range checks against them.
+    if item.status == ItemStatus.NOT_FOUND:
+        return issues
 
     # Check char_range validity
     if item.char_range and len(item.char_range) == 2:
@@ -116,11 +132,15 @@ def _validate_item(item: ExtractedItem, source_text: str) -> list[dict]:
     # Check content quality
     if item.status == ItemStatus.EXTRACTED:
         if not item.content_text or len(item.content_text.strip()) < 10:
-            issues.append({
-                "check": "empty_content",
-                "severity": "error",
-                "message": "Extracted item has no content",
-            })
+            # Item 6 was eliminated in 2021 and Item 1B is often "None" — those
+            # are not extraction failures. Only flag if the rule parser actually
+            # claimed extracted content but produced nothing.
+            if item.item_number not in _OPTIONAL_ITEMS and item.item_number != "1B":
+                issues.append({
+                    "check": "empty_content",
+                    "severity": "error",
+                    "message": "Extracted item has no content",
+                })
         elif len(item.content_text.strip()) < 50:
             issues.append({
                 "check": "very_short_content",
@@ -196,12 +216,17 @@ def fix_common_issues(result: ExtractionResult, source_text: str) -> ExtractionR
     Fixes:
     - Recalculate char_ranges from content matching
     - Clean HTML artifacts from content
-    - Fix status based on content patterns
+    - Fix status using the same strict heuristic as the rule parser
+      (the previous loose 'incorporated' + 'reference' substring check
+      misclassified long Item 1 sections that mention both words in
+      unrelated contexts, e.g. 'Tesla was incorporated in 2003').
     """
     for item in result.items:
-        # Fix status if content suggests different status
+        # Re-detect status using the strict header-zone heuristic.
+        # Only override EXTRACTED → other; never demote an explicit non-EXTRACTED
+        # status that the parser already locked in based on the heading region.
         if item.status == ItemStatus.EXTRACTED and item.content_text:
-            detected_status = _detect_status_from_content(item.content_text)
+            detected_status = detect_item_status(item.content_text)
             if detected_status != ItemStatus.EXTRACTED:
                 item.status = detected_status
 
@@ -214,23 +239,3 @@ def fix_common_issues(result: ExtractionResult, source_text: str) -> ExtractionR
                     item.char_range = [idx, idx + len(item.content_text)]
 
     return result
-
-
-def _detect_status_from_content(content: str) -> ItemStatus:
-    """Detect item status from content text."""
-    content_lower = content.lower().strip()
-
-    # Check reserved
-    if re.match(r"^\s*\[?\s*reserved\s*\]?\s*\.?\s*$", content_lower):
-        return ItemStatus.RESERVED
-
-    # Check not applicable
-    if len(content_lower) < 200:
-        if "not applicable" in content_lower or content_lower in ("none.", "none", "n/a"):
-            return ItemStatus.NOT_APPLICABLE
-
-    # Check incorporated by reference
-    if "incorporated" in content_lower and "reference" in content_lower:
-        return ItemStatus.INCORPORATED_BY_REFERENCE
-
-    return ItemStatus.EXTRACTED

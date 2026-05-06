@@ -636,6 +636,66 @@ class TestValidator:
         fixed = fix_common_issues(result, "[Reserved]" + "x" * 100)
         assert fixed.items[0].status == ItemStatus.RESERVED
 
+    def test_fix_status_does_not_false_fire_on_long_business_section(self):
+        """A long Item 1 that mentions 'incorporated' (corp history) and
+        'reference' (somewhere in the body) must NOT be flipped to
+        INCORPORATED_BY_REFERENCE. This is the Tesla 2023 regression: the
+        previous loose substring check misclassified Item 1 because the body
+        contained both words in unrelated contexts."""
+        long_business = (
+            "Overview\n\nWe design, develop, manufacture, sell and lease "
+            "high-performance fully electric vehicles. The Company was "
+            "incorporated in Delaware in 2003. " + ("Product detail. " * 200)
+            + " For reference, see additional disclosures in our investor materials."
+        )
+        items = [
+            ExtractedItem(
+                part="I", item_number="1", item_title="Business",
+                content_text=long_business,
+                char_range=[0, len(long_business)],
+                status=ItemStatus.EXTRACTED,
+            ),
+        ]
+        result = self._make_result(items)
+        fixed = fix_common_issues(result, long_business)
+        assert fixed.items[0].status == ItemStatus.EXTRACTED
+
+    def test_validator_skips_char_range_for_not_found_placeholders(self):
+        """Items synthesised by _fill_missing_items use [0, 0] as a placeholder
+        char_range; they should not surface as char_range_bounds errors."""
+        items = [
+            ExtractedItem(
+                part="I", item_number="1C", item_title="Cybersecurity",
+                content_text="",
+                char_range=[0, 0],
+                status=ItemStatus.NOT_FOUND,
+            ),
+        ]
+        result = self._make_result(items)
+        report = validate_extraction(result, "real source text " * 100)
+        assert "1C" not in report["item_issues"]
+
+    def test_coverage_passes_when_only_optional_items_missing(self):
+        """Modern filings legitimately omit Item 6 (retired 2021) and pre-2023
+        filings omit 1C/9C. Coverage check should not fail those filings."""
+        items = [
+            ExtractedItem(
+                part=item["part"],
+                item_number=item["item_number"],
+                item_title=item["item_title"],
+                content_text="content " * 20,
+                char_range=[0, 100],
+                status=ItemStatus.EXTRACTED,
+            )
+            for item in STANDARD_10K_ITEMS
+            if item["item_number"] not in {"1C", "6", "9C", "16"}
+        ]
+        result = self._make_result(items)
+        report = validate_extraction(result, "content " * 1000)
+        assert report["coverage"]["passed"]
+        assert set(report["coverage"]["missing"]) == {"1C", "6", "9C", "16"}
+        assert report["coverage"]["missing_required"] == []
+
 
 # ========== INTEGRATION TEST ==========
 
