@@ -21,10 +21,11 @@
             <label for="model-select">LLM Model Selection</label>
             <select id="model-select">
                 {% for model in models %}
-                <option value="{{ model.id }}">{{ model.display_name }} ({{ model.provider }})</option>
+                <option value="{{ model.id }}">{{ model.display_name }}</option>
                 {% endfor %}
             </select>
-            <input type="password" id="user-api-key" placeholder="Your OpenRouter API Key (optional — uses your own tokens)">
+            <input type="password" id="user-api-key" placeholder="Your OpenRouter API Key (only required for OpenRouter models)">
+            <small style="color:#888;display:block;margin-top:0.5rem;">Default Kimi K2.6 is free via NVIDIA NIM (rate-limited). Reviewers wanting Gemini / Claude / GPT must paste their own OpenRouter key above.</small>
         </div>
 
         <!-- Task Cards -->

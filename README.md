@@ -83,7 +83,7 @@ python -m evals.task3.run_eval --skip-xbrl    # 8 SEC filings, ~16s, $0
 python -m evals.task2.run_eval                # 17 cases (needs Playwright + LLM)
 ```
 
-**Routes:**
+**Routes (also live at `https://signal-foundry.zeabur.app/...`):**
 - `GET /task1` — CI/CD Skills runner UI
 - `GET /task2` — Browser Agent UI
 - `GET /task3` — SEC 10-K Extraction UI
@@ -92,6 +92,21 @@ python -m evals.task2.run_eval                # 17 cases (needs Playwright + LLM
 - `POST /api/v1/sec/extract` — Extract items from a 10-K filing
 - `GET /metrics` — Live cost / latency / token ledger
 - `GET /api/v1/models` — Model registry (which IDs work, which provider routes)
+
+**Reviewer-friendly model selection.** Default model is `moonshotai/kimi-k2.6` (free, NVIDIA NIM) — works out of the box. For higher quality / higher rate limit, paste your own OpenRouter API key in the UI and pick `google/gemini-3.1-pro-preview` (cheap), `anthropic/claude-opus-4.7` (premium), or `openai/gpt-5.5`. Per-request user keys are NOT stored server-side.
+
+**Live deployment verification (2026-05-07):**
+
+| Endpoint | Status | Notes |
+|---|---|---|
+| `/health` | 200 OK | task1/task2/task3 = ready |
+| `/api/v1/models` | 200 OK | 7 models listed (4 NVIDIA + 3 OpenRouter) |
+| `/api/v1/skills/run` (Task 1, lint-and-test, dry_run) | 200 OK | Real lint of `tychen5/Medical-Summary-Builder` with 7 ruff issues, 846 ms |
+| `/api/v1/skills/run` (Task 1, dependency-audit) | 200 OK | Real OSV.dev lookup → 3 jinja2 advisories on this repo |
+| `/api/v1/browser/execute` (Task 2, kimi-k2.6) | 200 OK | example.com title extracted in 3 steps, $0.0043 |
+| `/api/v1/sec/extract` (Task 3, Apple 2023) | 200 OK | 23 items, all 4 stages including XBRL cross-validation, 537 ms, $0 |
+| `/api/v1/sec/extract` (Task 3, Tesla 2023 false-positive guard) | 200 OK | Item 1 correctly = `extracted` (not falsely flagged as incorporated despite mentioning "incorporated in 2003") |
+| `/api/v1/sec/extract` (Task 3, Apple 2005 legacy) | 200 OK | 23 items, 5 not_found for items that didn't exist in 2005 (1A/1B/1C/9C/16) |
 
 ---
 
@@ -295,22 +310,26 @@ Source: [`evals/task3/results/task3_eval_20260506T060654Z.md`](evals/task3/resul
 
 These are real downloads from `sec.gov/Archives/edgar/data/...`, parsed end-to-end (raw → normalized → rule-segmented → validated → cross-checked). The `evals/task3/results/` folder is gitignored only for binary trace dumps; canonical reports stay committed.
 
-### Task 2 — Live eval: 5/17 genuine success, 11/17 graceful degradation, 0/17 crash/hallucination
+### Task 2 — Live eval (2 runs against real sites)
 
-```
-Run: 2026-05-07 | Model: moonshotai/kimi-k2.6 (NVIDIA NIM) | Cost: $0.0641
-Cases: 17 | Deterministic pass: 17/17 | Genuine success: 5/17 | Rate-limited gracefully: 11/17
-```
+**Run A** — `moonshotai/kimi-k2.6` (NVIDIA NIM, free tier):
+- 5/17 genuine success, 11/17 graceful 429 degradation, 0 crashes, $0.064 total
+- Validates that the system does the right thing under a degraded API: returns `status=unverified` with explicit failure-mode reason instead of fabricating an answer
 
-**Honest breakdown:**
-- 5 cases completed successfully (Wikipedia, Google, httpbin form fill, Hacker News, Reuters)
-- 1 case unverified (GitHub trending — planner worked, verifier couldn't confirm due to dynamic loading)
-- 11 cases hit NVIDIA NIM 429 rate-limit after first 4 calls; agent returned `status=unverified` with explicit failure mode — zero hallucinations, no silent failures
-- 0 crashes (rate-limit errors are handled gracefully)
+**Run B** — `anthropic/claude-opus-4.7` (OpenRouter, paid):
+- 8/17 **genuine success**, 5/17 partial (max-step cap reached), 4/17 unverified (silent-failure guard activated correctly), 0 crashes
+- Avg latency 136 s, total cost $3.06, 0.76 self-corrections per case
+- **Highlights:**
+  - `t2_cnyes_taiex_quote` — extracted real numeric data from cnyes 加權指數 in Chinese: "7876.86 點, +38.76 點, 1,046.00 億元"
+  - `t2_anuse_silent_failure_guard` — correctly reported "https://example.com is a placeholder domain with no contact information" instead of fabricating an email (the spec's hardest test)
+  - `t2_pypi_search` — correctly reported "Fastly anti-bot CAPTCHA blocked search" instead of inventing package names
+  - `t2_cookie_banner_news` (Reuters) — correctly reported "verification iframe blocked the page" instead of inventing a headline
 
-**What the 429 behavior demonstrates (positively):** The 9-class root cause taxonomy includes a `429 rate-limit` detector in the healer. When triggered, the agent back-offs and marks the result as unverified rather than proceeding with the cached page state and fabricating an answer. This is the silent-failure guard in action — arguably the correct behavior under a degraded API.
+Reports committed to `evals/task2/results/`.
 
-**Mitigation**: `run_eval.py` now supports `--delay N` (default 5 s) to pace requests within NVIDIA NIM's free-tier rate limit. Alternatively, pass `--model anthropic/claude-opus-4.7` to use OpenRouter with higher rate limits.
+**What the silent-failure / 429 behavior demonstrates:** The 9-class root cause taxonomy (`v2_healer.txt` extends to 13 classes adding `rate_limit_429`, `login_wall`, `paywall`, `frame_detached`) and the post-hoc `_guard_against_silent_success` numeric grounding check converge to the same outcome — when the agent cannot prove an answer is real, it does NOT mark the task complete. This is the spec's highest-priority requirement.
+
+**Mitigation**: `run_eval.py` now supports `--delay N` (default 5 s) to pace requests within NVIDIA NIM's free-tier rate limit. For higher-quality runs, pass `--model anthropic/claude-opus-4.7` (OpenRouter) — the live UI lets reviewers paste their own key.
 
 ### Task 2 — eval set covers 17 real-world cases across 4 difficulty dimensions
 
