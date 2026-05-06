@@ -120,11 +120,11 @@ async def run(ctx: RepoContext, cfg: SandboxConfig) -> SecurityScanResult:
         bandit_findings = await _run_bandit(clone_path, cfg)
         findings.extend(bandit_findings)
 
-    # Build severity summary
-    summary = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    # Build severity counts
+    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
     for f in findings:
-        if f.severity in summary:
-            summary[f.severity] += 1
+        if f.severity in severity_counts:
+            severity_counts[f.severity] += 1
 
     status = "findings" if findings else "clean"
 
@@ -139,7 +139,7 @@ async def run(ctx: RepoContext, cfg: SandboxConfig) -> SecurityScanResult:
         status=status,
         scan_types=scan_types,
         findings=findings,
-        summary=summary,
+        severity_counts=severity_counts,
         files_scanned=files_scanned,
     )
 

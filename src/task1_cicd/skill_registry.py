@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.shared.cost_tracker import get_cost_tracker
+from src.shared.llm_utils import coerce_message_text as _coerce_message_text
 from src.shared.logger import get_logger
 
 logger = get_logger("skill_registry")
@@ -192,7 +193,7 @@ async def _llm_match(
     response = await llm.ainvoke(prompt)
     latency_ms = (time.monotonic() - start) * 1000
 
-    response_text = response.content if hasattr(response, "content") else str(response)
+    response_text = _coerce_message_text(getattr(response, "content", response))
 
     # Parse JSON response
     try:
@@ -276,10 +277,16 @@ async def llm_summarize(
     try:
         response = await llm.ainvoke(prompt)
         latency_ms = (time.monotonic() - start) * 1000
-        summary = response.content if hasattr(response, "content") else str(response)
+        summary = _coerce_message_text(getattr(response, "content", response))
     except Exception as e:
         logger.warning("llm_summarize_failed", error=str(e))
         return f"Skill '{skill_name}' completed. Check the result JSON for details."
+
+    if not summary:
+        # Thinking-mode model returned only reasoning_content with no answer
+        # body — fall back to a deterministic summary so the eval check
+        # `has_summary` doesn't false-fire.
+        return f"Skill '{skill_name}' completed without an LLM summary; see result JSON."
 
     # Track cost
     tracker = get_cost_tracker()

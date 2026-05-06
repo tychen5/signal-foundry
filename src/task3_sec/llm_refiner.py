@@ -20,6 +20,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.llm_provider import get_llm
 from src.shared.cost_tracker import get_cost_tracker
+from src.shared.llm_utils import coerce_message_text
 from src.shared.logger import get_logger
 from src.task3_sec.rule_parser import ItemBoundary, ParseResult
 from src.task3_sec.schemas import STANDARD_10K_ITEMS
@@ -164,9 +165,11 @@ async def _refine_single_boundary(
     response = await llm.ainvoke(messages)
     latency_ms = (time.time() - start_time) * 1000
 
+    response_text = coerce_message_text(getattr(response, "content", response))
+
     # Track cost
     tokens_in = len(BOUNDARY_REFINE_PROMPT + context) // 4  # Rough estimate
-    tokens_out = len(response.content) // 4
+    tokens_out = len(response_text) // 4
     cost_tracker.record_call(
         model=model_name,
         tokens_in=tokens_in,
@@ -180,7 +183,7 @@ async def _refine_single_boundary(
     # Parse LLM response
     try:
         # Clean JSON from potential markdown wrapping
-        content = response.content.strip()
+        content = response_text.strip()
         if content.startswith("```"):
             content = content.split("\n", 1)[-1].rsplit("```", 1)[0]
 
@@ -195,7 +198,7 @@ async def _refine_single_boundary(
                 source="llm_refined",
             )
     except (json.JSONDecodeError, KeyError) as e:
-        logger.warning("llm_parse_failed", error=str(e), raw=response.content[:200])
+        logger.warning("llm_parse_failed", error=str(e), raw=response_text[:200])
 
     return None
 
@@ -248,8 +251,9 @@ async def _detect_missing_items(
                 response = await llm.ainvoke(messages)
                 latency_ms = (time.time() - start_time) * 1000
 
+                response_text = coerce_message_text(getattr(response, "content", response))
                 tokens_in = len(prompt) // 4
-                tokens_out = len(response.content) // 4
+                tokens_out = len(response_text) // 4
                 cost_tracker.record_call(
                     model=model_name,
                     tokens_in=tokens_in,
@@ -260,7 +264,7 @@ async def _detect_missing_items(
                     trace_id=trace_id,
                 )
 
-                content = response.content.strip()
+                content = response_text.strip()
                 if content.startswith("```"):
                     content = content.split("\n", 1)[-1].rsplit("```", 1)[0]
 

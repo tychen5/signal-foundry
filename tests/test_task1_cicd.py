@@ -69,7 +69,7 @@ class TestSchemas:
 
         result = SecurityScanResult(status="clean")
         assert result.findings == []
-        assert result.summary == {}
+        assert result.severity_counts == {}
 
     def test_build_and_release_result(self):
         from src.task1_cicd.schemas import BuildAndReleaseResult

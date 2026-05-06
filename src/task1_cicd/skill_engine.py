@@ -165,8 +165,13 @@ async def run_skill(
             trace_id=trace_id,
         )
 
-        # Build final result dict
+        # Build final result dict. Spread `raw_result` first so engine-level
+        # fields (`summary`, `match_confidence`, etc.) always win — this
+        # prevents skill-specific fields with conflicting names (e.g. an
+        # earlier `SecurityScanResult.summary` severity-counts dict) from
+        # silently overwriting the LLM-generated text summary.
         result_data = {
+            **raw_result,
             "skill": skill_name,
             "repo_url": request.repo_url,
             "branch": branch,
@@ -175,7 +180,6 @@ async def run_skill(
             "language": language,
             "summary": summary,
             "match_confidence": match_confidence,
-            **raw_result,
         }
 
         # [11] Cache result

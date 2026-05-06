@@ -1,0 +1,219 @@
+{
+  "run_at": "2026-05-06T10:59:38.396517+00:00",
+  "eval_set": "/mnt/c/Users/leoqa/Documents/signal-foundry/evals/task1/scenarios.json",
+  "model": "moonshotai/kimi-k2.6",
+  "mode": "direct",
+  "summary": {
+    "cases": 5,
+    "passed": 5,
+    "success_rate": 1.0,
+    "cache_hit_rate": 0.0,
+    "avg_latency_ms": 6076.1,
+    "p95_latency_ms": 12019.9,
+    "total_cost_usd": 0.006816,
+    "check_pass_rates": {
+      "no_crash": 1.0,
+      "has_result": 1.0,
+      "correct_skill": 1.0,
+      "has_summary": 1.0,
+      "error_case_detected": 1.0,
+      "dry_run_no_tag": 1.0
+    }
+  },
+  "scores": [
+    {
+      "case_id": "t1_clean_python",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "has status field",
+          "actual": "success"
+        },
+        {
+          "name": "has_result",
+          "passed": true,
+          "expected": "status=success with non-empty result",
+          "actual": "status=ExecutionStatus.SUCCESS, result_keys=['status', 'language', 'lint_tool', 'lint_passed', 'lint_issues']"
+        },
+        {
+          "name": "correct_skill",
+          "passed": true,
+          "expected": "lint-and-test",
+          "actual": "lint-and-test"
+        },
+        {
+          "name": "has_summary",
+          "passed": true,
+          "expected": "non-empty LLM summary",
+          "actual": "221 chars"
+        }
+      ],
+      "status": "success",
+      "skill_resolved": "lint-and-test",
+      "match_confidence": 1.0,
+      "language": "python",
+      "commit_sha": "9d25f52d63b4",
+      "cache_hit": false,
+      "summary_preview": "Ruff linting passed with 0 issues and pytest completed successfully with 0 tests run in 776ms. No failures or skipped tests were detected. Consider adding unit tests to the project since the test suit",
+      "error": "",
+      "latency_ms": 5308.2062570611015,
+      "cost_usd": 0.000848
+    },
+    {
+      "case_id": "t1_medical_repo",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "has status field",
+          "actual": "success"
+        },
+        {
+          "name": "has_result",
+          "passed": true,
+          "expected": "status=success with non-empty result",
+          "actual": "status=ExecutionStatus.SUCCESS, result_keys=['status', 'total_dependencies', 'ecosystems_checked', 'vulnerabilities', 'critical_count']"
+        },
+        {
+          "name": "correct_skill",
+          "passed": true,
+          "expected": "dependency-audit",
+          "actual": "dependency-audit"
+        },
+        {
+          "name": "has_summary",
+          "passed": true,
+          "expected": "non-empty LLM summary",
+          "actual": "534 chars"
+        }
+      ],
+      "status": "success",
+      "skill_resolved": "dependency-audit",
+      "match_confidence": 1.0,
+      "language": "python",
+      "commit_sha": "0c47b8e7a151",
+      "cache_hit": false,
+      "summary_preview": "Dependency audit found 41 total PyPI dependencies with 16 unpatched vulnerabilities across 6 packages: langchain-core (5 advisories), pypdf (4 advisories), langgraph-checkpoint (2 advisories), and one",
+      "error": "",
+      "latency_ms": 7896.549268974923,
+      "cost_usd": 0.00265
+    },
+    {
+      "case_id": "t1_security_scan",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "has status field",
+          "actual": "success"
+        },
+        {
+          "name": "has_result",
+          "passed": true,
+          "expected": "status=success with non-empty result",
+          "actual": "status=ExecutionStatus.SUCCESS, result_keys=['status', 'scan_types', 'findings', 'severity_counts', 'files_scanned']"
+        },
+        {
+          "name": "correct_skill",
+          "passed": true,
+          "expected": "security-scan",
+          "actual": "security-scan"
+        },
+        {
+          "name": "has_summary",
+          "passed": true,
+          "expected": "non-empty LLM summary",
+          "actual": "321 chars"
+        }
+      ],
+      "status": "success",
+      "skill_resolved": "security-scan",
+      "match_confidence": 1.0,
+      "language": "python",
+      "commit_sha": "9d25f52d63b4",
+      "cache_hit": false,
+      "summary_preview": "The developer should immediately revoke the exposed AWS Access Key (ID ending in `AKIA***`) via the AWS IAM console and rotate credentials. The scan found 1 critical-severity secret detection finding ",
+      "error": "",
+      "latency_ms": 12019.855154096149,
+      "cost_usd": 0.001478
+    },
+    {
+      "case_id": "t1_nonexistent_repo",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "has status field",
+          "actual": "failed"
+        },
+        {
+          "name": "error_case_detected",
+          "passed": true,
+          "expected": "status=failed with error message",
+          "actual": "status=ExecutionStatus.FAILED, error='Repository not found: nonexistent/repo-12345'"
+        }
+      ],
+      "status": "failed",
+      "skill_resolved": "",
+      "match_confidence": 0,
+      "language": "",
+      "commit_sha": "",
+      "cache_hit": false,
+      "summary_preview": "",
+      "error": "Repository not found: nonexistent/repo-12345",
+      "latency_ms": 422.3765259375796,
+      "cost_usd": 0
+    },
+    {
+      "case_id": "t1_build_release_dryrun",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "has status field",
+          "actual": "success"
+        },
+        {
+          "name": "has_result",
+          "passed": true,
+          "expected": "status=success with non-empty result",
+          "actual": "status=ExecutionStatus.SUCCESS, result_keys=['mode', 'status', 'current_version', 'next_version', 'version_bump']"
+        },
+        {
+          "name": "correct_skill",
+          "passed": true,
+          "expected": "build-and-release",
+          "actual": "build-and-release"
+        },
+        {
+          "name": "dry_run_no_tag",
+          "passed": true,
+          "expected": "no tag created when dry_run=True",
+          "actual": "dry_run=True, tag_created=False"
+        },
+        {
+          "name": "has_summary",
+          "passed": true,
+          "expected": "non-empty LLM summary",
+          "actual": "407 chars"
+        }
+      ],
+      "status": "success",
+      "skill_resolved": "build-and-release",
+      "match_confidence": 1.0,
+      "language": "python",
+      "commit_sha": "9d25f52d63b4",
+      "cache_hit": false,
+      "summary_preview": "Dry run succeeded and proposed a minor version bump to v0.1.0 based on 15 commits since the last tag, including 6 new features (CI/CD Skills engine, core CI/CD agent, Task 2 agent architecture, and SE",
+      "error": "",
+      "latency_ms": 4733.543800073676,
+      "cost_usd": 0.00184
+    }
+  ]
+}

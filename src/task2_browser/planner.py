@@ -18,6 +18,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.llm_provider import get_llm
 from src.shared.cost_tracker import get_cost_tracker
+from src.shared.llm_utils import coerce_message_text
 from src.shared.logger import get_logger
 from src.task2_browser.schemas import (
     ActionType,
@@ -28,6 +29,11 @@ from src.task2_browser.schemas import (
 
 logger = get_logger("planner")
 cost_tracker = get_cost_tracker()
+
+
+def _resp_text(response) -> str:
+    """Pull plain text out of a chat response, regardless of provider shape."""
+    return coerce_message_text(getattr(response, "content", response))
 
 _PROMPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -94,12 +100,12 @@ async def plan_task(
         cost_tracker.record_call(
             model=model_name or "default",
             tokens_in=len(PLANNER_PROMPT + context) // 4,
-            tokens_out=len(response.content) // 4,
+            tokens_out=len(_resp_text(response)) // 4,
             task="browser_planner",
             trace_id=trace_id,
         )
 
-        return _parse_plan(response.content, task_description, target_url)
+        return _parse_plan(_resp_text(response), task_description, target_url)
 
     except Exception as e:
         logger.warning("planning_failed", error=str(e))
@@ -163,12 +169,12 @@ async def decide_next_action(
         cost_tracker.record_call(
             model=model_name or "default",
             tokens_in=len(ACTOR_PROMPT + context) // 4,
-            tokens_out=len(response.content) // 4,
+            tokens_out=len(_resp_text(response)) // 4,
             task="browser_actor",
             trace_id=trace_id,
         )
 
-        return _parse_action(response.content)
+        return _parse_action(_resp_text(response))
 
     except Exception as e:
         logger.warning("action_decision_failed", error=str(e))
@@ -223,12 +229,12 @@ async def verify_with_llm(
         cost_tracker.record_call(
             model=model_name or "default",
             tokens_in=len(VERIFIER_PROMPT + context) // 4,
-            tokens_out=len(response.content) // 4,
+            tokens_out=len(_resp_text(response)) // 4,
             task="browser_verifier",
             trace_id=trace_id,
         )
 
-        return _parse_verification(response.content)
+        return _parse_verification(_resp_text(response))
 
     except Exception as e:
         logger.warning("verification_failed", error=str(e))

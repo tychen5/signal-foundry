@@ -162,7 +162,9 @@ class SecurityScanResult(BaseModel):
     status: str  # "clean" | "findings"
     scan_types: list[str] = Field(default_factory=list)
     findings: list[SecurityFinding] = Field(default_factory=list)
-    summary: dict[str, int] = Field(default_factory=dict)  # {critical: N, high: N, ...}
+    # Severity counts. Renamed from `summary` to avoid colliding with the
+    # engine's LLM-generated `summary` string when the result dict is merged.
+    severity_counts: dict[str, int] = Field(default_factory=dict)
     files_scanned: int = 0
     notes: str = ""
 

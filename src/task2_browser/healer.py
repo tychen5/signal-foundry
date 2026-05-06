@@ -24,6 +24,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.llm_provider import get_llm
 from src.shared.cost_tracker import get_cost_tracker
+from src.shared.llm_utils import coerce_message_text
 from src.shared.logger import get_logger
 from src.task2_browser.schemas import (
     ActionType,
@@ -198,16 +199,17 @@ async def diagnose_with_llm(
             ]
         )
 
+        text = coerce_message_text(getattr(response, "content", response))
         cost_tracker.record_call(
             model=model_name or "deepseek-ai/deepseek-v4-pro",
             tokens_in=len(context) // 4,
-            tokens_out=len(response.content) // 4,
+            tokens_out=len(text) // 4,
             task="browser_healer",
             trace_id=trace_id,
         )
 
         # Parse LLM response into Diagnosis
-        return _parse_llm_diagnosis(response.content, error_message, action)
+        return _parse_llm_diagnosis(text, error_message, action)
 
     except Exception as e:
         logger.warning("llm_diagnosis_failed", error=str(e))
