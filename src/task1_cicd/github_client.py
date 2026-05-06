@@ -167,9 +167,12 @@ async def clone_repo(
     """
     Shallow-clone a GitHub repo into dest_dir.
 
-    Uses: git clone --depth 1 --branch {branch} {authenticated_url} {dest_dir}
-    Returns the HEAD commit SHA (from git rev-parse HEAD).
-    Token is embedded in URL but never appears in logs.
+    Primary path: `git clone --depth 1 --branch {branch}` (faster, gives real
+    .git so subprocess tools that depend on it still work).
+    Fallback: GitHub tarball API → tar -xz (used when the runtime image lacks
+    a `git` binary, e.g. some Zeabur Python builders). The fallback is slower
+    but works without any system git installation.
+    Returns the HEAD commit SHA. Token is embedded in URL but never logged.
     """
     owner, repo = parse_repo_url(repo_url)
     auth_url = _make_authenticated_url(owner, repo, token)
@@ -183,6 +186,16 @@ async def clone_repo(
         ["git", "clone", "--depth", "1", "--branch", branch, auth_url, dest_dir],
         cfg,
     )
+
+    # Detect "git binary not installed in runtime" — fall back to API tarball.
+    git_missing = clone_result.returncode == 127 or (
+        "command not found" in (clone_result.stderr or "").lower()
+        or "no such file or directory" in (clone_result.stderr or "").lower()
+        and "git" in (clone_result.stderr or "").lower()
+    )
+    if git_missing:
+        logger.warning("git_binary_missing_fallback_to_api", stderr=clone_result.stderr[:200])
+        return await _clone_via_api_tarball(owner, repo, branch, dest_dir, token, timeout_seconds)
 
     if clone_result.timed_out:
         raise FastFailError(
@@ -204,6 +217,66 @@ async def clone_repo(
     commit_sha = sha_result.stdout.strip() or "unknown"
     logger.info("clone_done", sha=commit_sha[:12], duration_ms=round(clone_result.duration_ms))
     return commit_sha
+
+
+async def _clone_via_api_tarball(
+    owner: str,
+    repo: str,
+    branch: str,
+    dest_dir: str,
+    token: Optional[str],
+    timeout_seconds: int,
+) -> str:
+    """Download repo as tarball via GitHub API. Used when `git` is unavailable."""
+    import os
+    import tarfile
+    import time as _time
+
+    import httpx
+
+    url = f"https://api.github.com/repos/{owner}/{repo}/tarball/{branch}"
+    headers = {"Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    started = _time.time()
+    os.makedirs(dest_dir, exist_ok=True)
+
+    async with httpx.AsyncClient(follow_redirects=True, timeout=timeout_seconds) as client:
+        resp = await client.get(url, headers=headers)
+        if resp.status_code != 200:
+            raise FastFailError(
+                f"GitHub tarball download failed: {resp.status_code}",
+                error_code="api_tarball_failed",
+            )
+        tar_path = os.path.join(dest_dir, ".tarball.tgz")
+        with open(tar_path, "wb") as f:
+            f.write(resp.content)
+
+    # GitHub tarball wraps content in a top-level <user>-<repo>-<sha7>/ directory.
+    with tarfile.open(tar_path, "r:gz") as tar:
+        members = tar.getmembers()
+        if not members:
+            raise FastFailError("Empty tarball", error_code="api_tarball_failed")
+        top_prefix = members[0].name.split("/")[0]
+        # Strip the top-level directory while extracting
+        for m in members:
+            if m.name.startswith(top_prefix + "/"):
+                m.name = m.name[len(top_prefix) + 1 :]
+            elif m.name == top_prefix:
+                continue
+            if m.name:
+                tar.extract(m, path=dest_dir)
+    os.remove(tar_path)
+
+    # Get HEAD SHA via API since we don't have .git
+    head_sha = await get_repo_head_sha(owner, repo, branch, token)
+    logger.info(
+        "clone_done_via_api",
+        sha=head_sha[:12],
+        duration_ms=round((_time.time() - started) * 1000),
+    )
+    return head_sha
 
 
 async def get_latest_tag(

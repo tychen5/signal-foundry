@@ -132,10 +132,20 @@ async def extract_10k(
     )
 
     # ========== STAGE 2: LLM BOUNDARY REFINEMENT (if needed) ==========
-    if not skip_llm and (
-        parse_result.confidence_avg < 0.8
-        or parse_result.items_found < 10
-    ):
+    # Only fire LLM when the rule-based pass is genuinely uncertain. Modern
+    # 10-Ks with all standard items present and decent average confidence do
+    # NOT need LLM refinement — the rule-based segmentation is already
+    # authoritative, and burning 15+ LLM calls per filing risks rate-limit
+    # cascades on the free tier.
+    required_for_modern = {"1", "1A", "7", "7A", "8", "15"}
+    found_items = {b.item_number for b in parse_result.boundaries}
+    has_all_required = required_for_modern.issubset(found_items)
+    needs_llm = not skip_llm and (
+        parse_result.items_found < 10
+        or parse_result.confidence_avg < 0.55
+        or (parse_result.confidence_avg < 0.75 and not has_all_required)
+    )
+    if needs_llm:
         stage2_start = time.time()
         try:
             cost_before = cost_tracker.get_session_summary()

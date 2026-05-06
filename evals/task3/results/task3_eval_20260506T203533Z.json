@@ -1,0 +1,575 @@
+{
+  "run_at": "2026-05-06T20:35:33.503138+00:00",
+  "eval_set": "/mnt/c/Users/leoqa/Documents/signal-foundry/evals/task3/eval_set.json",
+  "mode": {
+    "allow_llm": true,
+    "skip_xbrl": false
+  },
+  "summary": {
+    "cases": 8,
+    "passed": 8,
+    "success_rate": 1.0,
+    "avg_latency_ms": 2483.9,
+    "avg_cost_usd": 0.0,
+    "total_cost_usd": 0.0,
+    "failure_types": {}
+  },
+  "scores": [
+    {
+      "case_id": "t3_apple_2023",
+      "passed": true,
+      "checks": [
+        {
+          "name": "min_items_extracted",
+          "passed": true,
+          "expected": 18,
+          "actual": 23
+        },
+        {
+          "name": "required_item_1",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_1A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_8",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_15",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "status_item_10",
+          "passed": true,
+          "expected": "incorporated_by_reference",
+          "actual": "incorporated_by_reference"
+        },
+        {
+          "name": "status_item_11",
+          "passed": true,
+          "expected": "incorporated_by_reference",
+          "actual": "incorporated_by_reference"
+        },
+        {
+          "name": "status_item_12",
+          "passed": true,
+          "expected": "incorporated_by_reference",
+          "actual": "incorporated_by_reference"
+        },
+        {
+          "name": "pipeline_validation",
+          "passed": true,
+          "expected": true,
+          "actual": true
+        }
+      ],
+      "items_returned": 23,
+      "items_extracted": 23,
+      "missing_items": [],
+      "status_counts": {
+        "extracted": 13,
+        "incorporated_by_reference": 5,
+        "not_applicable": 5,
+        "reserved": 0,
+        "not_found": 0
+      },
+      "latency_ms": 1971.2,
+      "cost_usd": 0.0,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "validation",
+        "xbrl_cross_check"
+      ],
+      "failure_type": null,
+      "error": null
+    },
+    {
+      "case_id": "t3_microsoft_2023",
+      "passed": true,
+      "checks": [
+        {
+          "name": "min_items_extracted",
+          "passed": true,
+          "expected": 18,
+          "actual": 22
+        },
+        {
+          "name": "required_item_1",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_1A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_8",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_15",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "pipeline_validation",
+          "passed": true,
+          "expected": true,
+          "actual": true
+        }
+      ],
+      "items_returned": 23,
+      "items_extracted": 22,
+      "missing_items": [
+        "1C"
+      ],
+      "status_counts": {
+        "extracted": 14,
+        "incorporated_by_reference": 5,
+        "not_applicable": 3,
+        "reserved": 0,
+        "not_found": 1
+      },
+      "latency_ms": 3032.4,
+      "cost_usd": 0.0,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "validation",
+        "xbrl_cross_check"
+      ],
+      "failure_type": null,
+      "error": null
+    },
+    {
+      "case_id": "t3_jpmorgan_2025",
+      "passed": true,
+      "checks": [
+        {
+          "name": "min_items_extracted",
+          "passed": true,
+          "expected": 17,
+          "actual": 22
+        },
+        {
+          "name": "required_item_1",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_1A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_8",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_15",
+          "passed": true,
+          "expected": "present",
+          "actual": "incorporated_by_reference"
+        },
+        {
+          "name": "pipeline_validation",
+          "passed": true,
+          "expected": true,
+          "actual": true
+        }
+      ],
+      "items_returned": 23,
+      "items_extracted": 22,
+      "missing_items": [
+        "16"
+      ],
+      "status_counts": {
+        "extracted": 17,
+        "incorporated_by_reference": 1,
+        "not_applicable": 4,
+        "reserved": 0,
+        "not_found": 1
+      },
+      "latency_ms": 4849.0,
+      "cost_usd": 0.0,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "validation",
+        "xbrl_cross_check"
+      ],
+      "failure_type": null,
+      "error": null
+    },
+    {
+      "case_id": "t3_exxon_2023",
+      "passed": true,
+      "checks": [
+        {
+          "name": "min_items_extracted",
+          "passed": true,
+          "expected": 17,
+          "actual": 22
+        },
+        {
+          "name": "required_item_1",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_1A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_2",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_8",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "pipeline_validation",
+          "passed": true,
+          "expected": true,
+          "actual": true
+        }
+      ],
+      "items_returned": 23,
+      "items_extracted": 22,
+      "missing_items": [
+        "6"
+      ],
+      "status_counts": {
+        "extracted": 15,
+        "incorporated_by_reference": 5,
+        "not_applicable": 2,
+        "reserved": 0,
+        "not_found": 1
+      },
+      "latency_ms": 2167.5,
+      "cost_usd": 0.0,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "validation",
+        "xbrl_cross_check"
+      ],
+      "failure_type": null,
+      "error": null
+    },
+    {
+      "case_id": "t3_tesla_2023",
+      "passed": true,
+      "checks": [
+        {
+          "name": "min_items_extracted",
+          "passed": true,
+          "expected": 18,
+          "actual": 23
+        },
+        {
+          "name": "required_item_1",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_1A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_8",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_15",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "status_item_1",
+          "passed": true,
+          "expected": "extracted",
+          "actual": "extracted"
+        },
+        {
+          "name": "pipeline_validation",
+          "passed": true,
+          "expected": true,
+          "actual": true
+        }
+      ],
+      "items_returned": 23,
+      "items_extracted": 23,
+      "missing_items": [],
+      "status_counts": {
+        "extracted": 15,
+        "incorporated_by_reference": 5,
+        "not_applicable": 3,
+        "reserved": 0,
+        "not_found": 0
+      },
+      "latency_ms": 1853.5,
+      "cost_usd": 0.0,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "validation",
+        "xbrl_cross_check"
+      ],
+      "failure_type": null,
+      "error": null
+    },
+    {
+      "case_id": "t3_small_company_2024",
+      "passed": true,
+      "checks": [
+        {
+          "name": "min_items_extracted",
+          "passed": true,
+          "expected": 12,
+          "actual": 23
+        },
+        {
+          "name": "pipeline_validation",
+          "passed": true,
+          "expected": true,
+          "actual": true
+        }
+      ],
+      "items_returned": 23,
+      "items_extracted": 23,
+      "missing_items": [],
+      "status_counts": {
+        "extracted": 13,
+        "incorporated_by_reference": 6,
+        "not_applicable": 4,
+        "reserved": 0,
+        "not_found": 0
+      },
+      "latency_ms": 2230.2,
+      "cost_usd": 0.0,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "validation",
+        "xbrl_cross_check"
+      ],
+      "failure_type": null,
+      "error": null
+    },
+    {
+      "case_id": "t3_apple_2005_old_format",
+      "passed": true,
+      "checks": [
+        {
+          "name": "min_items_extracted",
+          "passed": true,
+          "expected": 10,
+          "actual": 18
+        },
+        {
+          "name": "required_item_1",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_8",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_9A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "pipeline_validation",
+          "passed": true,
+          "expected": true,
+          "actual": true
+        }
+      ],
+      "items_returned": 23,
+      "items_extracted": 18,
+      "missing_items": [],
+      "status_counts": {
+        "extracted": 16,
+        "incorporated_by_reference": 1,
+        "not_applicable": 1,
+        "reserved": 0,
+        "not_found": 5
+      },
+      "latency_ms": 1397.0,
+      "cost_usd": 0.0,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "validation",
+        "xbrl_cross_check"
+      ],
+      "failure_type": null,
+      "error": null
+    },
+    {
+      "case_id": "t3_pfizer_2023_healthcare",
+      "passed": true,
+      "checks": [
+        {
+          "name": "min_items_extracted",
+          "passed": true,
+          "expected": 17,
+          "actual": 23
+        },
+        {
+          "name": "required_item_1",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_1A",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_7",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_8",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "required_item_15",
+          "passed": true,
+          "expected": "present",
+          "actual": "extracted"
+        },
+        {
+          "name": "pipeline_validation",
+          "passed": true,
+          "expected": true,
+          "actual": true
+        }
+      ],
+      "items_returned": 23,
+      "items_extracted": 23,
+      "missing_items": [],
+      "status_counts": {
+        "extracted": 17,
+        "incorporated_by_reference": 6,
+        "not_applicable": 0,
+        "reserved": 0,
+        "not_found": 0
+      },
+      "latency_ms": 2370.4,
+      "cost_usd": 0.0,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "validation",
+        "xbrl_cross_check"
+      ],
+      "failure_type": null,
+      "error": null
+    }
+  ]
+}

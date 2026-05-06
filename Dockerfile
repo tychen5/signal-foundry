@@ -1,7 +1,8 @@
 FROM python:3.11-slim
 
-# Install system dependencies for Playwright
+# Install system dependencies for Playwright + git for Task 1 (CI/CD skills clone repos)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     wget gnupg ca-certificates fonts-liberation \
     libnss3 libatk-bridge2.0-0 libdrm2 libxcomposite1 \
     libxdamage1 libxrandr2 libgbm1 libasound2 libpango-1.0-0 \

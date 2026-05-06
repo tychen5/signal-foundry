@@ -1,0 +1,685 @@
+{
+  "run_at": "2026-05-06T16:57:58.901579+00:00",
+  "eval_set": "/mnt/c/Users/leoqa/Documents/signal-foundry/evals/task2/eval_set.json",
+  "summary": {
+    "cases": 17,
+    "passed": 17,
+    "success_rate": 1.0,
+    "avg_latency_ms": 136490.9,
+    "total_cost_usd": 3.05592,
+    "avg_self_corrections": 0.76
+  },
+  "scores": [
+    {
+      "case_id": "t2_wikipedia_search",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "463 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 6
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 6
+        }
+      ],
+      "status": "success",
+      "steps_taken": 6,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Artificial intelligence (AI) is the capability of computational systems to perform tasks typically associated with human intelligence, such as learning, reasoning, problem-solving, perception, and dec",
+      "failure_modes": [],
+      "latency_ms": 44958.2,
+      "cost_usd": 0.052785,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_google_search",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "partial"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "138 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 15
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 15
+        }
+      ],
+      "status": "partial",
+      "steps_taken": 15,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Reached max steps (15). Last page: https://www.bing.com/search?q=SEC+10-K+filing+requirements&rdr=1&rdrig=4AC1CDB4C7B249DB99CED583698D469E",
+      "failure_modes": [],
+      "latency_ms": 243108.1,
+      "cost_usd": 0.27708,
+      "llm_calls": 18
+    },
+    {
+      "case_id": "t2_form_fill_httpbin",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "455 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 7
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 7
+        }
+      ],
+      "status": "success",
+      "steps_taken": 7,
+      "self_corrections": 2,
+      "healer_activations": 2,
+      "final_answer_preview": "The form was submitted incorrectly. The response shows only custname='555-1234' was filled (telephone value went into wrong field), and custtel, delivery, comments, custemail are all empty. The Medium",
+      "failure_modes": [],
+      "latency_ms": 97402.6,
+      "cost_usd": 0.147645,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_multi_step_hackernews",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "124 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "success",
+      "steps_taken": 5,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "The top story on Hacker News is 'Valve releases Steam Controller CAD files under Creative Commons license' with 16 comments.",
+      "failure_modes": [],
+      "latency_ms": 77166.7,
+      "cost_usd": 0.08622,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_github_trending",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "574 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 4
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 4
+        }
+      ],
+      "status": "success",
+      "steps_taken": 4,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Top 5 GitHub Trending Repositories Today:\n\n1. Hmbown/DeepSeek-TUI - Coding agent for DeepSeek models that runs in your terminal (Rust)\n\n2. addyosmani/agent-skills - Production-grade engineering skills",
+      "failure_modes": [],
+      "latency_ms": 42577.0,
+      "cost_usd": 0.045555,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_pypi_search",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "358 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 6
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 6
+        }
+      ],
+      "status": "success",
+      "steps_taken": 6,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Unable to complete the task: PyPI's search page is blocked by a CAPTCHA challenge (Fastly's anti-bot protection), which requires human interaction to solve. The search results for 'langchain' cannot b",
+      "failure_modes": [],
+      "latency_ms": 35222.6,
+      "cost_usd": 0.059925,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_error_recovery_404",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "225 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 3
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 3
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 3,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "The error page shown is a '404 Not Found' page. Page title: '404 Not Found'. Body content: 'Not Found - The requested URL was not found on the server. If you entered the URL manually please check your",
+      "failure_modes": [
+        "ungrounded_numbers:['404', '404']"
+      ],
+      "latency_ms": 27174.0,
+      "cost_usd": 0.03156,
+      "llm_calls": 1
+    },
+    {
+      "case_id": "t2_cookie_banner_news",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "249 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "success",
+      "steps_taken": 5,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "Unable to retrieve the top story headline from reuters.com. The page appears to be blocked by a verification iframe (likely a CAPTCHA or bot-detection challenge), and no article content is accessible ",
+      "failure_modes": [],
+      "latency_ms": 76891.4,
+      "cost_usd": 0.095505,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_multi_tab_comparison",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "256 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 8
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 8
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 8,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "Tokyo has a larger population than New York City. Tokyo's population is approximately 13.96 million (within the metropolis/prefecture), while New York City's population is approximately 8.3 million (2",
+      "failure_modes": [
+        "ungrounded_numbers:['13.96', '2020']"
+      ],
+      "latency_ms": 122228.2,
+      "cost_usd": 0.16356,
+      "llm_calls": 4
+    },
+    {
+      "case_id": "t2_sec_edgar_lookup",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "252 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 5
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 5
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 5,
+      "self_corrections": 2,
+      "healer_activations": 2,
+      "final_answer_preview": "Unable to complete the task: SEC EDGAR blocked the request with an 'Undeclared Automated Tool' page, which requires a declared user agent with company-specific information. However, Apple Inc's CIK nu",
+      "failure_modes": [
+        "ungrounded_numbers:['0000320193', '320193']"
+      ],
+      "latency_ms": 109664.8,
+      "cost_usd": 0.148605,
+      "llm_calls": 2
+    },
+    {
+      "case_id": "t2_spa_navigation",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "90 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 7
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 7
+        }
+      ],
+      "status": "success",
+      "steps_taken": 7,
+      "self_corrections": 2,
+      "healer_activations": 2,
+      "final_answer_preview": "The Fetch API provides an interface for fetching resources (including across the network).",
+      "failure_modes": [],
+      "latency_ms": 153357.1,
+      "cost_usd": 0.17055,
+      "llm_calls": 3
+    },
+    {
+      "case_id": "t2_table_extraction",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "partial"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "99 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 15
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 15
+        }
+      ],
+      "status": "partial",
+      "steps_taken": 15,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "Reached max steps (15). Last page: https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)",
+      "failure_modes": [],
+      "latency_ms": 272061.2,
+      "cost_usd": 0.46248,
+      "llm_calls": 20
+    },
+    {
+      "case_id": "t2_wantgoo_tx_pivots",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "partial"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "90 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 15
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 15
+        }
+      ],
+      "status": "partial",
+      "steps_taken": 15,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Reached max steps (15). Last page: https://www.wantgoo.com/investrue/tw-index-futures-post",
+      "failure_modes": [],
+      "latency_ms": 257868.8,
+      "cost_usd": 0.337605,
+      "llm_calls": 20
+    },
+    {
+      "case_id": "t2_twse_company_lookup",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "partial"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "78 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 15
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 15
+        }
+      ],
+      "status": "partial",
+      "steps_taken": 15,
+      "self_corrections": 2,
+      "healer_activations": 2,
+      "final_answer_preview": "Reached max steps (15). Last page: https://mops.twse.com.tw/mops/#/web/t05st03",
+      "failure_modes": [],
+      "latency_ms": 328533.3,
+      "cost_usd": 0.34011,
+      "llm_calls": 18
+    },
+    {
+      "case_id": "t2_cnyes_taiex_quote",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "success"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "203 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 7
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 7
+        }
+      ],
+      "status": "success",
+      "steps_taken": 7,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "\u6839\u64da\u9245\u4ea8\u7db2\u53f0\u80a1\u52a0\u6b0a\u6307\u6578\u9801\u9762\uff082010-03-26 \u6536\u76e4\uff09\uff1a\n- \u6700\u65b0\u6307\u6578\u9ede\u4f4d\uff1a7876.86 \u9ede\n- \u6f32\u8dcc\uff1a+38.76 \u9ede\uff08\u6f32\u5e45\u7d04 +0.49%\uff09\n- \u6210\u4ea4\u91d1\u984d\uff08\u96c6\u4e2d\u5e02\u5834\uff09\uff1a1,046.00 \u5104\u5143\uff08\u524d\u4e00\u4ea4\u6613\u65e5 2010-03-25 \u8cc7\u6599\uff1b\u7576\u65e5\u76e4\u5f8c\u5373\u6642\u6210\u4ea4\u91d1\u984d\u672a\u65bc\u76ee\u524d\u9801\u9762\u6587\u5b57\u660e\u78ba\u5217\u51fa\uff09\n\n\u5099\u8a3b\uff1a\u9801\u9762\u4ea6\u986f\u793a\u300c13:31 \u53f0\u7063\u52a0\u6b0a\u6307\u6578\u6536\u76e4\u6f3238.76\u9ede \u58317876.86\u9ede\u300d\uff0c\u4e09\u5927\u6cd5\u4eba\u5408\u8a08\u8cb7\u8d8591.11",
+      "failure_modes": [],
+      "latency_ms": 109680.6,
+      "cost_usd": 0.10602,
+      "llm_calls": 6
+    },
+    {
+      "case_id": "t2_yahoo_finance_aapl_options",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "partial"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "80 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 15
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 15
+        }
+      ],
+      "status": "partial",
+      "steps_taken": 15,
+      "self_corrections": 0,
+      "healer_activations": 0,
+      "final_answer_preview": "Reached max steps (15). Last page: https://finance.yahoo.com/quote/AAPL/options/",
+      "failure_modes": [],
+      "latency_ms": 249918.3,
+      "cost_usd": 0.440535,
+      "llm_calls": 18
+    },
+    {
+      "case_id": "t2_anuse_silent_failure_guard",
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_crash",
+          "passed": true,
+          "expected": "success or partial",
+          "actual": "unverified"
+        },
+        {
+          "name": "has_answer",
+          "passed": true,
+          "expected": "non-empty answer",
+          "actual": "525 chars"
+        },
+        {
+          "name": "took_steps",
+          "passed": true,
+          "expected": "> 0 steps",
+          "actual": 6
+        },
+        {
+          "name": "reasonable_steps",
+          "passed": true,
+          "expected": "<= 15",
+          "actual": 6
+        }
+      ],
+      "status": "unverified",
+      "steps_taken": 6,
+      "self_corrections": 1,
+      "healer_activations": 1,
+      "final_answer_preview": "The information could not be found. https://example.com is a placeholder domain reserved for documentation purposes (per IANA/RFC 2606). Its only content is a generic notice stating 'This domain is fo",
+      "failure_modes": [
+        "ungrounded_numbers:['2606']"
+      ],
+      "latency_ms": 72533.1,
+      "cost_usd": 0.09018,
+      "llm_calls": 1
+    }
+  ]
+}

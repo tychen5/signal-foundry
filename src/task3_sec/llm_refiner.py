@@ -57,7 +57,7 @@ async def refine_boundaries(
     parse_result: ParseResult,
     model_name: Optional[str] = None,
     user_api_key: Optional[str] = None,
-    confidence_threshold: float = 0.7,
+    confidence_threshold: float = 0.5,
     trace_id: str = "",
 ) -> ParseResult:
     """

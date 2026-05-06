@@ -3,5 +3,6 @@
   "start_command": "uvicorn src.main:app --host 0.0.0.0 --port 8080",
   "python": {
     "version": "3.11"
-  }
+  },
+  "aptPackages": ["git"]
 }
