@@ -139,13 +139,6 @@ def _create_openai_compat(
             "X-OpenRouter-Title": "Signal-Foundry",
         }
 
-    # `extra_body` placement varies across langchain-openai versions:
-    # - newer (≥0.3): top-level kwarg
-    # - older: must be nested inside `model_kwargs` (and the wrapper warns).
-    # We probe at runtime so we don't pin a specific dependency version.
-    import inspect as _inspect
-    accepts_extra_body_top = "extra_body" in _inspect.signature(ChatOpenAI.__init__).parameters
-
     chat_kwargs: dict = {
         "model": model_name,
         "api_key": api_key,
@@ -157,11 +150,13 @@ def _create_openai_compat(
         # error to the caller fast rather than silently retrying inside the SDK.
         "max_retries": 1,
     }
+    # `extra_body` is accepted by ChatOpenAI in all versions ≥0.2.10 (our
+    # minimum). Earlier versions silently ate it; newer versions emit a
+    # UserWarning if we pass it via model_kwargs. The simplest correct path
+    # is to pass it as a top-level kwarg — ChatOpenAI's __init__ uses
+    # **kwargs and forwards to the openai SDK which accepts extra_body.
     if extra_body:
-        if accepts_extra_body_top:
-            chat_kwargs["extra_body"] = extra_body
-        else:
-            chat_kwargs["model_kwargs"] = {"extra_body": extra_body}
+        chat_kwargs["extra_body"] = extra_body
 
     return ChatOpenAI(**chat_kwargs)
 
