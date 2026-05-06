@@ -70,6 +70,44 @@ def diagnose_deterministic(
     """
     error_lower = (error_message or "").lower()
 
+    # Anti-bot / rate-limit responses. These MUST be diagnosed before generic
+    # network errors because the underlying error string may also contain
+    # "net::" / "err_" depending on the Playwright version.
+    if any(s in error_lower for s in ("429", "too many requests", "rate limit", "ratelimit")):
+        return Diagnosis(
+            root_cause=FailureRootCause.NETWORK_ERROR,
+            explanation="Server returned rate-limit (429). Anti-bot or quota exhaustion.",
+            recovery_strategy="Back off (5–15s), then retry once. Repeated 429s should fail the task rather than burn budget.",
+            should_retry=True,
+            confidence=0.95,
+        )
+    if any(s in error_lower for s in ("403", "forbidden", "access denied", "blocked")):
+        return Diagnosis(
+            root_cause=FailureRootCause.CAPTCHA_DETECTED,
+            explanation="403/Forbidden. Likely anti-bot block, geofence, or missing auth.",
+            recovery_strategy="Cannot bypass automatically. Report as blocked rather than loop on retries.",
+            should_retry=False,
+            confidence=0.9,
+        )
+    if "ssl" in error_lower or "cert" in error_lower or "ssl_error" in error_lower:
+        return Diagnosis(
+            root_cause=FailureRootCause.NETWORK_ERROR,
+            explanation=f"TLS/cert error: {error_message[:120]}",
+            recovery_strategy="Cannot fix from agent. Verify URL spelling or report as blocked.",
+            should_retry=False,
+            confidence=0.95,
+        )
+    # Playwright sometimes fails because the underlying frame/page got
+    # navigated/destroyed mid-action (common during heavy SPA redirects).
+    if any(s in error_lower for s in ("frame was detached", "target closed", "execution context was destroyed")):
+        return Diagnosis(
+            root_cause=FailureRootCause.PAGE_NOT_LOADED,
+            explanation="Page or frame navigated/destroyed mid-action.",
+            recovery_strategy="Re-observe page state, then retry the action against the new DOM.",
+            should_retry=True,
+            confidence=0.85,
+        )
+
     # Timeout / not found patterns
     if "timeout" in error_lower:
         if "waiting for" in error_lower or "locator" in error_lower:

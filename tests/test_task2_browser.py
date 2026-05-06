@@ -367,6 +367,117 @@ class TestHealer:
         # CAPTCHA is not in the mapping, so None is returned
         assert alt is None
 
+    def test_diagnose_rate_limit_429(self) -> None:
+        """429/Too Many Requests → recoverable network error with backoff."""
+        from src.task2_browser.healer import diagnose_deterministic
+
+        state = PageState(url="https://example.com")
+        action = BrowserAction(action_type=ActionType.NAVIGATE, target_description="page")
+
+        diag = diagnose_deterministic("HTTP 429 Too Many Requests", state, action)
+        assert diag.root_cause == FailureRootCause.NETWORK_ERROR
+        assert diag.should_retry is True
+        assert "back off" in diag.recovery_strategy.lower()
+
+    def test_diagnose_403_blocked(self) -> None:
+        """403/Forbidden → anti-bot block, do NOT retry."""
+        from src.task2_browser.healer import diagnose_deterministic
+
+        state = PageState(url="https://example.com")
+        action = BrowserAction(action_type=ActionType.NAVIGATE, target_description="page")
+
+        diag = diagnose_deterministic("HTTP 403 Forbidden", state, action)
+        assert diag.root_cause == FailureRootCause.CAPTCHA_DETECTED
+        assert diag.should_retry is False
+
+    def test_diagnose_frame_detached(self) -> None:
+        """Frame detached mid-action → page_not_loaded, retry against fresh DOM."""
+        from src.task2_browser.healer import diagnose_deterministic
+
+        state = PageState(url="https://example.com/destination")
+        action = BrowserAction(action_type=ActionType.CLICK, target_description="button")
+
+        diag = diagnose_deterministic("frame was detached", state, action)
+        assert diag.root_cause == FailureRootCause.PAGE_NOT_LOADED
+        assert diag.should_retry is True
+
+
+# ==============================================================================
+# Silent-Failure Guard Tests
+# ==============================================================================
+
+
+class TestSilentFailureGuard:
+    """Verify the agent downgrades plausible-but-wrong final answers."""
+
+    def _make_agent(self):
+        from src.task2_browser.agent import BrowserAgent
+
+        return BrowserAgent()
+
+    def _make_result(self, answer: str, observed_text: str = "") -> "AgentResult":
+        from src.task2_browser.schemas import AgentResult, StepResult
+
+        result = AgentResult(
+            trace_id="t",
+            task_description="test",
+            target_url="https://example.com",
+            status="success",
+            final_answer=answer,
+        )
+        if observed_text:
+            step = StepResult(
+                step_number=1,
+                action=BrowserAction(action_type=ActionType.NAVIGATE, target_description="x"),
+                after_state=PageState(url="https://example.com", visible_text_summary=observed_text),
+            )
+            result.steps.append(step)
+        return result
+
+    def test_hedged_answer_marked_not_found(self) -> None:
+        agent = self._make_agent()
+        result = self._make_result("I cannot find that information on this page.")
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+        assert "hedged_answer" in result.failure_modes
+
+    def test_chinese_hedge_phrase_marked_not_found(self) -> None:
+        agent = self._make_agent()
+        result = self._make_result("頁面沒有相關資訊，無法取得指定的數值。")
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+
+    def test_ungrounded_numbers_marked_unverified(self) -> None:
+        """If the answer cites numbers that don't appear anywhere in observed
+        page text, mark unverified — likely fabrication."""
+        agent = self._make_agent()
+        result = self._make_result(
+            answer="The TX support is at 22850 and resistance is at 23420.",
+            observed_text="Welcome to example.com — this domain is for use in illustrative examples in documents.",
+        )
+        agent._guard_against_silent_success(result)
+        assert result.status == "unverified"
+        assert any("ungrounded_numbers" in fm for fm in result.failure_modes)
+
+    def test_grounded_numbers_pass_through(self) -> None:
+        agent = self._make_agent()
+        result = self._make_result(
+            answer="The TX support is at 22850 and resistance is at 23420.",
+            observed_text="盤後支撐 22850 / 壓力 23420 來源 玩股網",
+        )
+        agent._guard_against_silent_success(result)
+        assert result.status == "success"
+        assert result.failure_modes == []
+
+    def test_no_observed_text_does_not_falsely_unverify(self) -> None:
+        """When the run produced no observed text (e.g. failure before any
+        navigation), don't penalise an answer just because grounding is
+        impossible — only the hedge check applies."""
+        agent = self._make_agent()
+        result = self._make_result("The CIK is 320193.", observed_text="")
+        agent._guard_against_silent_success(result)
+        assert result.status == "success"
+
 
 # ==============================================================================
 # Planner Tests

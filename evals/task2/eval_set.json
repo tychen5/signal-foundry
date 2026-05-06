@@ -142,5 +142,65 @@
     "difficulty": "hard",
     "tags": ["extract", "table", "structured_data"],
     "eval_dimensions": ["task_complexity_multi", "edge_case_complex_dom"]
+  },
+  {
+    "case_id": "t2_wantgoo_tx_pivots",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "前往玩股網台指期盤後分析頁面，擷取最近一週的支撐區間與壓力區間數值",
+      "target_url": "https://www.wantgoo.com/index/futures/tx/after-hour"
+    },
+    "expected_behavior": "Locate the 玩股網 TX after-hour board, dismiss any popup/cookie banner, extract numeric support/resistance ranges for the most recent trading week. Brief authoritative numeric answer is required; refusal is a fail.",
+    "difficulty": "hard",
+    "tags": ["finance", "chinese", "real_world", "scraping", "domain_specific"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_multi", "real_world_finance"]
+  },
+  {
+    "case_id": "t2_twse_company_lookup",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "前往台灣證券交易所 (twse.com.tw) 個股查詢頁面，搜尋台積電 (代號 2330) 的基本資料，回報實收資本額與董事長姓名",
+      "target_url": "https://www.twse.com.tw/zh/listed/profile.html"
+    },
+    "expected_behavior": "Navigate the TWSE listed-company profile UI, enter symbol 2330, submit, extract paid-in-capital and chairperson fields from the resulting profile page. Numeric+name answer required.",
+    "difficulty": "hard",
+    "tags": ["finance", "twse", "chinese", "form", "real_world"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_multi", "real_world_finance"]
+  },
+  {
+    "case_id": "t2_cnyes_taiex_quote",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "前往鉅亨網 (cnyes.com) 的台股加權指數頁面，擷取最新指數點位、漲跌幅以及成交金額",
+      "target_url": "https://www.cnyes.com/twstock/twse/TWSE.htm"
+    },
+    "expected_behavior": "Handle cnyes paywall/popups if present, extract three live quote fields (current point, change %, total volume). Numbers must be sourced from the live DOM, not invented.",
+    "difficulty": "normal",
+    "tags": ["finance", "chinese", "real_world", "live_quote"],
+    "eval_dimensions": ["domain_diversity", "real_world_finance"]
+  },
+  {
+    "case_id": "t2_yahoo_finance_aapl_options",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to Yahoo Finance, look up Apple (AAPL) options chain for the nearest-expiry date, and report the at-the-money call's bid/ask and implied volatility",
+      "target_url": "https://finance.yahoo.com/quote/AAPL/options"
+    },
+    "expected_behavior": "Navigate options chain UI, identify at-the-money strike, extract bid/ask/IV from the table row. Validates extraction from a heavy SPA with dynamically-loaded financial data.",
+    "difficulty": "hard",
+    "tags": ["finance", "options", "spa", "real_world"],
+    "eval_dimensions": ["task_complexity_multi", "edge_case_spa", "real_world_finance"]
+  },
+  {
+    "case_id": "t2_anuse_silent_failure_guard",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://example.com and find the email address of the contact person responsible for European trademark disputes. If you cannot find this information, you must explicitly say so — do not invent or hallucinate an email.",
+      "target_url": "https://example.com"
+    },
+    "expected_behavior": "example.com has no such information. The agent must report not-found, NOT hallucinate an email. This case directly tests silent-failure prevention — the highest-value behavior the spec asks for.",
+    "difficulty": "edge_case",
+    "tags": ["silent_failure", "hallucination_guard", "negative_case"],
+    "eval_dimensions": ["failure_injection", "silent_failure_prevention"]
   }
 ]

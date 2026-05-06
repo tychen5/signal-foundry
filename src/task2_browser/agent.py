@@ -16,6 +16,7 @@ a targeted recovery strategy.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from typing import Optional
 
@@ -35,6 +36,7 @@ from src.task2_browser.schemas import (
     ActionType,
     AgentResult,
     BrowserAction,
+    PageState,
     StepResult,
 )
 
@@ -45,6 +47,32 @@ cost_tracker = get_cost_tracker()
 _MAX_HEAL_ATTEMPTS = 3
 # Verification confidence threshold — below this triggers healing
 _VERIFICATION_THRESHOLD = 0.4
+
+# Phrases that indicate the LLM is hedging or didn't actually find an answer.
+# When the final_answer matches one of these, downgrade status to "not_found"
+# instead of claiming "success" — this is the silent-failure guard.
+_NOT_FOUND_PHRASES = (
+    "i cannot find",
+    "i could not find",
+    "i was unable to find",
+    "i don't have access",
+    "i do not have access",
+    "no such information",
+    "not available on the page",
+    "the page does not contain",
+    "i'm not able to determine",
+    "cannot determine",
+    "cannot be found",
+    "this page does not have",
+    "no information about",
+    "未能找到",
+    "找不到",
+    "無法找到",
+    "無法取得",
+    "頁面沒有",
+)
+
+_NUMBER_TOKEN = re.compile(r"\d{2,}(?:[.,]\d+)?")
 
 
 class BrowserAgent:
@@ -236,6 +264,11 @@ class BrowserAgent:
         request_cost = cost_tracker.get_request_cost(trace_id)
         result.cost_usd = request_cost.get("cost_usd", 0.0)
 
+        # Silent-failure guard: even if the verifier said "is_complete=True",
+        # downgrade the result if the answer is a hedge or the cited numbers
+        # can't be sourced from observed page text.
+        self._guard_against_silent_success(result)
+
         logger.info(
             "agent_complete",
             status=result.status,
@@ -246,6 +279,59 @@ class BrowserAgent:
         )
 
         return result
+
+    def _guard_against_silent_success(self, result: AgentResult) -> None:
+        """Downgrade `success` → `not_found` / `unverified` when the final
+        answer doesn't survive a grounding check.
+
+        Why this matters: the spec explicitly calls out silent-failure
+        prevention. The verifier and planner can both produce a confident
+        "I found X = 42" reply when in reality the page returned an error or
+        the LLM hallucinated. We catch two patterns here:
+
+        1. Hedging/refusal phrases — convert to status="not_found" so a
+           caller can distinguish "no such data exists" from "succeeded".
+        2. Numeric answers whose digits don't appear in any observed page
+           text — flag as status="unverified" with a reason. This is a
+           cheap deterministic check that catches the most common
+           hallucination mode for finance scraping tasks.
+        """
+        if result.status != "success" or not result.final_answer:
+            return
+
+        answer = result.final_answer.strip()
+        answer_lower = answer.lower()
+
+        for phrase in _NOT_FOUND_PHRASES:
+            if phrase in answer_lower:
+                result.status = "not_found"
+                result.failure_modes.append("hedged_answer")
+                return
+
+        # Collect text observed during the run for grounding.
+        observed_blobs: list[str] = []
+        for step in result.steps:
+            for state in (step.before_state, step.after_state):
+                if state and state.visible_text_summary:
+                    observed_blobs.append(state.visible_text_summary)
+        observed = "\n".join(observed_blobs)
+
+        # Pull every number-ish token out of the answer that is at least 2
+        # digits (so we don't false-fire on "1 result"). If the answer cites
+        # a number that doesn't appear anywhere on observed pages, the agent
+        # very likely fabricated it.
+        nums = _NUMBER_TOKEN.findall(answer)
+        if nums and observed:
+            normalized_observed = observed.replace(",", "")
+            ungrounded = [
+                n for n in nums
+                if n not in observed and n.replace(",", "") not in normalized_observed
+            ]
+            if ungrounded and len(ungrounded) == len(nums):
+                # *Every* numeric token in the answer is missing from observed
+                # text — strongly indicates fabrication.
+                result.status = "unverified"
+                result.failure_modes.append(f"ungrounded_numbers:{ungrounded[:3]}")
 
     async def _execute_step(
         self,

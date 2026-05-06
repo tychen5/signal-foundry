@@ -134,7 +134,10 @@ class AgentResult(BaseModel):
     trace_id: str = ""
     task_description: str = ""
     target_url: str = ""
-    status: str = "success"  # success, partial, failed
+    # success | partial | failed | not_found | unverified
+    # not_found  → agent ran cleanly but the target data does not exist
+    # unverified → final answer's numbers can't be sourced from observed text
+    status: str = "success"
     steps: list[StepResult] = Field(default_factory=list)
     final_answer: str = Field(default="", description="Extracted data or task completion summary")
     total_steps: int = 0
