@@ -68,3 +68,17 @@ src/
 - NEVER force push to main branch
 - ALWAYS verify char_range matches source text (Task 3)
 - ALWAYS run dry-run before destructive operations (Task 1)
+- ALWAYS route chat-response `.content` through `src.shared.llm_utils.coerce_message_text` — newer thinking-mode models return block lists, raw `.content[:200]` crashes
+- For Task 2, never trust an LLM "task complete" without grounding the answer in observed page text (`BrowserAgent._guard_against_silent_success`)
+- For Task 3, never tighten the coverage check to require Items 6 / 1C / 9C / 16 — they're conditionally optional by SEC year
+
+## Harness Engineering Quick Reference
+
+- **LLM provider** — `src/llm_provider.py` defaults to `langchain_openai.ChatOpenAI` pointed at NVIDIA NIM or OpenRouter base URLs. Both providers via one code path avoids the AssertionError / silent-kwargs-drop bugs in the dedicated wrappers. Per-model `extra_body` (NIM thinking toggles) lives in `MODEL_REGISTRY`.
+- **Cost tracker** — every chat call through `src/shared/cost_tracker.py` with `(task, operation, trace_id)`. Per-task / per-skill cost visible from the `/metrics` endpoint.
+- **Skill engine merge order** (Task 1) — `**raw_result` first, engine fields last so `summary` and `match_confidence` always win over skill-level keys with name collisions (the previous bug: `SecurityScanResult.summary` shadowed the LLM summary).
+- **Idempotency cache** (Task 1) — `cicd:v1:{owner}/{repo}:{branch}:{skill}:{sha[:12]}:{dry_run}`. HEAD SHA fetched *before* clone so cache hits skip the entire subprocess pipeline.
+- **Reactive planning** (Task 2) — agent observes after each step and `decide_next_action` re-decides on the new page state, rather than blindly following a pre-made plan.
+- **Selective LLM** (Task 3) — LLM only fires when rule-based confidence < 0.8 or items_found < 10. Modern HTML filings stay $0.
+
+For deeper per-task notes (context engineering decisions, LLM touch points, red lines), see `AGENTS.md`.
