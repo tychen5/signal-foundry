@@ -28,31 +28,57 @@
             <small style="color:#888;display:block;margin-top:0.5rem;">Default Kimi K2.6 is free via NVIDIA NIM (rate-limited). Reviewers wanting Gemini / Claude / GPT must paste their own OpenRouter key above.</small>
         </div>
 
-        <!-- Task Cards -->
+        <!-- Task Cards (entire card clickable) -->
         <div class="task-grid">
-            <div class="task-card" id="task1-card">
-                <h3>📋 Task 1: CI/CD Skills Engine</h3>
-                <p>GitHub CI/CD workflows packaged as reusable, precisely-triggered Claude Skills with sandbox execution and idempotency.</p>
-                <span class="badge badge-skills">Skills</span>
-                <a href="/api/v1/skills/list">View Skills →</a>
-                <span class="status">Ready</span>
-            </div>
+            <a href="/task1" class="task-card-link" id="task1-card">
+                <div class="task-card">
+                    <h3>📋 Task 1: CI/CD Skills Engine</h3>
+                    <p>GitHub CI/CD workflows packaged as reusable, precisely-triggered Claude Skills with sandbox execution and idempotency.</p>
+                    <div class="card-bullets">
+                        <span>4 skills · OSV.dev advisories · ruff/eslint/bandit · semver release planner</span>
+                    </div>
+                    <div class="card-footer">
+                        <span class="badge badge-skills">Skills</span>
+                        <span class="status">Ready · Click to run →</span>
+                    </div>
+                </div>
+            </a>
 
-            <div class="task-card" id="task2-card">
-                <h3>🌐 Task 2: Browser Automation Agent</h3>
-                <p>Self-healing browser agent with AOM-first locators, semantic state tracking, and silent failure prevention.</p>
-                <span class="badge badge-agent">Agent</span>
-                <a href="#task2">Try Agent →</a>
-                <span class="status">Ready</span>
-            </div>
+            <a href="/task2" class="task-card-link" id="task2-card">
+                <div class="task-card">
+                    <h3>🌐 Task 2: Browser Automation Agent</h3>
+                    <p>Self-healing browser agent with AOM-first locators, semantic state tracking, and silent failure prevention.</p>
+                    <div class="card-bullets">
+                        <span>13-class healer · 50+ silent-failure phrases · vision-language opt-in · 30-case eval set</span>
+                    </div>
+                    <div class="card-footer">
+                        <span class="badge badge-agent">Agent</span>
+                        <span class="status">Ready · Click to run →</span>
+                    </div>
+                </div>
+            </a>
 
-            <div class="task-card" id="task3-card">
-                <h3>📊 Task 3: SEC 10-K Extraction</h3>
-                <p>Hybrid rule+LLM pipeline for structured extraction with XBRL cross-validation and cost discipline.</p>
-                <span class="badge badge-pipeline">Pipeline</span>
-                <a href="#task3">Extract Filing →</a>
-                <span class="status">Ready</span>
-            </div>
+            <a href="/task3" class="task-card-link" id="task3-card">
+                <div class="task-card">
+                    <h3>📊 Task 3: SEC 10-K Extraction</h3>
+                    <p>Hybrid rule+LLM pipeline for structured extraction with XBRL cross-validation and cost discipline.</p>
+                    <div class="card-bullets">
+                        <span>4-stage pipeline · 16-case eval · 10-K + 10-K/A + 20-F · char_range grounding</span>
+                    </div>
+                    <div class="card-footer">
+                        <span class="badge badge-pipeline">Pipeline</span>
+                        <span class="status">Ready · Click to run →</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- View Skills (Task 1 only) -->
+        <div class="quick-actions" style="margin-top:1.5rem">
+            <h3 style="margin-bottom:0.75rem;color:#aaa;font-size:0.95rem">Quick links</h3>
+            <a href="/api/v1/skills/list" class="action-link">📋 List CI/CD Skills</a>
+            <a href="/api/v1/sec/filings/0000320193?filing_type=10-K&limit=5" class="action-link">📁 List Apple 10-Ks</a>
+            <a href="/api/v1/sec/company/0000320193" class="action-link">🏢 Apple Company Info</a>
         </div>
 
         <!-- System Links -->

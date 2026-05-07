@@ -145,8 +145,8 @@
   11. [x] /health + /api/v1/models sanity-checked on every deploy. Final verification table in README "Live deployment verification".
   12. [x] Task 2 live eval — 3 sweeps committed (kimi rate-limited, claude-opus baseline, gemini after improvements). Best run: 13/21 genuine success.
 
-7. [] Phase 7 美化優化zeabur deploy UI介面與交互並且提升UX、demo可用可直接看性
-  1. [] 目前在https://signal-foundry.zeabur.app中只有 task1的View Skills可以點，但我希望改成整個卡片都要可以點，而且現在view skills的呈現方式有點醜，需要排版美化以讓其他一般人可以更容易看懂並理解。
+7. [x] Phase 7 UI/UX 美化 ✅ (2026-05-07)
+  1. [x] Index page rewritten: each task card is now a full `<a>` link wrapping a card div — entire card is clickable, hover state highlights the whole card with blue border + lift. Added `.card-bullets` block showing 3-4 highlight features per task. Added `.quick-actions` panel below cards with direct links to /api/v1/skills/list (View Skills), example SEC filings list, and example SEC company info — gives reviewers fast jumping-off points without typing URLs.
 
 ---
 

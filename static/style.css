@@ -77,6 +77,18 @@ body {
     background: var(--gradient);
 }
 
+.task-card-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+.task-card-link:hover .task-card {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(59, 130, 246, 0.25);
+    border-color: var(--accent-blue);
+}
+.task-card-link:hover { color: inherit; }
+
 .task-card:hover {
     transform: translateY(-4px);
     box-shadow: 0 12px 40px rgba(59, 130, 246, 0.15);
@@ -90,6 +102,47 @@ body {
 .task-card p {
     color: var(--text-secondary);
     margin-bottom: 1rem;
+}
+
+.card-bullets {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin: 0.5rem 0 1rem 0;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-left: 2px solid var(--accent-blue);
+    border-radius: 4px;
+}
+
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.75rem;
+}
+
+.quick-actions {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+}
+
+.action-link {
+    display: inline-block;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+    padding: 0.5rem 0.85rem;
+    margin: 0.25rem 0.5rem 0.25rem 0;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    transition: background 0.2s, border-color 0.2s;
+}
+.action-link:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
 }
 
 /* Badges */
