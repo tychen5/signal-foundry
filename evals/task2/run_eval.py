@@ -30,37 +30,45 @@ def _score_case(case: dict[str, Any], result: AgentResult) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
 
     # Check 1: Agent didn't crash
-    checks.append({
-        "name": "no_crash",
-        "passed": result.status != "failed",
-        "expected": "success or partial",
-        "actual": result.status,
-    })
+    checks.append(
+        {
+            "name": "no_crash",
+            "passed": result.status != "failed",
+            "expected": "success or partial",
+            "actual": result.status,
+        }
+    )
 
     # Check 2: Agent produced a final answer
-    checks.append({
-        "name": "has_answer",
-        "passed": bool(result.final_answer and result.final_answer.strip()),
-        "expected": "non-empty answer",
-        "actual": f"{len(result.final_answer)} chars" if result.final_answer else "empty",
-    })
+    checks.append(
+        {
+            "name": "has_answer",
+            "passed": bool(result.final_answer and result.final_answer.strip()),
+            "expected": "non-empty answer",
+            "actual": f"{len(result.final_answer)} chars" if result.final_answer else "empty",
+        }
+    )
 
     # Check 3: Agent took steps (not zero-shot)
-    checks.append({
-        "name": "took_steps",
-        "passed": result.total_steps > 0,
-        "expected": "> 0 steps",
-        "actual": result.total_steps,
-    })
+    checks.append(
+        {
+            "name": "took_steps",
+            "passed": result.total_steps > 0,
+            "expected": "> 0 steps",
+            "actual": result.total_steps,
+        }
+    )
 
     # Check 4: Reasonable step count (not infinite loop)
     max_steps = case.get("input_data", {}).get("max_steps", 15)
-    checks.append({
-        "name": "reasonable_steps",
-        "passed": result.total_steps <= max_steps,
-        "expected": f"<= {max_steps}",
-        "actual": result.total_steps,
-    })
+    checks.append(
+        {
+            "name": "reasonable_steps",
+            "passed": result.total_steps <= max_steps,
+            "expected": f"<= {max_steps}",
+            "actual": result.total_steps,
+        }
+    )
 
     passed = all(c["passed"] for c in checks)
 
@@ -81,14 +89,18 @@ def _score_case(case: dict[str, Any], result: AgentResult) -> dict[str, Any]:
 
 
 async def _run_case(
-    case: dict[str, Any], model_name: str | None, use_vision: bool = False,
+    case: dict[str, Any],
+    model_name: str | None,
+    use_vision: bool = False,
     timeout_s: float = 120.0,
 ) -> dict[str, Any]:
     """Run one eval case through the live browser agent."""
     started = time.time()
     try:
         agent = BrowserAgent(
-            model_name=model_name, headless=True, use_vision=use_vision,
+            model_name=model_name,
+            headless=True,
+            use_vision=use_vision,
         )
         coro = agent.run(
             task_description=case["input_data"]["task_description"],
@@ -157,9 +169,14 @@ async def run_eval(
 
     scores = []
     for i, case in enumerate(cases):
-        scores.append(await _run_case(
-            case, model_name, use_vision=use_vision, timeout_s=timeout_s,
-        ))
+        scores.append(
+            await _run_case(
+                case,
+                model_name,
+                use_vision=use_vision,
+                timeout_s=timeout_s,
+            )
+        )
         if inter_case_delay > 0 and i < len(cases) - 1:
             await _asyncio.sleep(inter_case_delay)
 
@@ -207,8 +224,13 @@ def main() -> None:
 
     payload = asyncio.run(
         run_eval(
-            args.eval_set, args.results_dir, args.model, args.skip_hard,
-            args.delay, args.vision, args.timeout,
+            args.eval_set,
+            args.results_dir,
+            args.model,
+            args.skip_hard,
+            args.delay,
+            args.vision,
+            args.timeout,
         )
     )
     sys.stdout.write(json.dumps(payload["summary"], indent=2) + "\n")

@@ -203,9 +203,7 @@ class TestSchemas:
     def test_item_title_variants_coverage(self):
         """Every standard item should have title variants for fuzzy matching."""
         for item in STANDARD_10K_ITEMS:
-            assert item["item_number"] in ITEM_TITLE_VARIANTS, (
-                f"Missing title variants for Item {item['item_number']}"
-            )
+            assert item["item_number"] in ITEM_TITLE_VARIANTS, f"Missing title variants for Item {item['item_number']}"
 
     def test_extracted_item_creation(self):
         """Test creating an ExtractedItem with all fields."""
@@ -240,7 +238,7 @@ class TestNormalizer:
 
     def test_detect_format_xbrl(self):
         """XBRL HTML should be detected."""
-        html = '<html><ix:nonNumeric>test</ix:nonNumeric></html>'
+        html = "<html><ix:nonNumeric>test</ix:nonNumeric></html>"
         assert detect_format(html) == "xbrl_html"
 
     def test_detect_format_html(self):
@@ -405,12 +403,15 @@ Item 15. Exhibits
 
     def test_toc_deduplication(self):
         """Items appearing in ToC AND content should prefer content position."""
-        text = """
+        text = (
+            """
 Table of Contents
 Item 1. Business .......... 5
 Item 1A. Risk Factors .... 20
 
-""" + "x" * 500 + """
+"""
+            + "x" * 500
+            + """
 
 PART I
 
@@ -423,6 +424,7 @@ Item 1A. Risk Factors
 
 The following risk factors should be considered.
 """
+        )
         boundaries = detect_item_headings(text)
         # Should find 2 items (deduplicated from ToC)
         found = {b.item_number for b in boundaries}
@@ -470,9 +472,11 @@ The following risk factors should be considered.
         """Even when 'Proxy Statement' appears 1500+ chars in (because the item
         starts with caption titles), a 'Refer to' antecedent should trigger
         incorporated_by_reference."""
-        long_caption_list = "Refer to the information under " + (
-            '"' + ("Caption Title " * 50) + '" '
-        ) + "in the Proxy Statement filed with the SEC."
+        long_caption_list = (
+            "Refer to the information under "
+            + ('"' + ("Caption Title " * 50) + '" ')
+            + "in the Proxy Statement filed with the SEC."
+        )
         assert detect_item_status(long_caption_list) == ItemStatus.INCORPORATED_BY_REFERENCE
 
     def test_full_parse_result(self):
@@ -532,6 +536,7 @@ class TestFetcher:
 
     async def test_find_10k_specific_accession_does_not_fallback_to_latest(self, monkeypatch):
         """A requested accession must not silently fall back to the latest 10-K."""
+
         async def fake_metadata(cik):
             return {
                 "cik": "0000000001",
@@ -594,8 +599,11 @@ class TestValidator:
         """Missing items should be reported."""
         items = [
             ExtractedItem(
-                part="I", item_number="1", item_title="Business",
-                content_text="content", char_range=[0, 100],
+                part="I",
+                item_number="1",
+                item_title="Business",
+                content_text="content",
+                char_range=[0, 100],
             ),
         ]
         result = self._make_result(items)
@@ -606,12 +614,18 @@ class TestValidator:
         """Items should be in standard order."""
         items = [
             ExtractedItem(
-                part="I", item_number="1A", item_title="Risk Factors",
-                content_text="risks", char_range=[0, 50],
+                part="I",
+                item_number="1A",
+                item_title="Risk Factors",
+                content_text="risks",
+                char_range=[0, 50],
             ),
             ExtractedItem(
-                part="I", item_number="1", item_title="Business",
-                content_text="business", char_range=[50, 100],
+                part="I",
+                item_number="1",
+                item_title="Business",
+                content_text="business",
+                char_range=[50, 100],
             ),
         ]
         result = self._make_result(items)
@@ -623,12 +637,18 @@ class TestValidator:
         """Duplicate item numbers should be flagged."""
         items = [
             ExtractedItem(
-                part="I", item_number="1", item_title="Business",
-                content_text="first", char_range=[0, 50],
+                part="I",
+                item_number="1",
+                item_title="Business",
+                content_text="first",
+                char_range=[0, 50],
             ),
             ExtractedItem(
-                part="I", item_number="1", item_title="Business",
-                content_text="second", char_range=[50, 100],
+                part="I",
+                item_number="1",
+                item_title="Business",
+                content_text="second",
+                char_range=[50, 100],
             ),
         ]
         result = self._make_result(items)
@@ -640,7 +660,9 @@ class TestValidator:
         """Auto-fix should detect incorporated by reference from content."""
         items = [
             ExtractedItem(
-                part="III", item_number="10", item_title="Directors",
+                part="III",
+                item_number="10",
+                item_title="Directors",
                 content_text="Incorporated by reference from the Proxy Statement.",
                 char_range=[0, 50],
                 status=ItemStatus.EXTRACTED,  # Wrong status
@@ -654,7 +676,9 @@ class TestValidator:
         """Auto-fix should detect reserved status from content."""
         items = [
             ExtractedItem(
-                part="II", item_number="6", item_title="Selected Financial Data",
+                part="II",
+                item_number="6",
+                item_title="Selected Financial Data",
                 content_text="[Reserved]",
                 char_range=[0, 10],
                 status=ItemStatus.EXTRACTED,  # Wrong
@@ -673,12 +697,15 @@ class TestValidator:
         long_business = (
             "Overview\n\nWe design, develop, manufacture, sell and lease "
             "high-performance fully electric vehicles. The Company was "
-            "incorporated in Delaware in 2003. " + ("Product detail. " * 200)
+            "incorporated in Delaware in 2003. "
+            + ("Product detail. " * 200)
             + " For reference, see additional disclosures in our investor materials."
         )
         items = [
             ExtractedItem(
-                part="I", item_number="1", item_title="Business",
+                part="I",
+                item_number="1",
+                item_title="Business",
                 content_text=long_business,
                 char_range=[0, len(long_business)],
                 status=ItemStatus.EXTRACTED,
@@ -693,7 +720,9 @@ class TestValidator:
         char_range; they should not surface as char_range_bounds errors."""
         items = [
             ExtractedItem(
-                part="I", item_number="1C", item_title="Cybersecurity",
+                part="I",
+                item_number="1C",
+                item_title="Cybersecurity",
                 content_text="",
                 char_range=[0, 0],
                 status=ItemStatus.NOT_FOUND,
@@ -792,9 +821,11 @@ class TestPipelineIntegration:
     def test_prompt_files_exist(self):
         """Versioned prompt files should exist in prompts/sec_extraction/."""
         import os
+
         prompts_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "prompts", "sec_extraction",
+            "prompts",
+            "sec_extraction",
         )
         assert os.path.isfile(os.path.join(prompts_dir, "v2_boundary_refine.txt"))
         assert os.path.isfile(os.path.join(prompts_dir, "v2_missing_item_detect.txt"))
@@ -804,6 +835,7 @@ class TestPipelineIntegration:
     def test_prompt_loading(self):
         """LLM refiner should load prompts from files."""
         from src.task3_sec.llm_refiner import BOUNDARY_REFINE_PROMPT, MISSING_ITEM_PROMPT
+
         assert len(BOUNDARY_REFINE_PROMPT) > 100
         assert "SEC 10-K" in BOUNDARY_REFINE_PROMPT
         assert len(MISSING_ITEM_PROMPT) > 100
@@ -858,10 +890,7 @@ class TestPipelineIntegration:
                 "<h2>Item 7. MD&A</h2><table><tr><td>Revenue</td><td>$100</td></tr></table>",
                 width_px=640,
             )
-            text = (
-                "Item 1. Business\nWe make products.\n\n"
-                "Item 1A. Risk Factors\nRisks include demand shocks."
-            )
+            text = "Item 1. Business\nWe make products.\n\nItem 1A. Risk Factors\nRisks include demand shocks."
             boundary = text.index("Item 1A")
             comparison = await render_comparison_snapshots(text, boundary, "1A", width_px=640)
             return html_b64, comparison

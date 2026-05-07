@@ -318,21 +318,15 @@ class TestHealer:
 
         state = PageState(url="https://example.com")
         # Pattern 1: [role] "name"
-        result = _extract_target_from_recovery(
-            'Click [textbox] "Customer Name" instead', "customer name", state
-        )
+        result = _extract_target_from_recovery('Click [textbox] "Customer Name" instead', "customer name", state)
         assert result == "textbox Customer Name"
 
         # Pattern 2: role=X name='Y'
-        result = _extract_target_from_recovery(
-            "Try locating element with role=button name='Submit'", "Search", state
-        )
+        result = _extract_target_from_recovery("Try locating element with role=button name='Submit'", "Search", state)
         assert "Submit" in result
 
         # Pattern 3: imperative "Click the X 'Y'"
-        result = _extract_target_from_recovery(
-            "Click the button 'Send'", "Search", state
-        )
+        result = _extract_target_from_recovery("Click the button 'Send'", "Search", state)
         assert "send" in result.lower()
 
         # Empty recovery → fallback
@@ -535,9 +529,7 @@ class TestSilentFailureGuard:
         """v2 prompt's structured marker `not_accessible: <reason>` should
         flip status to not_found via the expanded phrase list."""
         agent = self._make_agent()
-        result = self._make_result(
-            "not_accessible: LinkedIn profile is behind an authwall requiring login"
-        )
+        result = self._make_result("not_accessible: LinkedIn profile is behind an authwall requiring login")
         agent._guard_against_silent_success(result)
         assert result.status == "not_found"
         assert "hedged_answer" in result.failure_modes
@@ -545,18 +537,14 @@ class TestSilentFailureGuard:
     def test_404_marker_marked_not_found(self) -> None:
         """A 404 reply should also be marked not_found, not silently success."""
         agent = self._make_agent()
-        result = self._make_result(
-            "The page does not exist (404 not found)."
-        )
+        result = self._make_result("The page does not exist (404 not found).")
         agent._guard_against_silent_success(result)
         assert result.status == "not_found"
 
     def test_captcha_or_anti_bot_marked_not_found(self) -> None:
         """Anti-bot CAPTCHA pages should also flip to not_found."""
         agent = self._make_agent()
-        result = self._make_result(
-            "Unable to retrieve: Cloudflare anti-bot CAPTCHA challenge is blocking access."
-        )
+        result = self._make_result("Unable to retrieve: Cloudflare anti-bot CAPTCHA challenge is blocking access.")
         agent._guard_against_silent_success(result)
         assert result.status == "not_found"
 
@@ -697,6 +685,7 @@ class TestSilentFailureGuard:
             assert len(b64) > 100, "rendered output should be non-trivial"
             # base64 decodes OK
             import base64
+
             try:
                 base64.b64decode(b64)
             except Exception as e:

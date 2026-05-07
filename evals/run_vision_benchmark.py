@@ -52,11 +52,14 @@ async def _run_task2_case(
     input_data = case["input_data"]
     try:
         agent = BrowserAgent(model_name=model, headless=True, use_vision=use_vision)
-        result = await asyncio.wait_for(agent.run(
-            task_description=input_data["task_description"],
-            target_url=input_data.get("target_url"),
-            max_steps=input_data.get("max_steps", 15),
-        ), timeout=timeout_s)
+        result = await asyncio.wait_for(
+            agent.run(
+                task_description=input_data["task_description"],
+                target_url=input_data.get("target_url"),
+                max_steps=input_data.get("max_steps", 15),
+            ),
+            timeout=timeout_s,
+        )
     except Exception as exc:
         return {
             "task": "task2",
@@ -98,16 +101,19 @@ async def _run_task3_case(
     """Run one Task 3 case with one model and vision setting."""
     input_data = case["input_data"]
     try:
-        result = await asyncio.wait_for(extract_10k(
-            cik=input_data.get("cik"),
-            accession_number=input_data.get("accession_number"),
-            filing_url=input_data.get("filing_url"),
-            model_name=model,
-            skip_llm=False,
-            skip_xbrl=True,
-            use_vision=use_vision,
-            force_llm=force_llm,
-        ), timeout=timeout_s)
+        result = await asyncio.wait_for(
+            extract_10k(
+                cik=input_data.get("cik"),
+                accession_number=input_data.get("accession_number"),
+                filing_url=input_data.get("filing_url"),
+                model_name=model,
+                skip_llm=False,
+                skip_xbrl=True,
+                use_vision=use_vision,
+                force_llm=force_llm,
+            ),
+            timeout=timeout_s,
+        )
     except Exception as exc:
         return {
             "task": "task3",

@@ -34,53 +34,62 @@ def _score_case(case: dict[str, Any], result: ExtractionResult) -> dict[str, Any
     # / reserved). Treating those as failures penalises filings that correctly
     # mark items as N/A or proxy-incorporated.
     extracted_items = [
-        item for item in result.items
-        if item.status != ItemStatus.NOT_FOUND
-        and (item.content_text.strip() or item.status != ItemStatus.EXTRACTED)
+        item
+        for item in result.items
+        if item.status != ItemStatus.NOT_FOUND and (item.content_text.strip() or item.status != ItemStatus.EXTRACTED)
     ]
     item_by_number = {item.item_number: item for item in result.items}
     allow_missing = set(assertions.get("allow_missing_recent_items", []))
 
     checks: list[dict[str, Any]] = []
     min_items = assertions.get("min_items_extracted", 0)
-    checks.append({
-        "name": "min_items_extracted",
-        "passed": len(extracted_items) >= min_items,
-        "expected": min_items,
-        "actual": len(extracted_items),
-    })
+    checks.append(
+        {
+            "name": "min_items_extracted",
+            "passed": len(extracted_items) >= min_items,
+            "expected": min_items,
+            "actual": len(extracted_items),
+        }
+    )
 
     for required in assertions.get("required_items", []):
         item = item_by_number.get(required)
         present = bool(item and item.status != ItemStatus.NOT_FOUND)
-        checks.append({
-            "name": f"required_item_{required}",
-            "passed": present,
-            "expected": "present",
-            "actual": item.status.value if item else "missing",
-        })
+        checks.append(
+            {
+                "name": f"required_item_{required}",
+                "passed": present,
+                "expected": "present",
+                "actual": item.status.value if item else "missing",
+            }
+        )
 
     for item_number, expected_status in assertions.get("expected_status_items", {}).items():
         item = item_by_number.get(item_number)
-        checks.append({
-            "name": f"status_item_{item_number}",
-            "passed": bool(item and item.status.value == expected_status),
-            "expected": expected_status,
-            "actual": item.status.value if item else "missing",
-        })
+        checks.append(
+            {
+                "name": f"status_item_{item_number}",
+                "passed": bool(item and item.status.value == expected_status),
+                "expected": expected_status,
+                "actual": item.status.value if item else "missing",
+            }
+        )
 
     validation_report = result.processing_metadata.validation_report
     if validation_report:
-        checks.append({
-            "name": "pipeline_validation",
-            "passed": bool(validation_report.get("overall_valid", False)),
-            "expected": True,
-            "actual": validation_report.get("overall_valid"),
-        })
+        checks.append(
+            {
+                "name": "pipeline_validation",
+                "passed": bool(validation_report.get("overall_valid", False)),
+                "expected": True,
+                "actual": validation_report.get("overall_valid"),
+            }
+        )
 
     passed = all(check["passed"] for check in checks)
     missing_items = [
-        item.item_number for item in result.items
+        item.item_number
+        for item in result.items
         if item.status == ItemStatus.NOT_FOUND and item.item_number not in allow_missing
     ]
 
@@ -119,8 +128,11 @@ def _classify_failure(case_score: dict[str, Any]) -> str | None:
 
 
 async def _run_case(
-    case: dict[str, Any], allow_llm: bool, skip_xbrl: bool,
-    use_vision: bool = False, force_llm: bool = False,
+    case: dict[str, Any],
+    allow_llm: bool,
+    skip_xbrl: bool,
+    use_vision: bool = False,
+    force_llm: bool = False,
     timeout_s: float = 300.0,
 ) -> dict[str, Any]:
     """Run one eval case through the live Task 3 pipeline."""
@@ -208,17 +220,28 @@ def _write_markdown_report(report_path: Path, payload: dict[str, Any]) -> None:
 
 
 async def run_eval(
-    eval_set: Path, results_dir: Path, allow_llm: bool, skip_xbrl: bool,
-    use_vision: bool = False, force_llm: bool = False, timeout_s: float = 300.0,
+    eval_set: Path,
+    results_dir: Path,
+    allow_llm: bool,
+    skip_xbrl: bool,
+    use_vision: bool = False,
+    force_llm: bool = False,
+    timeout_s: float = 300.0,
 ) -> dict[str, Any]:
     """Run all Task 3 eval cases and persist JSON/Markdown reports."""
     cases = _load_cases(eval_set)
     scores = []
     for case in cases:
-        scores.append(await _run_case(
-            case, allow_llm=allow_llm, skip_xbrl=skip_xbrl,
-            use_vision=use_vision, force_llm=force_llm, timeout_s=timeout_s,
-        ))
+        scores.append(
+            await _run_case(
+                case,
+                allow_llm=allow_llm,
+                skip_xbrl=skip_xbrl,
+                use_vision=use_vision,
+                force_llm=force_llm,
+                timeout_s=timeout_s,
+            )
+        )
 
     run_at = datetime.now(timezone.utc).isoformat()
     payload = {
@@ -252,12 +275,15 @@ def main() -> None:
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--allow-llm", action="store_true", help="Allow LLM boundary refinement.")
     parser.add_argument("--skip-xbrl", action="store_true", help="Skip XBRL cross-validation.")
-    parser.add_argument("--force-llm", action="store_true",
-                        help="Force Stage 2 LLM refinement even on high-confidence filings.")
-    parser.add_argument("--vision", action="store_true",
-                        help="Pass use_vision=True (only effective with vision-capable models).")
-    parser.add_argument("--timeout", type=float, default=300.0,
-                        help="Max seconds per case before timeout (default: 300).")
+    parser.add_argument(
+        "--force-llm", action="store_true", help="Force Stage 2 LLM refinement even on high-confidence filings."
+    )
+    parser.add_argument(
+        "--vision", action="store_true", help="Pass use_vision=True (only effective with vision-capable models)."
+    )
+    parser.add_argument(
+        "--timeout", type=float, default=300.0, help="Max seconds per case before timeout (default: 300)."
+    )
     args = parser.parse_args()
 
     payload = asyncio.run(

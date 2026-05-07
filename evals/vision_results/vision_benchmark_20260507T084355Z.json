@@ -1,0 +1,187 @@
+{
+  "run_at": "2026-05-07T08:43:55.793893+00:00",
+  "mode": {
+    "timeout_s": 240.0,
+    "force_llm_task3": true
+  },
+  "summary": {
+    "groups": [
+      {
+        "task": "task3",
+        "model": "anthropic/claude-opus-4.7",
+        "use_vision": false,
+        "cases": 1,
+        "ok_rate": 1.0,
+        "total_cost_usd": 0.02424,
+        "avg_latency_ms": 5809.4,
+        "llm_calls": 1
+      },
+      {
+        "task": "task3",
+        "model": "anthropic/claude-opus-4.7",
+        "use_vision": true,
+        "cases": 1,
+        "ok_rate": 1.0,
+        "total_cost_usd": 0.025365,
+        "avg_latency_ms": 10678.1,
+        "llm_calls": 1
+      },
+      {
+        "task": "task3",
+        "model": "google/gemini-3.1-pro-preview",
+        "use_vision": false,
+        "cases": 1,
+        "ok_rate": 1.0,
+        "total_cost_usd": 0.002044,
+        "avg_latency_ms": 83375.8,
+        "llm_calls": 1
+      },
+      {
+        "task": "task3",
+        "model": "google/gemini-3.1-pro-preview",
+        "use_vision": true,
+        "cases": 1,
+        "ok_rate": 1.0,
+        "total_cost_usd": 0.002059,
+        "avg_latency_ms": 29726.4,
+        "llm_calls": 1
+      },
+      {
+        "task": "task3",
+        "model": "openai/gpt-5.5",
+        "use_vision": false,
+        "cases": 1,
+        "ok_rate": 1.0,
+        "total_cost_usd": 0.008155,
+        "avg_latency_ms": 112359.9,
+        "llm_calls": 1
+      },
+      {
+        "task": "task3",
+        "model": "openai/gpt-5.5",
+        "use_vision": true,
+        "cases": 1,
+        "ok_rate": 1.0,
+        "total_cost_usd": 0.008275,
+        "avg_latency_ms": 42347.6,
+        "llm_calls": 1
+      }
+    ]
+  },
+  "rows": [
+    {
+      "task": "task3",
+      "case_id": "t3_apple_2023",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 23,
+      "items_total": 23,
+      "cost_usd": 0.002044,
+      "latency_ms": 83375.8,
+      "llm_calls": 1,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_apple_2023",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 23,
+      "items_total": 23,
+      "cost_usd": 0.002059,
+      "latency_ms": 29726.4,
+      "llm_calls": 1,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_apple_2023",
+      "model": "anthropic/claude-opus-4.7",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 23,
+      "items_total": 23,
+      "cost_usd": 0.02424,
+      "latency_ms": 5809.4,
+      "llm_calls": 1,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_apple_2023",
+      "model": "anthropic/claude-opus-4.7",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 23,
+      "items_total": 23,
+      "cost_usd": 0.025365,
+      "latency_ms": 10678.1,
+      "llm_calls": 1,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_apple_2023",
+      "model": "openai/gpt-5.5",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 23,
+      "items_total": 23,
+      "cost_usd": 0.008155,
+      "latency_ms": 112359.9,
+      "llm_calls": 1,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_apple_2023",
+      "model": "openai/gpt-5.5",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 23,
+      "items_total": 23,
+      "cost_usd": 0.008275,
+      "latency_ms": 42347.6,
+      "llm_calls": 1,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    }
+  ]
+}
