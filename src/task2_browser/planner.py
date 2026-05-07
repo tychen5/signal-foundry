@@ -136,6 +136,7 @@ async def decide_next_action(
     user_api_key: Optional[str] = None,
     trace_id: str = "",
     screenshot_b64: Optional[str] = None,
+    screenshot_history: Optional[list[tuple[str, str]]] = None,
 ) -> BrowserAction:
     """
     Decide the next action given the current page state (reactive planning).
@@ -158,7 +159,11 @@ async def decide_next_action(
     Returns:
         Next BrowserAction to execute
     """
-    from src.task2_browser.vision import is_vision_capable, make_multimodal_message
+    from src.task2_browser.vision import (
+        is_vision_capable,
+        make_multimodal_message,
+        make_multimodal_message_history,
+    )
 
     llm = get_llm(
         model_name=model_name,
@@ -180,12 +185,16 @@ async def decide_next_action(
         f"ERROR INDICATORS: {page_state.error_indicators}\n"
     )
 
-    use_vision = bool(screenshot_b64) and is_vision_capable(model_name)
-    user_msg = (
-        make_multimodal_message(context, screenshot_b64)
-        if use_vision
-        else HumanMessage(content=context)
-    )
+    vision_capable = is_vision_capable(model_name)
+    if screenshot_history and vision_capable:
+        # Multi-snapshot path — show LLM the sequence of states so it can see
+        # what changed since the last action (click that did nothing, modal
+        # that popped up, error toast that appeared)
+        user_msg = make_multimodal_message_history(context, screenshot_history)
+    elif screenshot_b64 and vision_capable:
+        user_msg = make_multimodal_message(context, screenshot_b64)
+    else:
+        user_msg = HumanMessage(content=context)
 
     try:
         _t0 = time.time()
@@ -224,17 +233,17 @@ async def verify_with_llm(
     user_api_key: Optional[str] = None,
     trace_id: str = "",
     screenshot_b64: Optional[str] = None,
+    screenshot_history: Optional[list[tuple[str, str]]] = None,
 ) -> tuple[bool, str, float]:
     """
     LLM-based verification: has the task been completed?
 
     Args:
-        screenshot_b64: optional base64-encoded JPEG of current viewport.
-            When provided AND model is vision-capable (gemini/claude/gpt),
-            it's added as an image_url content block alongside the text
-            context — gives the verifier a visual grounding signal that
-            the AOM tree alone can't provide (chart values, captcha,
-            visual layout cues). See `src.task2_browser.vision`.
+        screenshot_b64: optional base64-encoded JPEG of CURRENT viewport.
+        screenshot_history: optional list of (label, base64) for the last
+            N viewports. When provided + vision-capable model, the verifier
+            sees the full sequence — useful to confirm an action's effect
+            (was the modal dismissed? did the search complete?).
 
     Returns:
         Tuple of (is_complete, final_answer, confidence)
@@ -242,7 +251,11 @@ async def verify_with_llm(
     if not VERIFIER_PROMPT:
         return False, "", 0.5
 
-    from src.task2_browser.vision import is_vision_capable, make_multimodal_message
+    from src.task2_browser.vision import (
+        is_vision_capable,
+        make_multimodal_message,
+        make_multimodal_message_history,
+    )
 
     llm = get_llm(
         model_name=model_name,
@@ -261,15 +274,16 @@ async def verify_with_llm(
         f"STEPS TAKEN:\n{steps_summary}\n"
     )
 
-    # Vision: include screenshot only when model supports it AND a screenshot
-    # was captured. Silently degrades to text-only otherwise — this keeps
-    # the function usable across the full model registry.
-    use_vision = bool(screenshot_b64) and is_vision_capable(model_name)
-    user_msg = (
-        make_multimodal_message(context, screenshot_b64)
-        if use_vision
-        else HumanMessage(content=context)
-    )
+    # Vision: prefer multi-snapshot history when available, fall back to
+    # single screenshot, then text-only. Silent degradation across the
+    # full model registry.
+    vision_capable = is_vision_capable(model_name)
+    if screenshot_history and vision_capable:
+        user_msg = make_multimodal_message_history(context, screenshot_history)
+    elif screenshot_b64 and vision_capable:
+        user_msg = make_multimodal_message(context, screenshot_b64)
+    else:
+        user_msg = HumanMessage(content=context)
 
     try:
         _t0 = time.time()

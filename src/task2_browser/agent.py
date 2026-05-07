@@ -225,6 +225,13 @@ class BrowserAgent:
             target_url=target_url or "",
         )
 
+        # Vision history: rolling buffer of the last N screenshots labelled
+        # by step number. Only populated when use_vision=True and model is
+        # vision-capable. Cap at 3 so we don't blow token budget — the LLM
+        # mostly cares about the chronological diff between adjacent states.
+        vision_history: list[tuple[str, str]] = []
+        _MAX_VISION_HISTORY = 3
+
         logger.info(
             "agent_start",
             task=task_description[:100],
@@ -299,8 +306,19 @@ class BrowserAgent:
                         )
                         if is_vision_capable(self.model_name):
                             screenshot_b64 = await capture_screenshot_b64(page)
+                            if screenshot_b64:
+                                # Roll into bounded history so the LLM sees
+                                # what changed since the last action
+                                step_no = result.total_steps + 1
+                                vision_history.append(
+                                    (f"step {step_no} viewport", screenshot_b64)
+                                )
+                                if len(vision_history) > _MAX_VISION_HISTORY:
+                                    vision_history.pop(0)
 
-                    # Check if task is complete
+                    # Check if task is complete — pass the FULL vision history
+                    # so the verifier can confirm action effects (modal
+                    # dismissed, search completed, error toast appeared)
                     is_complete, answer, confidence = await verify_with_llm(
                         task_description=task_description,
                         page_state=current_state,
@@ -309,6 +327,7 @@ class BrowserAgent:
                         user_api_key=self.user_api_key,
                         trace_id=trace_id,
                         screenshot_b64=screenshot_b64,
+                        screenshot_history=vision_history if len(vision_history) > 1 else None,
                     )
                     result.llm_calls += 1
 
@@ -317,9 +336,9 @@ class BrowserAgent:
                         result.status = "success"
                         break
 
-                    # Decide next action — pass screenshot too so the actor
-                    # can see chart areas / image-only buttons / canvas-rendered
-                    # data that AOM doesn't expose
+                    # Decide next action — also pass screenshot history so
+                    # the actor can detect loops (clicked button → no change)
+                    # and choose a different strategy
                     next_action = await decide_next_action(
                         task_description=task_description,
                         page_state=current_state,
@@ -328,6 +347,7 @@ class BrowserAgent:
                         user_api_key=self.user_api_key,
                         trace_id=trace_id,
                         screenshot_b64=screenshot_b64,
+                        screenshot_history=vision_history if len(vision_history) > 1 else None,
                     )
                     result.llm_calls += 1
 

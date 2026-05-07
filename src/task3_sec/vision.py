@@ -39,11 +39,84 @@ def _vision_max_renders() -> int:
         return 5
 
 
+async def render_multi_snapshots(
+    full_text: str,
+    boundary_pos: int,
+    item_number: str,
+    width_px: int = 1024,
+    quality: int = 70,
+) -> list[tuple[str, str]]:
+    """Render up to 3 labelled JPEGs around a boundary for richer LLM context.
+
+    For SEC filings, item boundaries can be ambiguous in text-only form
+    when typography matters (bold heading vs prose mention, indentation,
+    ALL-CAPS). Sending three zoom levels lets the LLM see:
+
+      1. "Header zone": ±150 chars around the boundary (the candidate
+         heading itself, rendered with 10-K typography). Most useful for
+         deciding if this IS a heading vs an in-text reference.
+      2. "Local context": ±500 chars (default). Shows the heading + a
+         paragraph of body text — useful for confirming status
+         (incorporated_by_reference vs extracted vs not_applicable).
+      3. "Neighbor context": ±1500 chars. Shows the previous item's tail
+         + this item's start — useful when the boundary itself is hard
+         to locate visually but the layout difference between items
+         (whitespace, divider lines) is visible.
+
+    Returns up to 3 (label, base64) pairs. Empty list if rendering
+    fails (e.g. playwright not installed). Caller MUST handle the
+    no-vision case.
+    """
+    snapshots: list[tuple[str, str]] = []
+    n = len(full_text)
+
+    # Tier 1 — header zone (tight ±150)
+    h_start = max(0, boundary_pos - 150)
+    h_end = min(n, boundary_pos + 200)
+    header = full_text[h_start:h_end]
+    snap = await render_text_to_jpeg_b64(
+        header, width_px=width_px, quality=quality, mark_position=boundary_pos - h_start
+    )
+    if snap:
+        snapshots.append((f"item_{item_number} header zone (±150 chars)", snap))
+
+    # Tier 2 — local context (±500 default)
+    l_start = max(0, boundary_pos - 200)
+    l_end = min(n, boundary_pos + 800)
+    local = full_text[l_start:l_end]
+    snap = await render_text_to_jpeg_b64(local, width_px=width_px, quality=quality)
+    if snap:
+        snapshots.append((f"item_{item_number} local context (±500 chars)", snap))
+
+    # Tier 3 — neighbor context (±1500). Only fire when the filing is large
+    # enough; small filings don't need this and we save cost.
+    if n > 4000:
+        nb_start = max(0, boundary_pos - 1500)
+        nb_end = min(n, boundary_pos + 2000)
+        neighbor = full_text[nb_start:nb_end]
+        snap = await render_text_to_jpeg_b64(
+            neighbor, width_px=width_px, quality=quality
+        )
+        if snap:
+            snapshots.append(
+                (f"item_{item_number} neighbor context (±1500 chars)", snap)
+            )
+
+    logger.info(
+        "t3_multi_snapshot",
+        item=item_number,
+        snapshots=len(snapshots),
+        text_len=n,
+    )
+    return snapshots
+
+
 async def render_text_to_jpeg_b64(
     text: str,
     width_px: int = 1024,
     quality: int = 75,
     timeout_ms: int = 8000,
+    mark_position: Optional[int] = None,
 ) -> Optional[str]:
     """Render a text snippet to a styled HTML page → JPEG → base64.
 
@@ -53,16 +126,31 @@ async def render_text_to_jpeg_b64(
     q=75. Returns None if playwright isn't available or render fails —
     callers must handle the no-vision case.
     """
-    safe_text = (
-        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    )
+    # Optionally insert a yellow highlight at the boundary position so
+    # the LLM's eye is drawn to the candidate heading.
+    if mark_position is not None and 0 <= mark_position < len(text):
+        before = text[:mark_position]
+        after = text[mark_position:mark_position + 80]
+        rest = text[mark_position + 80:]
+        before_safe = before.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        after_safe = after.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        rest_safe = rest.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        body_html = (
+            f"<pre>{before_safe}<mark>{after_safe}</mark>{rest_safe}</pre>"
+        )
+    else:
+        safe_text = (
+            text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        )
+        body_html = f"<pre>{safe_text}</pre>"
 
     html = f"""<!doctype html>
 <html><head><meta charset="utf-8"><style>
   body {{ font-family: 'Times New Roman', Times, serif; padding: 24px; color: #111; background: #fff; line-height: 1.4; max-width: {width_px}px; font-size: 14px; }}
   /* Mimic 10-K item-heading typography so bold pre/post-context is preserved */
   pre {{ white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 14px; }}
-</style></head><body><pre>{safe_text}</pre></body></html>"""
+  mark {{ background: #fff3a0; padding: 0 2px; }}
+</style></head><body>{body_html}</body></html>"""
 
     try:
         from playwright.async_api import async_playwright

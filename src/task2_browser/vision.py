@@ -125,3 +125,38 @@ def make_multimodal_message(
             {"type": "text", "text": text},
         ]
     )
+
+
+def make_multimodal_message_history(
+    text: str,
+    screenshots_b64: list[tuple[str, str]],
+    mime: str = "image/jpeg",
+) -> HumanMessage:
+    """Build a HumanMessage with multiple labelled screenshots + text.
+
+    Args:
+        text: The user-prompt text (task description, AOM tree, etc.)
+        screenshots_b64: list of (label, base64) pairs — newest LAST so
+            the LLM sees the chronological progression. Labels like
+            "before navigation", "after click", "current viewport".
+
+    For Task 2 multi-step flows the LLM needs to see CHANGE over time
+    (a button click that did nothing, a modal that just popped up, an
+    error toast that appeared). One screenshot misses these dynamics;
+    a labelled history puts them in front of the model.
+    """
+    if not screenshots_b64:
+        return HumanMessage(content=text)
+
+    parts: list[dict] = []
+    for label, b64 in screenshots_b64:
+        # Label as text BEFORE the image so the LLM knows what it's looking at
+        parts.append({"type": "text", "text": f"[{label}]"})
+        parts.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{b64}"},
+            }
+        )
+    parts.append({"type": "text", "text": text})
+    return HumanMessage(content=parts)

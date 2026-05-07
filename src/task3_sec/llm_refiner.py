@@ -47,8 +47,19 @@ def _load_prompt(filename: str, fallback: str = "") -> str:
         return fallback
 
 
-# Load versioned prompts (v2 — context-window approach)
-BOUNDARY_REFINE_PROMPT = _load_prompt("v2_boundary_refine.txt")
+def _load_versioned_prompt(stem: str) -> str:
+    """Load latest prompt version (v3 → v2 → v1 fallback chain)."""
+    for version in ("v3", "v2", "v1"):
+        text = _load_prompt(f"{version}_{stem}.txt")
+        if text:
+            return text
+    return ""
+
+
+# v3 boundary-refine prompt adds multi-snapshot vision instructions +
+# explicit status detection guidance (extracted / incorporated / N/A / reserved).
+# Falls back to v2 if v3 missing.
+BOUNDARY_REFINE_PROMPT = _load_versioned_prompt("boundary_refine")
 MISSING_ITEM_PROMPT = _load_prompt("v2_missing_item_detect.txt")
 
 
@@ -224,16 +235,25 @@ async def _refine_single_boundary(
     user_msg = HumanMessage(content=user_text)
     if use_vision:
         try:
-            from src.task2_browser.vision import make_multimodal_message
-            from src.task3_sec.vision import render_text_to_jpeg_b64
+            from src.task2_browser.vision import (
+                make_multimodal_message_history,
+            )
+            from src.task3_sec.vision import render_multi_snapshots
 
-            screenshot_b64 = await render_text_to_jpeg_b64(context)
-            if screenshot_b64:
-                user_msg = make_multimodal_message(user_text, screenshot_b64)
+            # Multi-snapshot: header zone (boundary itself), local context,
+            # neighbor context. Each tier helps the LLM make a different
+            # judgement (heading-vs-prose, status, layout).
+            snapshots = await render_multi_snapshots(
+                full_text=text,
+                boundary_pos=boundary.start_pos,
+                item_number=boundary.item_number,
+            )
+            if snapshots:
+                user_msg = make_multimodal_message_history(user_text, snapshots)
                 logger.info(
-                    "t3_vision_attached",
+                    "t3_multi_vision_attached",
                     item=boundary.item_number,
-                    bytes=len(screenshot_b64),
+                    snapshots=len(snapshots),
                 )
         except Exception as e:
             logger.warning("t3_vision_attach_failed", error=str(e)[:120])
