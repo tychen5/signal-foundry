@@ -112,6 +112,15 @@
                     <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
                 </div>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="use-vision">
+                        Use vision (multi-modal)
+                    </label>
+                    <small style="color:#888">Sends viewport JPEG to the verifier. Only effective with Gemini 3.1 Pro / Claude Opus 4.7 / GPT-5.5. Silent fallback to text-only on NVIDIA models.</small>
+                </div>
+            </div>
             <button class="run-btn" id="run-btn" onclick="executeTask()">Execute Task</button>
         </div>
 
@@ -176,9 +185,11 @@
             document.getElementById('raw-json').classList.remove('visible');
             panel.classList.add('visible');
 
+            const useVision = document.getElementById('use-vision').checked;
             const payload = {
                 task_description: taskDesc,
                 max_steps: maxSteps,
+                use_vision: useVision,
                 model: { model_id: modelId }
             };
             if (targetUrl) payload.target_url = targetUrl;

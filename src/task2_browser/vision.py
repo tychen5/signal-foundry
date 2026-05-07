@@ -29,15 +29,33 @@ from playwright.async_api import Page
 
 VISION_CAPABLE_MODELS: frozenset[str] = frozenset(
     {
+        # OpenRouter — confirmed multi-modal
         "google/gemini-3.1-pro-preview",
         "anthropic/claude-opus-4.7",
         "openai/gpt-5.5",
     }
 )
 
+# NVIDIA NIM models in our registry that are TEXT-ONLY. Sending image_url
+# to these returns a 400. We track the explicit list so the toggle still
+# accepts use_vision=True and we can WARN rather than error.
+TEXT_ONLY_MODELS: frozenset[str] = frozenset(
+    {
+        "moonshotai/kimi-k2.6",
+        "z-ai/glm-5.1",
+        "deepseek-ai/deepseek-v4-pro",
+        "minimaxai/minimax-m2.7",
+    }
+)
+
 
 def is_vision_capable(model_name: Optional[str]) -> bool:
-    """Return True if the model accepts image_url content blocks."""
+    """Return True if the model accepts image_url content blocks.
+
+    For text-only NVIDIA NIM models in our registry the answer is firmly
+    No. Unknown models default to No (safest — the worst that happens
+    is we miss a vision opportunity, instead of a 400).
+    """
     if not model_name:
         return False
     return model_name in VISION_CAPABLE_MODELS
