@@ -77,9 +77,13 @@
                     <label>Task Description (natural language)</label>
                     <textarea id="task-desc" placeholder="e.g. Go to Wikipedia and find the population of Tokyo"></textarea>
                     <div class="examples">
-                        <button class="example-btn" onclick="setTask('Go to en.wikipedia.org and find the current population of Tokyo, Japan')">Wikipedia lookup</button>
-                        <button class="example-btn" onclick="setTask('Search for Python on PyPI and return the latest version number')">PyPI search</button>
-                        <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story')">HN top story</button>
+                        <button class="example-btn" onclick="setTask('Go to en.wikipedia.org and find the current population of Tokyo, Japan')">📚 Wikipedia lookup</button>
+                        <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story and the comment count')">🟧 HN top story</button>
+                        <button class="example-btn" onclick="setTask('Go to https://arxiv.org/abs/2509.13753 and report the paper title plus the first two authors')">🔬 arXiv paper</button>
+                        <button class="example-btn" onclick="setTask('前往鉅亨網 https://www.cnyes.com/twstock/twse/TWSE.htm 並擷取台股加權指數最新點位')">💹 cnyes 加權指數 (TW)</button>
+                        <button class="example-btn" onclick="setTask('Go to https://tw.stock.yahoo.com/quote/2330 and return TSMC current price')">💰 TSMC quote (TW)</button>
+                        <button class="example-btn" onclick="setTask('Go to https://www.linkedin.com/in/satyanadella/ and report Satya Nadella job title')">🛡️ LinkedIn login wall (anti-hallucination)</button>
+                        <button class="example-btn" onclick="setTask('Go to https://example.com and find the email address for European trademark disputes. If not present, say so.')">🎯 example.com hallucination guard</button>
                     </div>
                 </div>
             </div>
