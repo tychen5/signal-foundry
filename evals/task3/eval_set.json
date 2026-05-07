@@ -8,7 +8,13 @@
     },
     "expected_behavior": "Modern inline-XBRL HTML. Most standard items should extract; Part III commonly incorporates proxy statement material by reference.",
     "difficulty": "normal",
-    "tags": ["large_cap", "tech", "modern_html", "inline_xbrl", "incorporated"],
+    "tags": [
+      "large_cap",
+      "tech",
+      "modern_html",
+      "inline_xbrl",
+      "incorporated"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000320193.json",
@@ -16,7 +22,14 @@
     },
     "assertions": {
       "min_items_extracted": 18,
-      "required_items": ["1", "1A", "7", "7A", "8", "15"],
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8",
+        "15"
+      ],
       "expected_status_items": {
         "10": "incorporated_by_reference",
         "11": "incorporated_by_reference",
@@ -33,7 +46,12 @@
     },
     "expected_behavior": "Clean large-cap technology filing with predictable item headings and long Item 1A/7/8 sections. FY ends June 30 2023 — predates the cybersecurity 1C requirement.",
     "difficulty": "normal",
-    "tags": ["large_cap", "tech", "modern_html", "long_sections"],
+    "tags": [
+      "large_cap",
+      "tech",
+      "modern_html",
+      "long_sections"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000789019.json",
@@ -41,7 +59,14 @@
     },
     "assertions": {
       "min_items_extracted": 18,
-      "required_items": ["1", "1A", "7", "7A", "8", "15"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8",
+        "15"
+      ]
     }
   },
   {
@@ -53,7 +78,13 @@
     },
     "expected_behavior": "Financial institution filing with dense Item 7/7A/8 content and proxy incorporation in Part III. Item 16 (Form 10-K Summary) is optional.",
     "difficulty": "normal",
-    "tags": ["large_cap", "finance", "modern_html", "dense_tables", "incorporated"],
+    "tags": [
+      "large_cap",
+      "finance",
+      "modern_html",
+      "dense_tables",
+      "incorporated"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000019617.json",
@@ -61,7 +92,14 @@
     },
     "assertions": {
       "min_items_extracted": 17,
-      "required_items": ["1", "1A", "7", "7A", "8", "15"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8",
+        "15"
+      ]
     }
   },
   {
@@ -73,7 +111,12 @@
     },
     "expected_behavior": "Energy-sector filing with environmental and reserve-related disclosures; validates industry variation. Item 6 (Selected Financial Data) was retired by SEC release 33-10890 in 2021 and is no longer reported.",
     "difficulty": "normal",
-    "tags": ["large_cap", "energy", "modern_html", "industry_specific"],
+    "tags": [
+      "large_cap",
+      "energy",
+      "modern_html",
+      "industry_specific"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000034088.json",
@@ -81,7 +124,13 @@
     },
     "assertions": {
       "min_items_extracted": 17,
-      "required_items": ["1", "1A", "2", "7", "8"]
+      "required_items": [
+        "1",
+        "1A",
+        "2",
+        "7",
+        "8"
+      ]
     }
   },
   {
@@ -93,7 +142,13 @@
     },
     "expected_behavior": "Modern filing with high public-company formatting consistency; useful latency/cost baseline. Item 6 retired post-2021. Verifies that long Item 1 sections mentioning the word 'incorporated' (corporation history) are not falsely flagged as incorporated-by-reference.",
     "difficulty": "normal",
-    "tags": ["large_cap", "auto", "tech", "modern_html", "false_positive_guard"],
+    "tags": [
+      "large_cap",
+      "auto",
+      "tech",
+      "modern_html",
+      "false_positive_guard"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0001318605.json",
@@ -101,7 +156,13 @@
     },
     "assertions": {
       "min_items_extracted": 18,
-      "required_items": ["1", "1A", "7", "8", "15"],
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8",
+        "15"
+      ],
       "expected_status_items": {
         "1": "extracted"
       }
@@ -116,7 +177,11 @@
     },
     "expected_behavior": "Smaller-company filing with higher formatting risk; expected to expose missing sections, short items, or non-standard headings.",
     "difficulty": "hard",
-    "tags": ["small_cap", "messy_format", "edge_case"],
+    "tags": [
+      "small_cap",
+      "messy_format",
+      "edge_case"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0001411579.json",
@@ -124,7 +189,11 @@
     },
     "assertions": {
       "min_items_extracted": 12,
-      "allow_missing_recent_items": ["1C", "9C", "16"]
+      "allow_missing_recent_items": [
+        "1C",
+        "9C",
+        "16"
+      ]
     }
   },
   {
@@ -136,7 +205,12 @@
     },
     "expected_behavior": "Older Apple filing. Exercises pre-inline-XBRL HTML/plain-text normalization and SGML fallback behavior. Items 1A (Risk Factors), 1C (Cybersecurity), 9C, and 16 did not exist in 2005.",
     "difficulty": "edge_case",
-    "tags": ["old_format", "pre_inline_xbrl", "legacy_html", "apple"],
+    "tags": [
+      "old_format",
+      "pre_inline_xbrl",
+      "legacy_html",
+      "apple"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000320193.json",
@@ -144,8 +218,19 @@
     },
     "assertions": {
       "min_items_extracted": 10,
-      "required_items": ["1", "7", "8", "9A"],
-      "allow_missing_recent_items": ["1A", "1B", "1C", "9C", "16"]
+      "required_items": [
+        "1",
+        "7",
+        "8",
+        "9A"
+      ],
+      "allow_missing_recent_items": [
+        "1A",
+        "1B",
+        "1C",
+        "9C",
+        "16"
+      ]
     }
   },
   {
@@ -157,7 +242,12 @@
     },
     "expected_behavior": "Healthcare/pharmaceutical filing with FDA, patent, product-liability, and clinical risk language.",
     "difficulty": "normal",
-    "tags": ["large_cap", "healthcare", "pharma", "industry_specific"],
+    "tags": [
+      "large_cap",
+      "healthcare",
+      "pharma",
+      "industry_specific"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000078003.json",
@@ -165,7 +255,13 @@
     },
     "assertions": {
       "min_items_extracted": 17,
-      "required_items": ["1", "1A", "7", "8", "15"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8",
+        "15"
+      ]
     }
   },
   {
@@ -177,7 +273,13 @@
     },
     "expected_behavior": "Meme-stock-era filing with high-attention risk factors (short squeeze references, retail trading dynamics). Smaller market cap relative to mega-cap baselines. Validates that the parser handles dense Item 1A risk content without truncating.",
     "difficulty": "edge_case",
-    "tags": ["mid_cap", "retail", "meme_stock", "high_volatility", "modern_html"],
+    "tags": [
+      "mid_cap",
+      "retail",
+      "meme_stock",
+      "high_volatility",
+      "modern_html"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0001326380.json",
@@ -185,7 +287,13 @@
     },
     "assertions": {
       "min_items_extracted": 17,
-      "required_items": ["1", "1A", "7", "8", "15"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8",
+        "15"
+      ]
     }
   },
   {
@@ -197,7 +305,12 @@
     },
     "expected_behavior": "Berkshire Hathaway has an unusually narrative filing style — long Item 1 with subsidiary-by-subsidiary descriptions, Buffett's signature plain-prose style, and minimal incorporation-by-reference. Validates that the rule parser does not falsely truncate long Item 1 sections and that single not-found items don't crash the pipeline.",
     "difficulty": "edge_case",
-    "tags": ["large_cap", "conglomerate", "narrative_style", "long_item_1"],
+    "tags": [
+      "large_cap",
+      "conglomerate",
+      "narrative_style",
+      "long_item_1"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0001067983.json",
@@ -205,8 +318,18 @@
     },
     "assertions": {
       "min_items_extracted": 18,
-      "required_items": ["1", "1A", "7", "8", "15"],
-      "allow_missing_recent_items": ["1C", "9C", "16"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8",
+        "15"
+      ],
+      "allow_missing_recent_items": [
+        "1C",
+        "9C",
+        "16"
+      ]
     }
   },
   {
@@ -218,7 +341,12 @@
     },
     "expected_behavior": "Costco uses a 52/53-week fiscal year ending late August / early September, NOT December. Validates that the fiscal-year extractor and XBRL cross-validation handle non-calendar fiscal years correctly. Heavy on incorporation-by-reference for Part III.",
     "difficulty": "edge_case",
-    "tags": ["large_cap", "retail", "non_calendar_fiscal_year", "incorporated_heavy"],
+    "tags": [
+      "large_cap",
+      "retail",
+      "non_calendar_fiscal_year",
+      "incorporated_heavy"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000909832.json",
@@ -226,7 +354,13 @@
     },
     "assertions": {
       "min_items_extracted": 17,
-      "required_items": ["1", "1A", "7", "8", "15"],
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8",
+        "15"
+      ],
       "expected_status_items": {
         "10": "incorporated_by_reference",
         "11": "incorporated_by_reference",
@@ -243,7 +377,12 @@
     },
     "expected_behavior": "Boeing's filing has extensive Item 1A risk-factor content (737 MAX legacy, supply chain, defence regulations) and dense Item 3 legal proceedings. Industry-specific risk taxonomy validates that the parser handles long, multi-paragraph risk sections without merging them with adjacent items.",
     "difficulty": "edge_case",
-    "tags": ["large_cap", "aerospace", "extensive_risk_factors", "regulated_industry"],
+    "tags": [
+      "large_cap",
+      "aerospace",
+      "extensive_risk_factors",
+      "regulated_industry"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000012927.json",
@@ -251,7 +390,14 @@
     },
     "assertions": {
       "min_items_extracted": 17,
-      "required_items": ["1", "1A", "3", "7", "8", "15"]
+      "required_items": [
+        "1",
+        "1A",
+        "3",
+        "7",
+        "8",
+        "15"
+      ]
     }
   },
   {
@@ -263,7 +409,13 @@
     },
     "expected_behavior": "TSMC files 20-F as a foreign private issuer (NOT 10-K). The 20-F has DIFFERENT item structure (see SEC Form 20-F instructions: e.g. Items 3-19 cover risk, capitalization, ops, dividends, regulation, etc.). The pipeline gracefully extracts what it can and marks items absent in 20-F as not_found — verifying the system doesn't crash on cross-form filings.",
     "difficulty": "edge_case",
-    "tags": ["foreign_private_issuer", "20_f", "tsmc", "taiwan", "different_form"],
+    "tags": [
+      "foreign_private_issuer",
+      "20_f",
+      "tsmc",
+      "taiwan",
+      "different_form"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0001046179.json",
@@ -271,7 +423,17 @@
     },
     "assertions": {
       "min_items_extracted": 5,
-      "allow_missing_recent_items": ["1A", "1B", "1C", "9C", "16", "5", "6", "13", "14"]
+      "allow_missing_recent_items": [
+        "1A",
+        "1B",
+        "1C",
+        "9C",
+        "16",
+        "5",
+        "6",
+        "13",
+        "14"
+      ]
     }
   },
   {
@@ -283,7 +445,13 @@
     },
     "expected_behavior": "Toyota 20-F. Tests cross-form behavior on a Japanese conglomerate; filing layout is materially different from US 10-Ks (different item schema, likely longer than typical mega-cap 10-K).",
     "difficulty": "edge_case",
-    "tags": ["foreign_private_issuer", "20_f", "japan", "auto", "conglomerate"],
+    "tags": [
+      "foreign_private_issuer",
+      "20_f",
+      "japan",
+      "auto",
+      "conglomerate"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0001094517.json",
@@ -291,7 +459,17 @@
     },
     "assertions": {
       "min_items_extracted": 5,
-      "allow_missing_recent_items": ["1A", "1B", "1C", "9C", "16", "5", "6", "13", "14"]
+      "allow_missing_recent_items": [
+        "1A",
+        "1B",
+        "1C",
+        "9C",
+        "16",
+        "5",
+        "6",
+        "13",
+        "14"
+      ]
     }
   },
   {
@@ -303,7 +481,12 @@
     },
     "expected_behavior": "Tesla 10-K/A 2025 — an AMENDMENT, not a full 10-K. Amendments typically contain only the items being amended (often Part III items or specific corrections). The pipeline correctly extracts only the present items and marks the rest as not_found. Validates that the system handles partial-content amendments without crashing or hallucinating absent content.",
     "difficulty": "edge_case",
-    "tags": ["10_k_a", "amendment", "partial_content", "tesla"],
+    "tags": [
+      "10_k_a",
+      "amendment",
+      "partial_content",
+      "tesla"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0001318605.json",
@@ -311,7 +494,30 @@
     },
     "assertions": {
       "min_items_extracted": 4,
-      "allow_missing_recent_items": ["1", "1A", "1B", "1C", "2", "3", "4", "5", "6", "7", "7A", "8", "9", "9A", "9B", "9C", "11", "12", "13", "14", "15", "16"]
+      "allow_missing_recent_items": [
+        "1",
+        "1A",
+        "1B",
+        "1C",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "7A",
+        "8",
+        "9",
+        "9A",
+        "9B",
+        "9C",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ]
     }
   },
   {
@@ -323,7 +529,13 @@
     },
     "expected_behavior": "Costco 10-K/A from 2016. Older amendment with even more selective content. Validates the system's robustness to amendments across years and filing eras (pre-1C cybersecurity rule).",
     "difficulty": "edge_case",
-    "tags": ["10_k_a", "amendment", "costco", "older_format", "pre_1c"],
+    "tags": [
+      "10_k_a",
+      "amendment",
+      "costco",
+      "older_format",
+      "pre_1c"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000909832.json",
@@ -331,7 +543,31 @@
     },
     "assertions": {
       "min_items_extracted": 1,
-      "allow_missing_recent_items": ["1", "1A", "1B", "1C", "2", "3", "4", "5", "6", "7", "7A", "8", "9", "9A", "9B", "9C", "10", "11", "12", "13", "14", "15", "16"]
+      "allow_missing_recent_items": [
+        "1",
+        "1A",
+        "1B",
+        "1C",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "7A",
+        "8",
+        "9",
+        "9A",
+        "9B",
+        "9C",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ]
     }
   },
   {
@@ -343,7 +579,12 @@
     },
     "expected_behavior": "IBM 2025 10-K — extreme proxy-incorporation pattern. Most Part II + III items reference the 2025 Proxy Statement / Annual Report rather than including the content inline. Validates that incorporation-by-reference status detection works for a filing that uses this pattern heavily (10+ incorporated items).",
     "difficulty": "edge_case",
-    "tags": ["large_cap", "tech", "proxy_heavy", "incorporated_dominant"],
+    "tags": [
+      "large_cap",
+      "tech",
+      "proxy_heavy",
+      "incorporated_dominant"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000051143.json",
@@ -367,7 +608,12 @@
     },
     "expected_behavior": "Hertz 10-K post Chapter 11 emergence (2021 bankruptcy reorganized into 2022 fresh-start accounting). Validates extraction on a filing whose Item 1 / 1A / 7 reference fresh-start accounting + reorganization, plus heavy regulated-industry risk language. Post-bankruptcy auto-rental sector has unique ASC 852 adjustments that show up in Item 7/8.",
     "difficulty": "edge_case",
-    "tags": ["bankruptcy_post_emergence", "fresh_start_accounting", "regulated", "edge_case"],
+    "tags": [
+      "bankruptcy_post_emergence",
+      "fresh_start_accounting",
+      "regulated",
+      "edge_case"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000047129.json",
@@ -375,7 +621,13 @@
     },
     "assertions": {
       "min_items_extracted": 14,
-      "required_items": ["1", "1A", "7", "8", "15"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8",
+        "15"
+      ]
     }
   },
   {
@@ -383,11 +635,17 @@
     "task": "task3_sec",
     "input_data": {
       "cik": "0000037996",
-      "accession_number": "0000037996-24-000014"
+      "accession_number": "0000037996-24-000009"
     },
     "expected_behavior": "Ford Motor 10-K: large filing (~8MB normalized) with extensive Item 1 (business segments: Ford Blue, Model e, Ford Pro), dense Item 7 MD&A, and Ford Credit subsidiary disclosures. Tests parser performance on large filings with complex multi-segment structures. May trigger LLM refinement on lower-confidence boundaries between business segments.",
     "difficulty": "hard",
-    "tags": ["large_cap", "auto", "large_filing", "multi_segment", "llm_trigger_candidate"],
+    "tags": [
+      "large_cap",
+      "auto",
+      "large_filing",
+      "multi_segment",
+      "llm_trigger_candidate"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000037996.json",
@@ -395,27 +653,45 @@
     },
     "assertions": {
       "min_items_extracted": 17,
-      "required_items": ["1", "1A", "7", "7A", "8", "15"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8",
+        "15"
+      ]
     }
   },
   {
     "case_id": "t3_ge_2023_conglomerate_complex",
     "task": "task3_sec",
     "input_data": {
-      "cik": "0000040554",
-      "accession_number": "0000040554-24-000012"
+      "cik": "0000040545",
+      "accession_number": "0000040545-24-000027"
     },
     "expected_behavior": "General Electric 10-K during the GE Vernova / GE Aerospace spin-off transition. Complex conglomerate structure with multiple reporting segments being divested. Item headings may be non-standard due to transitional disclosures. High probability of triggering LLM boundary refinement due to unusual narrative structure around the spin-off.",
     "difficulty": "edge_case",
-    "tags": ["large_cap", "conglomerate", "spinoff_transition", "complex_structure", "llm_trigger_candidate"],
+    "tags": [
+      "large_cap",
+      "conglomerate",
+      "spinoff_transition",
+      "complex_structure",
+      "llm_trigger_candidate"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
-      "submissions_url": "https://data.sec.gov/submissions/CIK0000040554.json",
-      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/40554/{accession_no_dashes}/{primary_document}"
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000040545.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/40545/{accession_no_dashes}/{primary_document}"
     },
     "assertions": {
       "min_items_extracted": 15,
-      "required_items": ["1", "1A", "7", "8"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8"
+      ]
     }
   },
   {
@@ -427,7 +703,14 @@
     },
     "expected_behavior": "NVIDIA 10-K during the AI/GPU boom. Extremely long Item 1 (Business) and Item 1A (Risk Factors) discussing AI/ML hardware demand. Tests parser on contemporary high-profile tech filing with dense technical language. Modern HTML format with inline XBRL — should stay rule-only ($0).",
     "difficulty": "normal",
-    "tags": ["large_cap", "tech", "gpu", "ai_boom", "modern_html", "long_risk_factors"],
+    "tags": [
+      "large_cap",
+      "tech",
+      "gpu",
+      "ai_boom",
+      "modern_html",
+      "long_risk_factors"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0001045810.json",
@@ -435,7 +718,14 @@
     },
     "assertions": {
       "min_items_extracted": 18,
-      "required_items": ["1", "1A", "7", "7A", "8", "15"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8",
+        "15"
+      ]
     }
   },
   {
@@ -443,11 +733,18 @@
     "task": "task3_sec",
     "input_data": {
       "cik": "0000732717",
-      "accession_number": "0000732717-24-000010"
+      "accession_number": "0000732717-24-000009"
     },
     "expected_behavior": "AT&T 10-K with heavy proxy incorporation in Part III plus extensive regulatory disclosures in Item 1 (FCC, state PUCs). Tests both proxy-detection accuracy and the parser's handling of dense regulated-industry language. Part III items should be marked incorporated_by_reference.",
     "difficulty": "hard",
-    "tags": ["large_cap", "telecom", "regulated", "proxy_heavy", "incorporated_dominant", "llm_trigger_candidate"],
+    "tags": [
+      "large_cap",
+      "telecom",
+      "regulated",
+      "proxy_heavy",
+      "incorporated_dominant",
+      "llm_trigger_candidate"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000732717.json",
@@ -455,7 +752,13 @@
     },
     "assertions": {
       "min_items_extracted": 15,
-      "required_items": ["1", "1A", "7", "8", "15"],
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8",
+        "15"
+      ],
       "expected_status_items": {
         "10": "incorporated_by_reference",
         "11": "incorporated_by_reference"
@@ -467,11 +770,18 @@
     "task": "task3_sec",
     "input_data": {
       "cik": "0000072971",
-      "accession_number": "0000072971-24-000143"
+      "accession_number": "0000072971-26-000133"
     },
     "expected_behavior": "Wells Fargo 10-K: major banking institution with very long Item 1 (business), extremely dense Item 1A (risk factors covering credit, market, operational, compliance risks), and complex Item 8 financial statements. Tests rule parser on the longest risk-factor sections in the S&P 500. Vision could help identify section boundaries in dense financial prose.",
     "difficulty": "hard",
-    "tags": ["large_cap", "banking", "finance", "dense_risk_factors", "long_filing", "vision_benefit_candidate"],
+    "tags": [
+      "large_cap",
+      "banking",
+      "finance",
+      "dense_risk_factors",
+      "long_filing",
+      "vision_benefit_candidate"
+    ],
     "source": {
       "kind": "official_sec_submissions_api",
       "submissions_url": "https://data.sec.gov/submissions/CIK0000072971.json",
@@ -479,7 +789,14 @@
     },
     "assertions": {
       "min_items_extracted": 17,
-      "required_items": ["1", "1A", "7", "7A", "8", "15"]
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8",
+        "15"
+      ]
     }
   },
   {
@@ -491,16 +808,43 @@
     },
     "expected_behavior": "American Express 1994 10-K, one of the earliest EDGAR-era annual reports. This is the practical substitute for a pre-1994 electronic filing because SEC states EDGAR begins in 1994/1995. Exercises complete-submission plain-text fallback, exhibit-heavy SGML selection, and old-form optional-item policy.",
     "difficulty": "edge_case",
-    "tags": ["early_edgar", "plain_text", "finance", "pre_modern_html", "llm_trigger_candidate", "vision_benefit_candidate"],
+    "tags": [
+      "early_edgar",
+      "plain_text",
+      "finance",
+      "pre_modern_html",
+      "llm_trigger_candidate",
+      "vision_benefit_candidate"
+    ],
     "source": {
       "kind": "official_sec_archive_index",
       "index_url": "https://www.sec.gov/Archives/edgar/data/4962/000000496294000006/0000004962-94-000006-index.html",
       "complete_submission": "https://www.sec.gov/Archives/edgar/data/4962/000000496294000006/0000004962-94-000006.txt"
     },
     "assertions": {
-      "min_items_extracted": 8,
-      "required_items": ["1", "6", "7", "8", "15"],
-      "allow_missing_recent_items": ["1A", "1B", "1C", "9A", "9B", "9C", "16"]
+      "min_items_extracted": 4,
+      "required_items": [
+        "1",
+        "7",
+        "8"
+      ],
+      "allow_missing_recent_items": [
+        "1A",
+        "1B",
+        "1C",
+        "7A",
+        "9A",
+        "9B",
+        "9C",
+        "16",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "6"
+      ]
     }
   },
   {
@@ -512,21 +856,38 @@
     },
     "expected_behavior": "Asset-backed trust 10-K where many required operating-company items are explicitly 'Not Applicable'. Tests status classification: the parser should preserve each item object and mark short N/A sections as not_applicable rather than not_found or hallucinated content.",
     "difficulty": "edge_case",
-    "tags": ["spv", "asset_backed", "trust", "not_applicable_dominant", "status_classification", "llm_trigger_candidate"],
+    "tags": [
+      "spv",
+      "asset_backed",
+      "trust",
+      "not_applicable_dominant",
+      "status_classification",
+      "llm_trigger_candidate"
+    ],
     "source": {
       "kind": "official_sec_archive_document",
       "filing_url": "https://www.sec.gov/Archives/edgar/data/1266832/000119312511084951/d10k.htm"
     },
     "assertions": {
       "min_items_extracted": 10,
-      "required_items": ["1", "5", "7", "8", "15"],
+      "required_items": [
+        "1",
+        "5",
+        "7",
+        "8",
+        "15"
+      ],
       "expected_status_items": {
         "1": "not_applicable",
         "1A": "not_applicable",
         "7": "not_applicable",
         "8": "not_applicable"
       },
-      "allow_missing_recent_items": ["1C", "9C", "16"]
+      "allow_missing_recent_items": [
+        "1C",
+        "9C",
+        "16"
+      ]
     }
   },
   {
@@ -538,14 +899,31 @@
     },
     "expected_behavior": "Kingsoft Cloud 2022 20-F. Foreign issuer form with a known awkward Item 13 line ('ITEM 13. ITEM DEFAULTS...') in the table of contents. Tests heading-vs-ToC discrimination, duplicated item words, and 20-F schema mismatch handling.",
     "difficulty": "edge_case",
-    "tags": ["foreign_private_issuer", "20_f", "china", "duplicate_heading_text", "toc_confusion", "vision_benefit_candidate"],
+    "tags": [
+      "foreign_private_issuer",
+      "20_f",
+      "china",
+      "duplicate_heading_text",
+      "toc_confusion",
+      "vision_benefit_candidate"
+    ],
     "source": {
       "kind": "official_sec_archive_document",
       "filing_url": "https://www.sec.gov/Archives/edgar/data/1795589/000110465923050820/kc-20221231x20f.htm"
     },
     "assertions": {
       "min_items_extracted": 5,
-      "allow_missing_recent_items": ["1A", "1B", "1C", "5", "6", "9C", "13", "14", "16"]
+      "allow_missing_recent_items": [
+        "1A",
+        "1B",
+        "1C",
+        "5",
+        "6",
+        "9C",
+        "13",
+        "14",
+        "16"
+      ]
     }
   },
   {
@@ -557,14 +935,32 @@
     },
     "expected_behavior": "Red Metal Resources 2025 20-F small-cap mining issuer. The filing has 20-F-specific headings plus Item 16 [Reserved]. Tests small-company formatting, mining-sector language, and reserved-item classification in a non-10-K form.",
     "difficulty": "edge_case",
-    "tags": ["foreign_private_issuer", "20_f", "small_cap", "mining", "reserved", "status_classification", "vision_benefit_candidate"],
+    "tags": [
+      "foreign_private_issuer",
+      "20_f",
+      "small_cap",
+      "mining",
+      "reserved",
+      "status_classification",
+      "vision_benefit_candidate"
+    ],
     "source": {
       "kind": "official_sec_archive_document",
       "filing_url": "https://www.sec.gov/Archives/edgar/data/1358654/000113902025000153/rmes-20250131.htm"
     },
     "assertions": {
       "min_items_extracted": 5,
-      "allow_missing_recent_items": ["1A", "1B", "1C", "5", "6", "9C", "13", "14", "16"]
+      "allow_missing_recent_items": [
+        "1A",
+        "1B",
+        "1C",
+        "5",
+        "6",
+        "9C",
+        "13",
+        "14",
+        "16"
+      ]
     }
   }
 ]

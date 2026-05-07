@@ -389,9 +389,27 @@ async def find_10k_filing(
         if not target:
             target = filings_10k[0]  # Most recent
 
-    # Build filing URL
+    # Build filing URL.
+    # When primary_document is missing (common for older filings whose
+    # additional-submissions records don't include it), probe the archive
+    # directory listing to find the real primary document. If that also
+    # fails (very old pre-1996 filings), fall back to {accession}.txt
+    # which is the canonical SGML complete-submission name.
     acc_nodash = accession_no_dashes(target["accession_number"])
     primary_doc = target.get("primary_document", "")
+
+    if not primary_doc:
+        archive_resolved = await resolve_filing_from_archive(
+            cik_padded, target["accession_number"]
+        )
+        if archive_resolved:
+            return {
+                **archive_resolved,
+                "company_name": metadata["company_name"],
+                "form_type": archive_resolved.get("form_type") or target.get("form", "10-K"),
+            }
+        # Last-resort: SGML complete-submission .txt (works for pre-1996)
+        primary_doc = f"{target['accession_number']}.txt"
 
     filing_url = (
         f"https://www.sec.gov/Archives/edgar/data/{cik_raw}/"
