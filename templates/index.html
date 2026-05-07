@@ -83,10 +83,14 @@
 
         <!-- View Skills (Task 1 only) -->
         <div class="quick-actions" style="margin-top:1.5rem">
-            <h3 style="margin-bottom:0.75rem;color:#aaa;font-size:0.95rem">Quick links</h3>
+            <h3 style="margin-bottom:0.75rem;color:#aaa;font-size:0.95rem">Reviewer launchpad</h3>
+            <a href="/task2" class="action-link">🌐 Run Browser Agent</a>
+            <a href="/task3" class="action-link">📊 Extract SEC Filing</a>
             <a href="/api/v1/skills/list" class="action-link">📋 List CI/CD Skills</a>
             <a href="/api/v1/sec/filings/0000320193?filing_type=10-K&limit=5" class="action-link">📁 List Apple 10-Ks</a>
             <a href="/api/v1/sec/company/0000320193" class="action-link">🏢 Apple Company Info</a>
+            <a href="/metrics" class="action-link">💵 Live Metrics</a>
+            <a href="/api/v1/models" class="action-link">🤖 Model Registry</a>
         </div>
 
         <!-- System Links -->
@@ -109,6 +113,12 @@
                 user_openrouter_key: apiKeyInput.value || null
             };
         }
+        const savedModel = sessionStorage.getItem('sf_model_id');
+        const savedKey = sessionStorage.getItem('sf_openrouter_key');
+        if (savedModel) modelSelect.value = savedModel;
+        if (savedKey) apiKeyInput.value = savedKey;
+        modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+        apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
 
         // Card hover animations
         document.querySelectorAll('.task-card').forEach(card => {

@@ -77,13 +77,16 @@
                     <label>Task Description (natural language)</label>
                     <textarea id="task-desc" placeholder="e.g. Go to Wikipedia and find the population of Tokyo"></textarea>
                     <div class="examples">
-                        <button class="example-btn" onclick="setTask('Go to en.wikipedia.org and find the current population of Tokyo, Japan')">📚 Wikipedia lookup</button>
-                        <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story and the comment count')">🟧 HN top story</button>
-                        <button class="example-btn" onclick="setTask('Go to https://arxiv.org/abs/2509.13753 and report the paper title plus the first two authors')">🔬 arXiv paper</button>
-                        <button class="example-btn" onclick="setTask('前往鉅亨網 https://www.cnyes.com/twstock/twse/TWSE.htm 並擷取台股加權指數最新點位')">💹 cnyes 加權指數 (TW)</button>
-                        <button class="example-btn" onclick="setTask('Go to https://tw.stock.yahoo.com/quote/2330 and return TSMC current price')">💰 TSMC quote (TW)</button>
-                        <button class="example-btn" onclick="setTask('Go to https://www.linkedin.com/in/satyanadella/ and report Satya Nadella job title')">🛡️ LinkedIn login wall (anti-hallucination)</button>
-                        <button class="example-btn" onclick="setTask('Go to https://example.com and find the email address for European trademark disputes. If not present, say so.')">🎯 example.com hallucination guard</button>
+                        <button class="example-btn" onclick="setTask('Go to en.wikipedia.org and find the current population of Tokyo, Japan', 'https://en.wikipedia.org')">📚 Wikipedia lookup</button>
+                        <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story and the comment count', 'https://news.ycombinator.com')">🟧 HN top story</button>
+                        <button class="example-btn" onclick="setTask('Go to https://arxiv.org/abs/2509.13753 and report the paper title plus the first two authors', 'https://arxiv.org/abs/2509.13753')">🔬 arXiv paper</button>
+                        <button class="example-btn" onclick="setTask('前往鉅亨網 https://www.cnyes.com/twstock/twse/TWSE.htm 並擷取台股加權指數最新點位', 'https://www.cnyes.com/twstock/twse/TWSE.htm')">💹 cnyes 加權指數 (TW)</button>
+                        <button class="example-btn" onclick="setTask('Go to https://tw.stock.yahoo.com/quote/2330 and return TSMC current price', 'https://tw.stock.yahoo.com/quote/2330')">💰 TSMC quote (TW)</button>
+                        <button class="example-btn" onclick="setTask('Go to https://www.linkedin.com/in/satyanadella/ and report Satya Nadella job title', 'https://www.linkedin.com/in/satyanadella/')">🛡️ LinkedIn login wall (anti-hallucination)</button>
+                        <button class="example-btn" onclick="setTask('Go to https://example.com and find the email address for European trademark disputes. If not present, say so.', 'https://example.com')">🎯 example.com hallucination guard</button>
+                        <button class="example-btn" onclick="setTask('Go to https://en.wikipedia.org/wiki/Mona_Lisa and describe what is shown in the infobox image.', 'https://en.wikipedia.org/wiki/Mona_Lisa'); document.getElementById('use-vision').checked = true;">🖼️ vision image</button>
+                        <button class="example-btn" onclick="setTask('Go to https://www.openstreetmap.org/#map=15/48.8584/2.2945 and describe what landmark or area is centered on the map.', 'https://www.openstreetmap.org/#map=15/48.8584/2.2945'); document.getElementById('use-vision').checked = true;">🗺️ vision map</button>
+                        <button class="example-btn" onclick="setTask('Go to https://www.google.com/recaptcha/api2/demo and describe what type of verification challenge is displayed on the page.', 'https://www.google.com/recaptcha/api2/demo'); document.getElementById('use-vision').checked = true;">🚧 CAPTCHA detect</button>
                     </div>
                 </div>
             </div>
@@ -122,7 +125,7 @@
                         <input type="checkbox" id="use-vision">
                         Use vision (multi-modal)
                     </label>
-                    <small style="color:#888">Sends viewport JPEG to the verifier. Only effective with Gemini 3.1 Pro / Claude Opus 4.7 / GPT-5.5. Silent fallback to text-only on NVIDIA models.</small>
+                    <small style="color:#888">Sends viewport JPEGs to the actor and verifier. Effective with Gemini 3.1 Pro / Claude Opus 4.7 / GPT-5.5; NVIDIA models fall back to text-only.</small>
                 </div>
             </div>
             <button class="run-btn" id="run-btn" onclick="executeTask()">Execute Task</button>
@@ -142,6 +145,7 @@
                 <div class="stat-item"><div class="stat-val" id="stat-steps">—</div><div class="stat-label">Steps</div></div>
                 <div class="stat-item"><div class="stat-val" id="stat-corrections">—</div><div class="stat-label">Self-Corrections</div></div>
                 <div class="stat-item"><div class="stat-val" id="stat-healer">—</div><div class="stat-label">Healer Activations</div></div>
+                <div class="stat-item"><div class="stat-val" id="stat-vision">—</div><div class="stat-label">Vision Active</div></div>
                 <div class="stat-item"><div class="stat-val" id="stat-latency">—</div><div class="stat-label">Latency</div></div>
                 <div class="stat-item"><div class="stat-val" id="stat-cost">—</div><div class="stat-label">Cost</div></div>
             </div>
@@ -164,9 +168,22 @@
     </div>
 
     <script>
-        function setTask(text) {
+        function setTask(text, targetUrl = '') {
             document.getElementById('task-desc').value = text;
+            document.getElementById('target-url').value = targetUrl;
         }
+
+        function hydrateSharedControls() {
+            const modelSelect = document.getElementById('model-select');
+            const apiKeyInput = document.getElementById('user-api-key');
+            const savedModel = sessionStorage.getItem('sf_model_id');
+            const savedKey = sessionStorage.getItem('sf_openrouter_key');
+            if (savedModel) modelSelect.value = savedModel;
+            if (savedKey) apiKeyInput.value = savedKey;
+            modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+            apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
+        }
+        hydrateSharedControls();
 
         async function executeTask() {
             const btn = document.getElementById('run-btn');
@@ -191,6 +208,8 @@
             document.getElementById('steps-list').innerHTML = '';
             document.getElementById('raw-toggle').style.display = 'none';
             document.getElementById('raw-json').classList.remove('visible');
+            document.getElementById('trace-info').style.display = 'none';
+            document.getElementById('langsmith-link').style.display = 'none';
             panel.classList.add('visible');
 
             const useVision = document.getElementById('use-vision').checked;
@@ -268,6 +287,7 @@
             document.getElementById('stat-steps').textContent = data.total_steps ?? '—';
             document.getElementById('stat-corrections').textContent = data.self_corrections ?? '—';
             document.getElementById('stat-healer').textContent = data.healer_activations ?? '—';
+            document.getElementById('stat-vision').textContent = data.metadata?.use_vision_active ? 'on' : (data.metadata?.use_vision_requested ? 'fallback' : 'off');
             const lat = data.total_duration_ms ?? envelope.latency_ms;
             document.getElementById('stat-latency').textContent = lat ? Math.round(lat) + 'ms' : '—';
             const cost = data.cost_usd ?? envelope.cost_metadata?.total_cost_usd;
@@ -292,20 +312,27 @@
             if (steps.length) {
                 const list = document.getElementById('steps-list');
                 list.innerHTML = steps.map((s, i) => {
-                    const conf = s.confidence ?? 1;
+                    const action = s.action || {};
+                    const verification = s.verification || {};
+                    const conf = verification.confidence ?? (s.error ? 0 : 1);
                     const confColor = conf >= 0.8 ? '#22c55e' : conf >= 0.6 ? '#eab308' : '#ef4444';
-                    const stepStatus = s.success === false ? 'failed' : s.confidence < 0.6 ? 'partial' : 'success';
+                    const stepStatus = s.error ? 'failed' : conf < 0.6 ? 'partial' : 'success';
+                    const actionName = action.action_type || action.action || 'action';
+                    const target = action.target_description || action.value || action.selector || '';
+                    const description = action.reasoning || action.success_criteria || verification.reason || s.healer_recovery || '';
+                    const rootCause = s.healer_diagnosis || s.root_cause || '';
                     return `<div class="step-item ${stepStatus}">
                         <div class="step-header">
                             <span class="step-num">#${i + 1}</span>
-                            <span class="step-action">${escHtml(s.action || '—')}</span>
+                            <span class="step-action">${escHtml(actionName)}${target ? ': ' + escHtml(target) : ''}</span>
                             <div class="step-confidence" style="text-align:right">
                                 <span style="font-size:0.75rem;color:${confColor}">${Math.round(conf * 100)}%</span>
                                 <div class="conf-bar"><div class="conf-fill" style="width:${Math.round(conf*100)}%;background:${confColor}"></div></div>
                             </div>
                         </div>
-                        <div class="step-desc">${escHtml(s.description || s.intent || '')}</div>
-                        ${s.root_cause ? `<div class="root-cause">Root cause: ${escHtml(s.root_cause)}</div>` : ''}
+                        <div class="step-desc">${escHtml(description)}</div>
+                        ${rootCause ? `<div class="root-cause">Root cause: ${escHtml(rootCause)}</div>` : ''}
+                        ${s.error ? `<div class="root-cause">Error: ${escHtml(s.error)}</div>` : ''}
                     </div>`;
                 }).join('');
                 document.getElementById('steps-panel').style.display = 'block';

@@ -164,6 +164,18 @@
         // Initially hide dry-run for non-release skills
         document.getElementById('skill-select').dispatchEvent(new Event('change'));
 
+        function hydrateSharedControls() {
+            const modelSelect = document.getElementById('model-select');
+            const apiKeyInput = document.getElementById('user-api-key');
+            const savedModel = sessionStorage.getItem('sf_model_id');
+            const savedKey = sessionStorage.getItem('sf_openrouter_key');
+            if (savedModel) modelSelect.value = savedModel;
+            if (savedKey) apiKeyInput.value = savedKey;
+            modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+            apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
+        }
+        hydrateSharedControls();
+
         async function runSkill() {
             const btn = document.getElementById('run-btn');
             const panel = document.getElementById('result-panel');

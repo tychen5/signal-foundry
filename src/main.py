@@ -11,6 +11,7 @@ Plus: dashboard, health checks, metrics, and model selection.
 
 from __future__ import annotations
 
+import json
 import os
 from contextlib import asynccontextmanager
 
@@ -96,6 +97,35 @@ if os.path.isdir(_static_dir):
 templates = Jinja2Templates(directory=_templates_dir) if os.path.isdir(_templates_dir) else None
 
 
+def _prefers_html(request: Request) -> bool:
+    """Return True when a browser navigation prefers HTML over JSON."""
+    accept = request.headers.get("accept", "")
+    return "text/html" in accept and "application/json" not in accept
+
+
+def _system_page(
+    request: Request,
+    title: str,
+    subtitle: str,
+    payload: dict,
+    page_kind: str,
+) -> HTMLResponse:
+    """Render a reviewer-friendly system status page."""
+    if templates:
+        return templates.TemplateResponse(
+            request,
+            "system.html",
+            {
+                "title": title,
+                "subtitle": subtitle,
+                "payload": payload,
+                "page_kind": page_kind,
+                "raw_json": json.dumps(payload, indent=2, default=str),
+            },
+        )
+    return HTMLResponse(f"<pre>{json.dumps(payload, indent=2, default=str)}</pre>")
+
+
 # --- Middleware: Trace ID injection ---
 @app.middleware("http")
 async def trace_id_middleware(request: Request, call_next):
@@ -111,23 +141,50 @@ async def trace_id_middleware(request: Request, call_next):
 
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
-async def health_check():
+async def health_check(request: Request):
     """Health check endpoint for Zeabur and monitoring."""
     settings = get_settings()
-    return HealthResponse(environment=settings.environment)
+    health = HealthResponse(environment=settings.environment)
+    if _prefers_html(request):
+        return _system_page(
+            request,
+            "System Health",
+            "Readiness snapshot for Zeabur and the three task harnesses.",
+            health.model_dump(),
+            "health",
+        )
+    return health
 
 
 @app.get("/api/v1/models", tags=["System"])
-async def list_models():
+async def list_models(request: Request):
     """List all available LLM models with their providers."""
-    return {"models": list_available_models()}
+    payload = {"models": list_available_models()}
+    if _prefers_html(request):
+        return _system_page(
+            request,
+            "Model Registry",
+            "Provider routing, reviewer key expectations, and model choices.",
+            payload,
+            "models",
+        )
+    return payload
 
 
 @app.get("/metrics", tags=["System"])
-async def get_metrics():
+async def get_metrics(request: Request):
     """Get aggregated cost and performance metrics."""
     tracker = get_cost_tracker()
-    return tracker.get_session_summary()
+    payload = tracker.get_session_summary()
+    if _prefers_html(request):
+        return _system_page(
+            request,
+            "Live Cost Metrics",
+            "Session-level LLM calls, estimated spend, tokens, and latency.",
+            payload,
+            "metrics",
+        )
+    return payload
 
 
 @app.get("/", response_class=HTMLResponse, tags=["UI"])

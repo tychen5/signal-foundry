@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} — Signal-Foundry</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header system-header">
+            <a href="/" class="back-link">← Dashboard</a>
+            <h1>{{ title }}</h1>
+            <p>{{ subtitle }}</p>
+        </header>
+
+        {% if page_kind == "health" %}
+        <section class="system-grid">
+            <div class="system-card">
+                <span class="system-label">Status</span>
+                <strong class="system-value good">{{ payload.status }}</strong>
+            </div>
+            <div class="system-card">
+                <span class="system-label">Version</span>
+                <strong class="system-value">{{ payload.version }}</strong>
+            </div>
+            <div class="system-card">
+                <span class="system-label">Environment</span>
+                <strong class="system-value">{{ payload.environment }}</strong>
+            </div>
+        </section>
+
+        <section class="system-panel">
+            <h2>Task Readiness</h2>
+            <div class="readiness-list">
+                {% for task, status in payload.tasks.items() %}
+                <div class="readiness-row">
+                    <span>{{ task }}</span>
+                    <strong class="readiness-pill">{{ status }}</strong>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        {% if page_kind == "metrics" %}
+        <section class="system-grid">
+            <div class="system-card">
+                <span class="system-label">LLM Calls</span>
+                <strong class="system-value">{{ payload.total_calls }}</strong>
+            </div>
+            <div class="system-card">
+                <span class="system-label">Total Cost</span>
+                <strong class="system-value">${{ "%.6f"|format(payload.total_cost_usd) }}</strong>
+            </div>
+            <div class="system-card">
+                <span class="system-label">Tokens In</span>
+                <strong class="system-value">{{ payload.total_tokens_in }}</strong>
+            </div>
+            <div class="system-card">
+                <span class="system-label">Tokens Out</span>
+                <strong class="system-value">{{ payload.total_tokens_out }}</strong>
+            </div>
+            <div class="system-card">
+                <span class="system-label">Average Latency</span>
+                <strong class="system-value">{{ payload.avg_latency_ms }} ms</strong>
+            </div>
+        </section>
+
+        <section class="system-panel two-col">
+            <div>
+                <h2>By Task</h2>
+                {% if payload.by_task %}
+                <table class="system-table">
+                    <thead><tr><th>Task</th><th>Calls</th><th>Cost</th><th>Tokens</th></tr></thead>
+                    <tbody>
+                    {% for task, row in payload.by_task.items() %}
+                    <tr><td>{{ task }}</td><td>{{ row.calls }}</td><td>${{ "%.6f"|format(row.cost_usd) }}</td><td>{{ row.tokens }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty-state">No LLM calls recorded in this server session yet.</p>
+                {% endif %}
+            </div>
+            <div>
+                <h2>By Model</h2>
+                {% if payload.by_model %}
+                <table class="system-table">
+                    <thead><tr><th>Model</th><th>Calls</th><th>Cost</th></tr></thead>
+                    <tbody>
+                    {% for model, row in payload.by_model.items() %}
+                    <tr><td>{{ model }}</td><td>{{ row.calls }}</td><td>${{ "%.6f"|format(row.cost_usd) }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty-state">Run any task UI to populate model-level spend.</p>
+                {% endif %}
+            </div>
+        </section>
+        {% endif %}
+
+        {% if page_kind == "models" %}
+        <section class="system-panel">
+            <h2>Available Models</h2>
+            <table class="system-table">
+                <thead><tr><th>Model ID</th><th>Provider</th><th>Reviewer Guidance</th></tr></thead>
+                <tbody>
+                {% for model in payload.models %}
+                <tr>
+                    <td><code>{{ model.id }}</code></td>
+                    <td><span class="provider-pill provider-{{ model.provider }}">{{ model.provider }}</span></td>
+                    <td>
+                        {% if model.provider == "openrouter" %}
+                        Paid OpenRouter path. Paste a per-request key in Task 1/2/3 UI for sustained demos.
+                        {% else %}
+                        Server-side NVIDIA path. Good default, but free-tier rate limits can throttle long eval sweeps.
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </section>
+        {% endif %}
+
+        <section class="system-panel">
+            <div class="panel-title-row">
+                <h2>Raw JSON</h2>
+                <button class="raw-toggle" onclick="toggleRaw()">Show raw JSON</button>
+            </div>
+            <pre class="raw-json system-raw" id="raw-json">{{ raw_json }}</pre>
+        </section>
+    </div>
+
+    <script>
+        function toggleRaw() {
+            const raw = document.getElementById('raw-json');
+            raw.classList.toggle('visible');
+            const btn = document.querySelector('.raw-toggle');
+            btn.textContent = raw.classList.contains('visible') ? 'Hide raw JSON' : 'Show raw JSON';
+        }
+    </script>
+</body>
+</html>
