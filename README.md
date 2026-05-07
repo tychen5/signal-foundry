@@ -100,6 +100,20 @@ python -m evals.task2.run_eval --vision --timeout 120   # 38-case set, Playwrigh
 
 **Reviewer-friendly model selection.** Default model is `moonshotai/kimi-k2.6` (free, NVIDIA NIM) — works out of the box. For higher quality / higher rate limit, paste your own OpenRouter API key in the UI and pick `google/gemini-3.1-pro-preview` (cheap), `anthropic/claude-opus-4.7` (premium), or `openai/gpt-5.5`. Per-request user keys are NOT stored server-side.
 
+**Live progress for slow Task 2 runs.** Browser-agent tasks can take 30-180 s per case (planning → executing → verifying). The Task 2 UI calls `/api/v1/browser/stream` (Server-Sent Events), so reviewers see milestones in real time:
+```
+[10:42:15] 🧭 planning task with google/gemini-3.1-pro-preview
+[10:42:18] ✅ plan ready — 4 step(s)
+[10:42:18] ▶️ step 1: navigate → Wikipedia
+[10:42:21] ✓ step 1 conf:0.95
+[10:42:21] ▶️ step 2: fill → main search input
+...
+[10:42:45] 🏁 success in 4 step(s) — $0.0042
+```
+No more spinner-and-wait — every step / healer activation / confidence score is visible.
+
+**Errors that explain themselves.** A 4xx/429/500 from the LLM provider is classified into one of `invalid_key | rate_limit | insufficient_credit | quota_exhausted | timeout | no_response | server_error` and surfaced in the UI with an actionable suggestion ("top up at openrouter.ai/credits", "rotate key on console", "wait 30 s and retry"). Reviewers don't have to dig through stack traces.
+
 **Live deployment verification (2026-05-07):**
 
 | Endpoint | Status | Notes |
