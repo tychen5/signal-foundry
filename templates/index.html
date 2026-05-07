@@ -14,6 +14,14 @@
         <header class="header">
             <h1>🔧 Signal-Foundry</h1>
             <p>Evaluation-first AI systems — harness engineering for reliable automation</p>
+            <div class="hero-stats">
+                <div class="hero-stat"><strong>3</strong> tasks</div>
+                <div class="hero-stat"><strong>67</strong> committed eval cases</div>
+                <div class="hero-stat"><strong>7</strong> LLM models</div>
+                <div class="hero-stat"><strong>209</strong> unit tests</div>
+                <div class="hero-stat" id="live-cost-stat"><strong>—</strong> live cost</div>
+                <div class="hero-stat" id="live-calls-stat"><strong>—</strong> LLM calls</div>
+            </div>
         </header>
 
         <!-- Model Selector -->
@@ -106,6 +114,22 @@
         document.querySelectorAll('.task-card').forEach(card => {
             card.style.cursor = 'pointer';
         });
+
+        // Live metrics: poll /metrics every 30 s and refresh hero stats
+        async function refreshMetrics() {
+            try {
+                const r = await fetch('/metrics');
+                if (!r.ok) return;
+                const d = await r.json();
+                const cost = d.total_cost_usd ?? 0;
+                const calls = d.total_calls ?? 0;
+                document.querySelector('#live-cost-stat strong').textContent =
+                    '$' + Number(cost).toFixed(4);
+                document.querySelector('#live-calls-stat strong').textContent = calls;
+            } catch (_) { /* ignore */ }
+        }
+        refreshMetrics();
+        setInterval(refreshMetrics, 30000);
     </script>
 </body>
 </html>

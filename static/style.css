@@ -176,6 +176,31 @@ body {
     color: #c4b5fd;
 }
 
+.hero-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+.hero-stat {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.45rem 0.95rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+}
+.hero-stat strong {
+    color: var(--accent-blue);
+    font-weight: 700;
+    margin-right: 0.3rem;
+}
+.hero-stat:hover {
+    transform: translateY(-1px);
+    border-color: var(--accent-blue);
+}
+
 /* Badges */
 .badge {
     display: inline-block;
