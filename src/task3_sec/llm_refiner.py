@@ -32,7 +32,8 @@ cost_tracker = get_cost_tracker()
 # --- Prompt loading from versioned files ---
 _PROMPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "prompts", "sec_extraction",
+    "prompts",
+    "sec_extraction",
 )
 
 
@@ -91,10 +92,7 @@ async def refine_boundaries(
     Returns:
         Updated ParseResult with refined boundaries
     """
-    low_confidence = [
-        b for b in parse_result.boundaries
-        if b.confidence < confidence_threshold
-    ]
+    low_confidence = [b for b in parse_result.boundaries if b.confidence < confidence_threshold]
     if force_refine:
         try:
             forced_limit = max(1, int(os.environ.get("T3_FORCE_LLM_MAX", "3")))
@@ -194,9 +192,7 @@ async def refine_boundaries(
         await asyncio.sleep(rate_delay_s)
 
     # Check for missing items
-    await _detect_missing_items(
-        text, refined_boundaries, llm, refine_model, user_api_key, trace_id
-    )
+    await _detect_missing_items(text, refined_boundaries, llm, refine_model, user_api_key, trace_id)
 
     # Re-sort and update end positions
     refined_boundaries.sort(key=lambda b: b.start_pos)
@@ -206,10 +202,7 @@ async def refine_boundaries(
         else:
             b.end_pos = len(text)
 
-    avg_conf = (
-        sum(b.confidence for b in refined_boundaries) / len(refined_boundaries)
-        if refined_boundaries else 0.0
-    )
+    avg_conf = sum(b.confidence for b in refined_boundaries) / len(refined_boundaries) if refined_boundaries else 0.0
 
     return ParseResult(
         boundaries=refined_boundaries,
@@ -355,7 +348,7 @@ async def _detect_missing_items(
         curr_num = curr.item_number
         next_num = next_b.item_number
 
-        gap_text = text[curr.start_pos:next_b.start_pos]
+        gap_text = text[curr.start_pos : next_b.start_pos]
 
         # Only use LLM for large gaps that might contain items
         if len(gap_text) > 2000:

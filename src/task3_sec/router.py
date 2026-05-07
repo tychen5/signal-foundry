@@ -91,6 +91,7 @@ async def extract_10k(request: SECExtractionRequest):
         )
 
         from src.shared.tracing import trace_url
+
         return ExecutionResult(
             status=ExecutionStatus.SUCCESS,
             task=TaskType.SEC_EXTRACTION,
@@ -137,7 +138,8 @@ async def list_filings(cik: str, filing_type: str = "10-K", limit: int = 10):
 
         # Filter by form type
         filings = [
-            f for f in metadata.get("filings", [])
+            f
+            for f in metadata.get("filings", [])
             if f.get("form", "") == filing_type or (filing_type == "10-K" and f.get("form", "") == "10-K/A")
         ][:limit]
 

@@ -125,6 +125,7 @@ def _clean_final_answer(answer: str) -> str:
     # Try to extract a JSON answer field
     try:
         import json as _json
+
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if m:
             obj = _json.loads(m.group())
@@ -141,20 +142,20 @@ def _clean_final_answer(answer: str) -> str:
 # content. These are deterministic — no LLM needed. If any appear in the
 # final URL, the silent-failure guard flips status to not_found.
 _BLOCKED_URL_MARKERS = (
-    "/authwall",          # LinkedIn auth redirect
-    "/login?",            # generic login redirect
+    "/authwall",  # LinkedIn auth redirect
+    "/login?",  # generic login redirect
     "/login/",
     "accounts.google.com/signin",
     "accounts.google.com/v3/signin",
-    "/checkpoint/challenge",   # Facebook
+    "/checkpoint/challenge",  # Facebook
     "/recaptcha",
-    "/cf-chl",            # Cloudflare challenge
+    "/cf-chl",  # Cloudflare challenge
     "/captcha",
     "/sso/login",
     "/oauth/authorize",
     "/access-denied",
     "/blocked",
-    "edgar/error",        # SEC EDGAR error page
+    "edgar/error",  # SEC EDGAR error page
 )
 
 
@@ -209,14 +210,16 @@ class BrowserAgent:
         if trace_id is None:
             trace_id = generate_trace_id()
 
-        attach_metadata({
-            "trace_id": trace_id,
-            "task_description": task_description[:200],
-            "target_url": target_url or "",
-            "max_steps": max_steps,
-            "model_name": self.model_name or "default",
-            "use_vision": self.use_vision,
-        })
+        attach_metadata(
+            {
+                "trace_id": trace_id,
+                "task_description": task_description[:200],
+                "target_url": target_url or "",
+                "max_steps": max_steps,
+                "model_name": self.model_name or "default",
+                "use_vision": self.use_vision,
+            }
+        )
 
         start_time = time.time()
         result = AgentResult(
@@ -235,6 +238,7 @@ class BrowserAgent:
         _vision_is_active = False
         if self.use_vision:
             from src.task2_browser.vision import is_vision_capable, vision_history_max
+
             _vision_is_active = is_vision_capable(self.model_name)
             _max_vision_hist = vision_history_max()
         else:
@@ -251,9 +255,7 @@ class BrowserAgent:
             )
 
             screenshot = (
-                await capture_full_page_screenshot_b64(page)
-                if full_page
-                else await capture_screenshot_b64(page)
+                await capture_full_page_screenshot_b64(page) if full_page else await capture_screenshot_b64(page)
             )
             if screenshot:
                 vision_history.append((label, screenshot))
@@ -340,9 +342,7 @@ class BrowserAgent:
                         # helps charts/maps/image-heavy pages without sending
                         # huge screenshots on normal text pages.
                         visual_terms = ("chart", "graph", "map", "image", "canvas", "screenshot", "color")
-                        wants_visual_context = any(
-                            term in task_description.lower() for term in visual_terms
-                        )
+                        wants_visual_context = any(term in task_description.lower() for term in visual_terms)
                         sparse_aom = len((current_state.visible_text_summary or "").strip()) < 400
                         step_no = result.total_steps + 1
                         screenshot_b64 = await capture_vision_snapshot(
@@ -387,9 +387,7 @@ class BrowserAgent:
                     result.llm_calls += 1
 
                     if next_action.action_type == ActionType.DONE:
-                        result.final_answer = _clean_final_answer(
-                            next_action.value or next_action.reasoning
-                        )
+                        result.final_answer = _clean_final_answer(next_action.value or next_action.reasoning)
                         result.status = "success"
                         break
 
@@ -520,10 +518,7 @@ class BrowserAgent:
         nums = _NUMBER_TOKEN.findall(answer)
         if nums and observed:
             normalized_observed = observed.replace(",", "")
-            ungrounded = [
-                n for n in nums
-                if n not in observed and n.replace(",", "") not in normalized_observed
-            ]
+            ungrounded = [n for n in nums if n not in observed and n.replace(",", "") not in normalized_observed]
             if ungrounded and len(ungrounded) == len(nums):
                 # *Every* numeric token in the answer is missing from observed
                 # text — strongly indicates fabrication.

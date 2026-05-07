@@ -102,9 +102,7 @@ async def render_multi_snapshots(
             mark_position=boundary_pos - nb_start,
         )
         if snap:
-            snapshots.append(
-                (f"item_{item_number} neighbor context (±1500 chars)", snap)
-            )
+            snapshots.append((f"item_{item_number} neighbor context (±1500 chars)", snap))
 
     logger.info(
         "t3_multi_snapshot",
@@ -164,18 +162,14 @@ async def render_text_to_jpeg_b64(
     # the LLM's eye is drawn to the candidate heading.
     if mark_position is not None and 0 <= mark_position < len(text):
         before = text[:mark_position]
-        after = text[mark_position:mark_position + 80]
-        rest = text[mark_position + 80:]
+        after = text[mark_position : mark_position + 80]
+        rest = text[mark_position + 80 :]
         before_safe = before.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         after_safe = after.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         rest_safe = rest.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        body_html = (
-            f"<pre>{before_safe}<mark>{after_safe}</mark>{rest_safe}</pre>"
-        )
+        body_html = f"<pre>{before_safe}<mark>{after_safe}</mark>{rest_safe}</pre>"
     else:
-        safe_text = (
-            text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        )
+        safe_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         body_html = f"<pre>{safe_text}</pre>"
 
     html = f"""<!doctype html>
@@ -216,6 +210,7 @@ async def render_text_to_jpeg_b64(
     # Downsample PNG → JPEG q=75 to keep token cost reasonable.
     try:
         from PIL import Image
+
         img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
         # Cap height to keep tokens bounded — beyond first ~1500px is rarely useful
         if img.height > 1500:
@@ -290,6 +285,7 @@ async def render_html_to_jpeg_b64(
 
     try:
         from PIL import Image
+
         img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
         if img.height > 1500:
             img = img.crop((0, 0, img.width, 1500))

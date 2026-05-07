@@ -86,6 +86,7 @@ async def capture_screenshot_b64(
     # Downsample + recompress to JPEG to keep token cost bounded
     try:
         from PIL import Image  # type: ignore
+
         img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
         if img.width > max_width_px:
             ratio = max_width_px / img.width
@@ -141,6 +142,7 @@ async def capture_full_page_screenshot_b64(
 
     try:
         from PIL import Image  # type: ignore
+
         img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
         if img.width > max_width_px:
             ratio = max_width_px / img.width
@@ -180,6 +182,7 @@ async def capture_element_screenshot_b64(
 
     try:
         from PIL import Image  # type: ignore
+
         img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
         if img.width > max_width_px:
             ratio = max_width_px / img.width

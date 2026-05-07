@@ -36,6 +36,7 @@ def _resp_text(response) -> str:
     """Pull plain text out of a chat response, regardless of provider shape."""
     return coerce_message_text(getattr(response, "content", response))
 
+
 _PROMPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "prompts",

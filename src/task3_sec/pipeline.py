@@ -97,15 +97,17 @@ async def extract_10k(
     )
 
     # Attach metadata to LangSmith span (no-op if not enabled)
-    attach_metadata({
-        "trace_id": trace_id or "",
-        "cik": cik or "",
-        "accession_number": accession_number or "",
-        "model_name": model_name or "default",
-        "skip_llm": skip_llm,
-        "use_vision": use_vision,
-        "force_llm": force_llm,
-    })
+    attach_metadata(
+        {
+            "trace_id": trace_id or "",
+            "cik": cik or "",
+            "accession_number": accession_number or "",
+            "model_name": model_name or "default",
+            "skip_llm": skip_llm,
+            "use_vision": use_vision,
+            "force_llm": force_llm,
+        }
+    )
 
     # ========== FETCH FILING ==========
     if filing_url:
@@ -160,11 +162,14 @@ async def extract_10k(
     required_for_modern = {"1", "1A", "7", "7A", "8", "15"}
     found_items = {b.item_number for b in parse_result.boundaries}
     has_all_required = required_for_modern.issubset(found_items)
-    needs_llm = force_llm or (not skip_llm and (
-        parse_result.items_found < 10
-        or parse_result.confidence_avg < 0.55
-        or (parse_result.confidence_avg < 0.75 and not has_all_required)
-    ))
+    needs_llm = force_llm or (
+        not skip_llm
+        and (
+            parse_result.items_found < 10
+            or parse_result.confidence_avg < 0.55
+            or (parse_result.confidence_avg < 0.75 and not has_all_required)
+        )
+    )
     if needs_llm:
         stage2_start = time.time()
         try:
@@ -238,13 +243,9 @@ async def extract_10k(
     # Get cost info from tracker
     request_cost = cost_tracker.get_request_cost(trace_id)
 
-    rule_only = sum(
-        1 for item in items
-        if item.extraction_method == ExtractionMethod.RULE_BASED
-    )
+    rule_only = sum(1 for item in items if item.extraction_method == ExtractionMethod.RULE_BASED)
     llm_refined = sum(
-        1 for item in items
-        if item.extraction_method in (ExtractionMethod.LLM_REFINED, ExtractionMethod.HYBRID)
+        1 for item in items if item.extraction_method in (ExtractionMethod.LLM_REFINED, ExtractionMethod.HYBRID)
     )
 
     result.processing_metadata = ProcessingMetadata(
@@ -315,16 +316,18 @@ def _build_items(text: str, parse_result: ParseResult) -> list[ExtractedItem]:
         # Get standard item info
         item_info = _get_item_info(boundary.item_number)
 
-        items.append(ExtractedItem(
-            part=item_info["part"],
-            item_number=boundary.item_number,
-            item_title=boundary.heading_text or item_info["item_title"],
-            content_text=content_body,
-            char_range=[start, end],
-            status=status,
-            confidence=boundary.confidence,
-            extraction_method=method,
-        ))
+        items.append(
+            ExtractedItem(
+                part=item_info["part"],
+                item_number=boundary.item_number,
+                item_title=boundary.heading_text or item_info["item_title"],
+                content_text=content_body,
+                char_range=[start, end],
+                status=status,
+                confidence=boundary.confidence,
+                extraction_method=method,
+            )
+        )
 
     return items
 
@@ -335,16 +338,18 @@ def _fill_missing_items(items: list[ExtractedItem]) -> list[ExtractedItem]:
 
     for std_item in STANDARD_10K_ITEMS:
         if std_item["item_number"] not in found:
-            items.append(ExtractedItem(
-                part=std_item["part"],
-                item_number=std_item["item_number"],
-                item_title=std_item["item_title"],
-                content_text="",
-                char_range=[0, 0],
-                status=ItemStatus.NOT_FOUND,
-                confidence=0.0,
-                extraction_method=ExtractionMethod.RULE_BASED,
-            ))
+            items.append(
+                ExtractedItem(
+                    part=std_item["part"],
+                    item_number=std_item["item_number"],
+                    item_title=std_item["item_title"],
+                    content_text="",
+                    char_range=[0, 0],
+                    status=ItemStatus.NOT_FOUND,
+                    confidence=0.0,
+                    extraction_method=ExtractionMethod.RULE_BASED,
+                )
+            )
 
     # Sort by standard order
     order = {item["item_number"]: i for i, item in enumerate(STANDARD_10K_ITEMS)}
@@ -359,10 +364,7 @@ async def _resolve_incorporations(
     filing_date: str,
 ) -> None:
     """Resolve incorporated-by-reference items by finding proxy statements."""
-    incorporated = [
-        item for item in items
-        if item.status == ItemStatus.INCORPORATED_BY_REFERENCE
-    ]
+    incorporated = [item for item in items if item.status == ItemStatus.INCORPORATED_BY_REFERENCE]
 
     if not incorporated:
         return
