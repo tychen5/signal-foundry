@@ -90,6 +90,10 @@ class ExecutionResult(BaseModel):
     cost_metadata: Optional[dict] = None
     latency_ms: float = 0.0
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # When LangSmith is configured, this URL deep-links to the trace tree
+    # in the LangSmith UI (filtered by our internal trace_id metadata).
+    # None when LangSmith env vars are absent.
+    langsmith_trace_url: Optional[str] = None
 
 
 class EvalCase(BaseModel):

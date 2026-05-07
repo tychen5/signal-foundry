@@ -24,6 +24,7 @@ from playwright.async_api import async_playwright
 
 from src.shared.cost_tracker import get_cost_tracker
 from src.shared.logger import generate_trace_id, get_logger
+from src.shared.tracing import attach_metadata, traced
 from src.task2_browser.executor import dismiss_popups, execute_action
 from src.task2_browser.healer import (
     diagnose_deterministic,
@@ -185,6 +186,7 @@ class BrowserAgent:
         # current viewport as an inline JPEG alongside the AOM text.
         self.use_vision = use_vision
 
+    @traced(name="task2_browser_agent_run", tags=["task2", "browser_agent"])
     async def run(
         self,
         task_description: str,
@@ -206,6 +208,15 @@ class BrowserAgent:
         """
         if trace_id is None:
             trace_id = generate_trace_id()
+
+        attach_metadata({
+            "trace_id": trace_id,
+            "task_description": task_description[:200],
+            "target_url": target_url or "",
+            "max_steps": max_steps,
+            "model_name": self.model_name or "default",
+            "use_vision": self.use_vision,
+        })
 
         start_time = time.time()
         result = AgentResult(

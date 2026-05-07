@@ -26,6 +26,16 @@ class SECExtractionRequest(BaseModel):
     filing_url: Optional[str] = Field(default=None, description="Direct URL to 10-K filing")
     skip_llm: bool = Field(default=False, description="Skip LLM refinement (rule-only mode)")
     skip_xbrl: bool = Field(default=False, description="Skip XBRL cross-validation")
+    use_vision: bool = Field(
+        default=False,
+        description=(
+            "If true AND model is vision-capable, the LLM boundary refiner "
+            "additionally receives a rendered PNG of the local context (±500 "
+            "chars rendered as HTML) when uncertainty is high. Helpful on "
+            "table-heavy / chart-heavy filings where text-only extraction "
+            "drops layout cues. No-op for text-only NVIDIA models."
+        ),
+    )
     model: ModelSelectionRequest = Field(default_factory=ModelSelectionRequest)
 
 
@@ -68,13 +78,16 @@ async def extract_10k(request: SECExtractionRequest):
             user_api_key=request.model.user_openrouter_key,
             skip_llm=request.skip_llm,
             skip_xbrl=request.skip_xbrl,
+            use_vision=request.use_vision,
             trace_id=trace_id,
         )
 
+        from src.shared.tracing import trace_url
         return ExecutionResult(
             status=ExecutionStatus.SUCCESS,
             task=TaskType.SEC_EXTRACTION,
             trace_id=trace_id,
+            langsmith_trace_url=trace_url(trace_id),
             result=result.model_dump(),
             cost_metadata={
                 "total_cost_usd": result.processing_metadata.total_cost_usd,

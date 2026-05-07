@@ -17,6 +17,7 @@ from typing import Optional
 
 from src.shared.cost_tracker import get_cost_tracker
 from src.shared.logger import generate_trace_id, get_logger
+from src.shared.tracing import attach_metadata, traced
 from src.task3_sec.fetcher import (
     fetch_filing_content,
     find_10k_filing,
@@ -46,6 +47,7 @@ logger = get_logger("pipeline")
 cost_tracker = get_cost_tracker()
 
 
+@traced(name="task3_extract_10k", tags=["task3", "sec_extraction"])
 async def extract_10k(
     cik: Optional[str] = None,
     accession_number: Optional[str] = None,
@@ -54,6 +56,7 @@ async def extract_10k(
     user_api_key: Optional[str] = None,
     skip_llm: bool = False,
     skip_xbrl: bool = False,
+    use_vision: bool = False,
     trace_id: Optional[str] = None,
 ) -> ExtractionResult:
     """
@@ -86,6 +89,16 @@ async def extract_10k(
         url=filing_url,
         trace_id=trace_id,
     )
+
+    # Attach metadata to LangSmith span (no-op if not enabled)
+    attach_metadata({
+        "trace_id": trace_id or "",
+        "cik": cik or "",
+        "accession_number": accession_number or "",
+        "model_name": model_name or "default",
+        "skip_llm": skip_llm,
+        "use_vision": use_vision,
+    })
 
     # ========== FETCH FILING ==========
     if filing_url:
@@ -154,6 +167,7 @@ async def extract_10k(
                 parse_result=parse_result,
                 model_name=model_name,
                 user_api_key=user_api_key,
+                use_vision=use_vision,
                 trace_id=trace_id,
             )
             stages_used.append("llm_refine")

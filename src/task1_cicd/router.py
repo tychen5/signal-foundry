@@ -79,6 +79,8 @@ async def run_skill(request: SkillRunRequest):
         # Skill-name mismatch is a client error — surface as 400 for clear HTTP semantics
         if result.status == ExecutionStatus.FAILED and result.failure_type == FailureType.SKILL_MISMATCH:
             raise HTTPException(status_code=400, detail=result.error or "Unknown skill")
+        from src.shared.tracing import trace_url
+        result.langsmith_trace_url = trace_url(trace_id)
         return result
     except HTTPException:
         raise

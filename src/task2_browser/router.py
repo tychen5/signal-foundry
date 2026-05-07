@@ -85,6 +85,7 @@ async def execute_browser_task(request: BrowserTaskRequest):
             trace_id=trace_id,
         )
 
+        from src.shared.tracing import trace_url
         return ExecutionResult(
             status=ExecutionStatus.SUCCESS
             if result.status == "success"
@@ -93,6 +94,7 @@ async def execute_browser_task(request: BrowserTaskRequest):
             else ExecutionStatus.FAILED,
             task=TaskType.BROWSER_AGENT,
             trace_id=trace_id,
+            langsmith_trace_url=trace_url(trace_id),
             result=result.model_dump(),
             cost_metadata={
                 "total_cost_usd": result.cost_usd,

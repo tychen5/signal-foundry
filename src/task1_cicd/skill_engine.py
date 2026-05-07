@@ -30,6 +30,7 @@ from typing import Any, Optional
 from src.shared.cost_tracker import get_cost_tracker
 from src.shared.logger import get_logger
 from src.shared.schemas import ExecutionResult, ExecutionStatus, FailureType, TaskType
+from src.shared.tracing import attach_metadata, traced
 from src.task1_cicd import github_client, skill_registry
 from src.task1_cicd.github_client import FastFailError
 from src.task1_cicd.sandbox import SandboxConfig, cleanup_temp_dir, detect_language, make_temp_dir
@@ -60,6 +61,7 @@ def _make_cache_key(
     return f"cicd:{CACHE_KEY_VERSION}:{owner}/{repo}:{branch}:{skill_name}:{commit_sha[:12]}:{dry_run}"
 
 
+@traced(name="task1_run_skill", tags=["task1", "cicd_skill"])
 async def run_skill(
     request: SkillRunRequest,
     trace_id: str,
@@ -67,6 +69,14 @@ async def run_skill(
     """
     Full skill execution pipeline with idempotency, caching, and cost tracking.
     """
+    attach_metadata({
+        "trace_id": trace_id,
+        "skill_name": request.skill_name,
+        "repo_url": request.repo_url,
+        "branch": request.branch,
+        "dry_run": request.dry_run,
+        "model_name": request.model.model_id if request.model else "default",
+    })
     start_time = time.monotonic()
     token = _get_github_token()
     temp_dir: Optional[str] = None
