@@ -135,6 +135,7 @@ async def decide_next_action(
     model_name: Optional[str] = None,
     user_api_key: Optional[str] = None,
     trace_id: str = "",
+    screenshot_b64: Optional[str] = None,
 ) -> BrowserAction:
     """
     Decide the next action given the current page state (reactive planning).
@@ -149,10 +150,16 @@ async def decide_next_action(
         model_name: LLM model
         user_api_key: User's API key
         trace_id: Trace ID
+        screenshot_b64: optional base64-encoded JPEG of current viewport.
+            When provided AND model is vision-capable, the actor sees the
+            rendered page so it can pick targets that AOM can't expose
+            (chart areas, image-only buttons, visual-only data).
 
     Returns:
         Next BrowserAction to execute
     """
+    from src.task2_browser.vision import is_vision_capable, make_multimodal_message
+
     llm = get_llm(
         model_name=model_name,
         user_openrouter_key=user_api_key,
@@ -173,12 +180,19 @@ async def decide_next_action(
         f"ERROR INDICATORS: {page_state.error_indicators}\n"
     )
 
+    use_vision = bool(screenshot_b64) and is_vision_capable(model_name)
+    user_msg = (
+        make_multimodal_message(context, screenshot_b64)
+        if use_vision
+        else HumanMessage(content=context)
+    )
+
     try:
         _t0 = time.time()
         response = await llm.ainvoke(
             [
                 SystemMessage(content=ACTOR_PROMPT),
-                HumanMessage(content=context),
+                user_msg,
             ]
         )
 

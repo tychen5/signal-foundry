@@ -108,11 +108,39 @@ async def refine_boundaries(
     rate_delay_s = float(os.environ.get("LLM_REFINER_DELAY_S", "1.5"))
     consecutive_429 = 0
 
+    # Vision support: only fires for vision-capable models AND only on the
+    # FIRST few boundaries (capped via T3_VISION_MAX env). Rendering each
+    # context to JPEG via headless Chromium adds ~1.5 s of latency per
+    # boundary, which would dominate runtime if we did it on all 15+
+    # uncertain boundaries.
+    vision_renders_left = 0
+    if use_vision:
+        try:
+            from src.task2_browser.vision import is_vision_capable
+            from src.task3_sec.vision import _vision_max_renders
+
+            if is_vision_capable(refine_model):
+                vision_renders_left = _vision_max_renders()
+                logger.info(
+                    "t3_vision_active",
+                    model=refine_model,
+                    max_renders=vision_renders_left,
+                )
+        except Exception:
+            vision_renders_left = 0
+
     for boundary in low_confidence:
         try:
             refined = await _refine_single_boundary(
-                text, boundary, llm, refine_model, trace_id
+                text,
+                boundary,
+                llm,
+                refine_model,
+                trace_id,
+                use_vision=vision_renders_left > 0,
             )
+            if vision_renders_left > 0:
+                vision_renders_left -= 1
             if refined:
                 # Replace the boundary in the list
                 for i, b in enumerate(refined_boundaries):
@@ -174,8 +202,16 @@ async def _refine_single_boundary(
     llm,
     model_name: str,
     trace_id: str,
+    use_vision: bool = False,
 ) -> Optional[ItemBoundary]:
-    """Refine a single boundary using LLM with ±500 char context."""
+    """Refine a single boundary using LLM with ±500 char context.
+
+    When `use_vision=True`, additionally render the context to a JPEG
+    via headless Chromium and attach as image_url. Helps when item
+    boundaries are signaled by typography (bold heading, ALL-CAPS,
+    indentation) more than by literal "Item N." prose — the visual
+    layout supplements the textual snippet.
+    """
     # Extract context window
     ctx_start = max(0, boundary.start_pos - 200)
     ctx_end = min(len(text), boundary.start_pos + 800)
@@ -183,9 +219,28 @@ async def _refine_single_boundary(
 
     start_time = time.time()
 
+    user_text = f"Text snippet (position {ctx_start} to {ctx_end}):\n---\n{context}\n---"
+
+    user_msg = HumanMessage(content=user_text)
+    if use_vision:
+        try:
+            from src.task2_browser.vision import make_multimodal_message
+            from src.task3_sec.vision import render_text_to_jpeg_b64
+
+            screenshot_b64 = await render_text_to_jpeg_b64(context)
+            if screenshot_b64:
+                user_msg = make_multimodal_message(user_text, screenshot_b64)
+                logger.info(
+                    "t3_vision_attached",
+                    item=boundary.item_number,
+                    bytes=len(screenshot_b64),
+                )
+        except Exception as e:
+            logger.warning("t3_vision_attach_failed", error=str(e)[:120])
+
     messages = [
         SystemMessage(content=BOUNDARY_REFINE_PROMPT),
-        HumanMessage(content=f"Text snippet (position {ctx_start} to {ctx_end}):\n---\n{context}\n---"),
+        user_msg,
     ]
 
     response = await llm.ainvoke(messages)

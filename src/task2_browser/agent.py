@@ -317,7 +317,9 @@ class BrowserAgent:
                         result.status = "success"
                         break
 
-                    # Decide next action
+                    # Decide next action — pass screenshot too so the actor
+                    # can see chart areas / image-only buttons / canvas-rendered
+                    # data that AOM doesn't expose
                     next_action = await decide_next_action(
                         task_description=task_description,
                         page_state=current_state,
@@ -325,6 +327,7 @@ class BrowserAgent:
                         model_name=self.model_name,
                         user_api_key=self.user_api_key,
                         trace_id=trace_id,
+                        screenshot_b64=screenshot_b64,
                     )
                     result.llm_calls += 1
 
