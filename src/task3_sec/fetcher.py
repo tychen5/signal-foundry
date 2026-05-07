@@ -331,13 +331,17 @@ async def find_10k_filing(
     cik_padded = normalize_cik(cik)
     cik_raw = cik_padded.lstrip("0") or "0"
 
+    # Primary filter: 10-K family. But if a specific accession is provided
+    # and isn't a 10-K, also try 20-F (foreign private issuer) and 10-KSB
+    # (older small-business form) — the API consumer is asking for THIS
+    # filing, not "the latest 10-K".
     filings_10k = [
         f for f in metadata["filings"]
-        if f["form"] in ("10-K", "10-K/A")
+        if f["form"] in ("10-K", "10-K/A", "20-F", "20-F/A", "10-KSB", "10-KSB/A")
     ]
 
     if not filings_10k:
-        raise ValueError(f"No 10-K filings found for CIK {cik}")
+        raise ValueError(f"No 10-K / 20-F filings found for CIK {cik}")
 
     # Find specific filing
     target = None

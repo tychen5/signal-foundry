@@ -250,5 +250,113 @@
     "difficulty": "normal",
     "tags": ["search", "alt_engine", "real_world", "extract"],
     "eval_dimensions": ["domain_diversity", "task_complexity_multi"]
+  },
+  {
+    "case_id": "t2_yahoo_tw_quote",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "前往 Yahoo 奇摩股市 https://tw.stock.yahoo.com/quote/2330 並擷取台積電 (2330) 的最新成交價、漲跌、與成交量",
+      "target_url": "https://tw.stock.yahoo.com/quote/2330"
+    },
+    "expected_behavior": "Taiwanese SPA finance site with live quotes for 2330 (TSMC). Validates Chinese-locale data extraction with anti-hallucination on numeric fields.",
+    "difficulty": "hard",
+    "tags": ["finance", "taiwan", "chinese", "live_quote", "spa", "real_world"],
+    "eval_dimensions": ["domain_diversity", "real_world_finance", "task_complexity_multi"]
+  },
+  {
+    "case_id": "t2_pchome_search",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "前往 PChome 24h 購物 https://24h.pchome.com.tw 搜尋 'iPhone 16 Pro'，回報前 3 個搜尋結果的商品名稱與價格",
+      "target_url": "https://24h.pchome.com.tw"
+    },
+    "expected_behavior": "Taiwanese e-commerce with Chinese product search. Validates: (1) Chinese keyword search, (2) NTD price extraction, (3) result-list iteration.",
+    "difficulty": "hard",
+    "tags": ["ecommerce", "taiwan", "chinese", "search", "extract", "real_world"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_multi"]
+  },
+  {
+    "case_id": "t2_mops_listed_company",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "前往公開資訊觀測站 (mops.twse.com.tw) 查詢台積電 (2330) 的最新月營收，回報營收金額與年增率",
+      "target_url": "https://mops.twse.com.tw/mops/web/index"
+    },
+    "expected_behavior": "Taiwan official financial disclosure portal (政府機關). Validates: (1) Chinese form filling with company code, (2) report navigation, (3) extracting tabular monthly-revenue data.",
+    "difficulty": "hard",
+    "tags": ["government", "finance", "taiwan", "chinese", "form", "real_world"],
+    "eval_dimensions": ["domain_diversity", "real_world_finance", "task_complexity_multi"]
+  },
+  {
+    "case_id": "t2_cwa_weather",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "前往中央氣象署 https://www.cwa.gov.tw 查詢台北市的目前天氣狀況、氣溫與降雨機率",
+      "target_url": "https://www.cwa.gov.tw"
+    },
+    "expected_behavior": "Taiwan government weather portal. Validates Chinese-locale information extraction from a non-finance domain.",
+    "difficulty": "normal",
+    "tags": ["government", "weather", "taiwan", "chinese", "extract", "real_world"],
+    "eval_dimensions": ["domain_diversity"]
+  },
+  {
+    "case_id": "t2_setn_news_headline",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "前往 SETN 三立新聞網 https://www.setn.com 並擷取首頁最上方的頭條新聞標題",
+      "target_url": "https://www.setn.com"
+    },
+    "expected_behavior": "Taiwanese news site, dynamic homepage. Validates: (1) Chinese news extraction, (2) handling popups / ad overlays, (3) timestamp-aware (the headline must be from 'today').",
+    "difficulty": "normal",
+    "tags": ["news", "taiwan", "chinese", "extract", "popup_likely", "real_world"],
+    "eval_dimensions": ["domain_diversity", "edge_case_popup"]
+  },
+  {
+    "case_id": "t2_amazon_product_search",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.amazon.com and search for 'mechanical keyboard'. Return the title and price of the first product result.",
+      "target_url": "https://www.amazon.com"
+    },
+    "expected_behavior": "US e-commerce giant with aggressive anti-bot protection. Likely results: either successful extraction OR not_accessible due to CAPTCHA. Both are correct outcomes.",
+    "difficulty": "hard",
+    "tags": ["ecommerce", "search", "anti_bot_likely", "real_world"],
+    "eval_dimensions": ["domain_diversity", "edge_case_dynamic_loading"]
+  },
+  {
+    "case_id": "t2_ycombinator_jobs",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.ycombinator.com/jobs and report the company name and role of the first job listing.",
+      "target_url": "https://www.ycombinator.com/jobs"
+    },
+    "expected_behavior": "Y Combinator jobs board, dynamic listing. Validates extracting structured data from a startup-style listing card.",
+    "difficulty": "normal",
+    "tags": ["jobs", "extract", "spa", "real_world"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_single"]
+  },
+  {
+    "case_id": "t2_iframe_embed",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.w3schools.com/html/html_iframe.asp and report the URL displayed in the embedded iframe example",
+      "target_url": "https://www.w3schools.com/html/html_iframe.asp"
+    },
+    "expected_behavior": "Tests iframe content extraction. The iframe-targeted URL should be retrievable from the page even if the agent can't introspect inside the iframe.",
+    "difficulty": "edge_case",
+    "tags": ["iframe", "edge_case", "extract"],
+    "eval_dimensions": ["edge_case_iframe"]
+  },
+  {
+    "case_id": "t2_shadow_dom_test",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.htmlquick.com/reference/tags/template.html and report the page's main heading text",
+      "target_url": "https://www.htmlquick.com/reference/tags/template.html"
+    },
+    "expected_behavior": "Static HTML page; baseline that the simple-page extraction path is fast and reliable across small / less-popular sites.",
+    "difficulty": "easy",
+    "tags": ["static", "extract", "edge_case_uncommon_site"],
+    "eval_dimensions": ["domain_diversity"]
   }
 ]

@@ -253,5 +253,85 @@
       "min_items_extracted": 17,
       "required_items": ["1", "1A", "3", "7", "8", "15"]
     }
+  },
+  {
+    "case_id": "t3_tsmc_20f_2026_foreign_issuer",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001046179",
+      "accession_number": "0001628280-26-025362"
+    },
+    "expected_behavior": "TSMC files 20-F as a foreign private issuer (NOT 10-K). The 20-F has DIFFERENT item structure (see SEC Form 20-F instructions: e.g. Items 3-19 cover risk, capitalization, ops, dividends, regulation, etc.). The pipeline gracefully extracts what it can and marks items absent in 20-F as not_found — verifying the system doesn't crash on cross-form filings.",
+    "difficulty": "edge_case",
+    "tags": ["foreign_private_issuer", "20_f", "tsmc", "taiwan", "different_form"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001046179.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1046179/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 5,
+      "allow_missing_recent_items": ["1A", "1B", "1C", "9C", "16", "5", "6", "13", "14"]
+    }
+  },
+  {
+    "case_id": "t3_toyota_20f_2025_foreign_issuer",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001094517",
+      "accession_number": "0001193125-25-142326"
+    },
+    "expected_behavior": "Toyota 20-F. Tests cross-form behavior on a Japanese conglomerate; filing layout is materially different from US 10-Ks (different item schema, likely longer than typical mega-cap 10-K).",
+    "difficulty": "edge_case",
+    "tags": ["foreign_private_issuer", "20_f", "japan", "auto", "conglomerate"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001094517.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1094517/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 5,
+      "allow_missing_recent_items": ["1A", "1B", "1C", "9C", "16", "5", "6", "13", "14"]
+    }
+  },
+  {
+    "case_id": "t3_tesla_2025_amendment",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001318605",
+      "accession_number": "0001104659-25-042659"
+    },
+    "expected_behavior": "Tesla 10-K/A 2025 — an AMENDMENT, not a full 10-K. Amendments typically contain only the items being amended (often Part III items or specific corrections). The pipeline correctly extracts only the present items and marks the rest as not_found. Validates that the system handles partial-content amendments without crashing or hallucinating absent content.",
+    "difficulty": "edge_case",
+    "tags": ["10_k_a", "amendment", "partial_content", "tesla"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001318605.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1318605/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 4,
+      "allow_missing_recent_items": ["1", "1A", "1B", "1C", "2", "3", "4", "5", "6", "7", "7A", "8", "9", "9A", "9B", "9C", "11", "12", "13", "14", "15", "16"]
+    }
+  },
+  {
+    "case_id": "t3_costco_2016_amendment",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000909832",
+      "accession_number": "0000909832-16-000034"
+    },
+    "expected_behavior": "Costco 10-K/A from 2016. Older amendment with even more selective content. Validates the system's robustness to amendments across years and filing eras (pre-1C cybersecurity rule).",
+    "difficulty": "edge_case",
+    "tags": ["10_k_a", "amendment", "costco", "older_format", "pre_1c"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000909832.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/909832/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 1,
+      "allow_missing_recent_items": ["1", "1A", "1B", "1C", "2", "3", "4", "5", "6", "7", "7A", "8", "9", "9A", "9B", "9C", "10", "11", "12", "13", "14", "15", "16"]
+    }
   }
 ]

@@ -303,36 +303,62 @@ async def _execute_fill(page: Page, action: BrowserAction) -> tuple[bool, Option
 
 
 async def _execute_select(page: Page, action: BrowserAction) -> tuple[bool, Optional[LocatorStrategy], Optional[str]]:
-    """Select an option from a dropdown/radio/checkbox."""
+    """Select an option from a dropdown/radio/checkbox.
+
+    The agent's `select` action covers three native HTML controls that all
+    behave differently:
+      1. <select><option> dropdown — needs select_option(label=...)
+      2. <input type=radio> — needs check() on the labelled radio
+      3. <input type=checkbox> — needs check() on the labelled checkbox
+    The fix: detect which one is present and call the right method, rather
+    than blindly calling select_option (which fails on radio/checkbox).
+    """
     target = action.target_description
     value = action.value
 
-    # Try select dropdown
+    # Strategy A: True <select> dropdown via label or role
     try:
-        locator = page.get_by_label(target, exact=False)
+        locator = page.get_by_role("combobox", name=target, exact=False)
         if await locator.count() > 0:
             await locator.first.select_option(label=value, timeout=_DEFAULT_TIMEOUT)
-            return True, LocatorStrategy.SEMANTIC_DOM, None
+            return True, LocatorStrategy.ACCESSIBILITY, None
     except Exception:
         pass
 
-    # Try clicking the option text directly (for custom dropdowns, radio buttons)
+    # Strategy B: Radio button by visible value (the most common form-fill pattern)
+    for role in ("radio", "checkbox"):
+        try:
+            locator = page.get_by_role(role, name=value, exact=False)
+            if await locator.count() > 0:
+                await locator.first.check(timeout=_DEFAULT_TIMEOUT)
+                return True, LocatorStrategy.ACCESSIBILITY, None
+        except Exception:
+            pass
+
+    # Strategy C: Label-based selection (handles `<label>X<input></label>`)
+    try:
+        locator = page.get_by_label(value, exact=False)
+        if await locator.count() > 0:
+            try:
+                await locator.first.check(timeout=_DEFAULT_TIMEOUT)
+                return True, LocatorStrategy.SEMANTIC_DOM, None
+            except Exception:
+                # If check() fails (e.g., it's actually a select), try select_option
+                await locator.first.select_option(label=value, timeout=_DEFAULT_TIMEOUT)
+                return True, LocatorStrategy.SEMANTIC_DOM, None
+    except Exception:
+        pass
+
+    # Strategy D: Click the option text directly (custom dropdowns)
     try:
         locator = page.get_by_text(value, exact=False)
         if await locator.count() > 0:
             await locator.first.click(timeout=_DEFAULT_TIMEOUT)
             return True, LocatorStrategy.TEXT_CONTENT, None
-    except Exception:
-        pass
-
-    # Try radio/checkbox with label
-    try:
-        locator = page.get_by_label(value, exact=False)
-        if await locator.count() > 0:
-            await locator.first.check(timeout=_DEFAULT_TIMEOUT)
-            return True, LocatorStrategy.SEMANTIC_DOM, None
     except Exception as e:
         return False, None, f"Could not select '{value}': {str(e)}"
+
+    return False, None, f"No locator strategy found for select '{target}' = '{value}'"
 
 
 async def _execute_scroll(page: Page, action: BrowserAction) -> tuple[bool, Optional[LocatorStrategy], Optional[str]]:
