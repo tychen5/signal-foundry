@@ -2,11 +2,12 @@
 
 > Evaluation-first AI systems: harness engineering for CI/CD Skills, browser automation, and SEC 10-K extraction.
 
-[![Tests](https://img.shields.io/badge/tests-193%20passing%20%2B%205%20live-22c55e)](tests/) [![Tasks](https://img.shields.io/badge/tasks-3%20complete-3b82f6)](#) [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt) [![Deploy](https://img.shields.io/badge/deploy-Zeabur-9333ea)](https://signal-foundry.zeabur.app)
+[![Tests](https://img.shields.io/badge/tests-offline%20%2B%20opt--in%20live-22c55e)](tests/) [![Tasks](https://img.shields.io/badge/tasks-3%20complete-3b82f6)](#) [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt) [![Deploy](https://img.shields.io/badge/deploy-Zeabur-9333ea)](https://signal-foundry.zeabur.app)
 
 **Live demo:** [`https://signal-foundry.zeabur.app`](https://signal-foundry.zeabur.app) (Zeabur, 2 vCPU / 4 GB / 50 GB SSD dedicated)
 
 > Routes: `/` dashboard, `/task1` CI/CD Skills, `/task2` Browser Agent, `/task3` SEC 10-K. JSON APIs under `/api/v1/{skills,browser,sec}/*`. Health at `/health`, live cost ledger at `/metrics`.
+> Browser visits to `/health`, `/metrics`, and `/api/v1/models` render reviewer-friendly HTML dashboards; API clients still receive JSON.
 
 ---
 
@@ -72,15 +73,19 @@ cp .env.example .env  # set OPENROUTER_API_KEY, NVIDIA_API_KEY, GITHUB_TOKEN
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8080
 
 # Unit tests (offline, no API keys needed)
-pytest tests/ -v               # 193 pass
+pytest tests/ -v
 
 # Live LLM integration tests (opt-in, hits real NVIDIA + OpenRouter)
 RUN_LLM_INTEGRATION=1 pytest tests/test_llm_integration.py -v   # 5 pass
 
+# Live eval regression tests (opt-in, hits real websites / SEC EDGAR)
+RUN_LIVE_EVALS=1 pytest tests/test_live_evals.py -v
+
 # Run evals (each writes JSON + Markdown report to evals/<task>/results/)
 python -m evals.task1.run_eval                # 5 cases, ~30s, ~$0.007
-python -m evals.task3.run_eval --skip-xbrl    # 8 SEC filings, ~16s, $0
-python -m evals.task2.run_eval                # 17 cases (needs Playwright + LLM)
+python -m evals.task3.run_eval --skip-xbrl    # 27 SEC filings, ~$0 rule path
+python -m evals.task3.run_eval --allow-llm --vision --force-llm --timeout 300
+python -m evals.task2.run_eval --vision --timeout 120   # 38-case set, Playwright + LLM
 ```
 
 **Routes (also live at `https://signal-foundry.zeabur.app/...`):**
@@ -166,6 +171,7 @@ Request body:
   "task_description": "Go to https://arxiv.org/abs/2509.13753 and report the paper's title and the first two authors",
   "target_url": "https://arxiv.org/abs/2509.13753",
   "max_steps": 10,
+  "use_vision": true,
   "model": {
     "model_id": "google/gemini-3.1-pro-preview",
     "user_openrouter_key": "sk-or-v1-..."
@@ -200,6 +206,8 @@ Response (success):
 - `unverified` — answer fields contain numbers that don't appear on observed pages (likely hallucination)
 - `failed` — uncaught exception (rare; system catches most error classes)
 
+`use_vision=true` attaches bounded viewport JPEG history to the actor and verifier, but only for the three OpenRouter vision-language models (`google/gemini-3.1-pro-preview`, `anthropic/claude-opus-4.7`, `openai/gpt-5.5`). NVIDIA models accept the flag and fall back to text-only AOM context.
+
 ### POST `/api/v1/sec/extract` — Task 3: SEC 10-K item-level extraction
 
 Request body (CIK + accession):
@@ -209,6 +217,8 @@ Request body (CIK + accession):
   "accession_number": "0000320193-23-000106",
   "skip_llm": false,
   "skip_xbrl": false,
+  "force_llm": false,
+  "use_vision": false,
   "model": {
     "model_id": "moonshotai/kimi-k2.6"
   }
@@ -221,6 +231,8 @@ Or directly by URL:
   "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm"
 }
 ```
+
+`use_vision=true` is only consulted if Stage 2 LLM boundary refinement actually runs. High-confidence modern HTML filings stay rule-only, so the flag has no cost or quality effect on the normal path. For reviewer demos that need to visibly compare text-only vs multimodal boundary refinement, set `force_llm=true` with an OpenRouter vision model.
 
 Response (success):
 ```json
@@ -464,29 +476,28 @@ Source: [`evals/task1/results/task1_eval_20260506T105938Z.md`](evals/task1/resul
 
 All five deterministic checks (`no_crash`, `has_result`, `correct_skill`, `dry_run_no_tag`, `has_summary`) pass at 100%. Cache-hit rate on a repeat run jumps to 100% (commit SHA didn't change), driving cost to **$0**.
 
-### Task 3 — 8/8 pass (100%) against real SEC filings, $0 LLM cost
+### Task 3 — latest committed sweep: 18/18 pass; current eval set: 27 filings
 
-Source: [`evals/task3/results/task3_eval_20260506T060654Z.md`](evals/task3/results/task3_eval_20260506T060654Z.md)
+Source: [`evals/task3/results/task3_eval_20260507T024548Z.md`](evals/task3/results/task3_eval_20260507T024548Z.md)
 
 | Metric | Value |
 |--------|-------|
-| Cases | 8 |
+| Cases in committed run | 18 |
+| Cases now in eval set | 27 |
 | Success rate | **100.0%** |
-| Avg latency | 1 891 ms |
+| Avg latency | 2 434 ms |
 | Total cost | **$0.00** (rule-only path) |
 
-| Case | Filing | Items extracted | Status |
-|------|--------|-----------------|--------|
-| `t3_apple_2023` | Apple 10-K, FY2023 | 23 | ✅ All required + Part III incorporated_by_reference detected |
-| `t3_microsoft_2023` | Microsoft 10-K, FY2023 (June fiscal-end) | 22 | ✅ Pre-cybersecurity-rule, 1C correctly absent |
-| `t3_jpmorgan_2025` | JPMorgan 10-K, FY2025 | 22 | ✅ Item 16 (optional) absent |
-| `t3_exxon_2023` | ExxonMobil 10-K, FY2023 | 22 | ✅ Item 6 (retired post-2021) absent |
-| `t3_tesla_2023` | Tesla 10-K, FY2023 | 23 | ✅ False-positive guard: Item 1 stays `extracted` |
-| `t3_small_company_2024` | Smaller CIK 1411579 | 23 | ✅ Format variation handled |
-| `t3_apple_2005_old_format` | Apple 10-K, FY2005 (pre-XBRL) | 18 | ✅ Items 1A/1B/1C/9C/16 correctly absent (didn't exist yet) |
-| `t3_pfizer_2023_healthcare` | Pfizer 10-K, FY2023 | 23 | ✅ Required + industry-specific |
+| Coverage slice | Representative filings | What it proves |
+|---|---|---|
+| Modern mega-cap 10-K | Apple, Microsoft, JPMorgan, Exxon, Tesla | Standard HTML + optional-item policy |
+| Older / legacy formats | Apple 2005, Costco 2016 10-K/A | Pre-cybersecurity-rule and amendment behavior |
+| Industry spread | Pfizer, Boeing, Berkshire, GameStop, Hertz | Healthcare, aerospace, insurance, retail, post-bankruptcy accounting |
+| Cross-form edge cases | TSMC 20-F, Toyota 20-F | Foreign private issuer forms with a different item schema |
+| Proxy-heavy incorporation | IBM 2025 | Part III proxy references detected without body-word false positives |
+| New LLM/vision-trigger candidates | American Express 1994 plain text, asset-backed trust N/A filing, Kingsoft Cloud 20-F duplicate heading, Red Metal 20-F reserved item | Old EDGAR text, status classification, ToC-vs-heading ambiguity, small-cap foreign issuer formatting |
 
-These are real downloads from `sec.gov/Archives/edgar/data/...`, parsed end-to-end (raw → normalized → rule-segmented → validated → cross-checked). The `evals/task3/results/` folder is gitignored only for binary trace dumps; canonical reports stay committed.
+These are real downloads from `sec.gov/Archives/edgar/data/...`, parsed end-to-end (raw → normalized → rule-segmented → validated → optional XBRL cross-check). The latest run intentionally includes 20-F and 10-K/A cases; these are not perfect 10-K analogues, and the pipeline marks absent 10-K items as `not_found` rather than hallucinating content.
 
 ### Task 2 — Live eval (3 runs across 3 different models)
 
@@ -512,22 +523,28 @@ These are real downloads from `sec.gov/Archives/edgar/data/...`, parsed end-to-e
 
 Reports committed to `evals/task2/results/`.
 
+**Latest expanded sweep** — `google/gemini-3.1-pro-preview`, 30-case live run:
+- **20/30 genuine success (66%)**, 9/30 correct `not_found`, 1/30 partial, 0 crashes
+- Avg latency 45.0 s, total cost **$0.2186**, avg self-corrections 0.57
+- Source: [`evals/task2/results/task2_eval_20260507T023943Z.md`](evals/task2/results/task2_eval_20260507T023943Z.md)
+
 **What the silent-failure / 429 behavior demonstrates:** The 9-class root cause taxonomy (`v2_healer.txt` extends to 13 classes adding `rate_limit_429`, `login_wall`, `paywall`, `frame_detached`) and the post-hoc `_guard_against_silent_success` numeric grounding check converge to the same outcome — when the agent cannot prove an answer is real, it does NOT mark the task complete. This is the spec's highest-priority requirement.
 
 **Mitigation**: `run_eval.py` now supports `--delay N` (default 5 s) to pace requests within NVIDIA NIM's free-tier rate limit. For higher-quality runs, pass `--model anthropic/claude-opus-4.7` (OpenRouter) — the live UI lets reviewers paste their own key.
 
-### Task 2 — eval set covers 17 real-world cases across 4 difficulty dimensions
+### Task 2 — eval set covers 38 real-world cases across 5 difficulty dimensions
 
-Source: `evals/task2/eval_set.json`. Live results: `evals/task2/results/` (after running `python -m evals.task2.run_eval`). ~$0.30 budget per full sweep.
+Source: `evals/task2/eval_set.json`. Live results: `evals/task2/results/` (after running `python -m evals.task2.run_eval`). The latest committed live sweep covers 30 cases; the current set adds 8 vision-focused cases for OpenRouter `use_vision` comparison. Budget: roughly $0.25-$0.45 for a Gemini sweep, higher for Claude/GPT.
 
 **Eval design rationale** — four orthogonal difficulty axes:
 
 | Axis | What it stress-tests | Example cases |
 |------|----------------------|---------------|
-| Domain diversity | Generalisation across sites the agent hasn't seen | Wikipedia, Google, Hacker News, GitHub, PyPI, Reuters, SEC EDGAR, MDN |
+| Domain diversity | Generalisation across sites the agent hasn't seen | Wikipedia, Google/Bing, Hacker News, GitHub, PyPI, Reuters, SEC EDGAR, MDN |
 | Task complexity | Single-step vs multi-step vs table extraction | Title extraction (easy) → Tokyo vs NYC population comparison (multi-step) → GDP table (structured) |
 | Failure injection | Graceful handling of non-success | 404 page → must report error content, NOT invent content |
-| Real-world finance (highest value) | Finance-domain knowledge + Chinese UI + live data | wantgoo.com TX support/resistance, TWSE 個股資料, cnyes 加權指數, Yahoo AAPL options |
+| Real-world finance (highest value) | Finance-domain knowledge + Chinese UI + live data | wantgoo.com TX support/resistance, TWSE/MOPS, cnyes 加權指數, Yahoo TW 2330, Yahoo AAPL options |
+| Visual / layout-heavy | When AOM text is insufficient | TradingView chart canvas, Wikipedia image caption, Nobel table layout, color indicators, D3 SVG, OpenStreetMap tiles, CAPTCHA iframe |
 
 **Negative / silent-failure test (hardest design requirement):**
 `t2_anuse_silent_failure_guard` sends the agent to example.com and asks for a contact email for "European trademark disputes" — information that does not exist. A passing result is `status=not_found` with an explicit statement. Any hallucinated email is a hard fail. This directly tests the spec's highest-priority requirement.
@@ -545,6 +562,44 @@ All 4 must pass for a case to be `passed=True`. The scorer also records `self_co
 - `t2_cnyes_taiex_quote` — cnyes.com 加權指數 live quote (paywall/popup handling required)
 - `t2_yahoo_finance_aapl_options` — heavy SPA, extract ATM call bid/ask/IV from dynamically loaded options chain
 - `t2_anuse_silent_failure_guard` — **negative test**: hallucination guard
+- `t2_vision_chart_trend` — TradingView canvas chart, intended to show the difference between AOM-only and `use_vision=true`
+- `t2_vision_image_caption` / `t2_vision_table_layout` — layout/image/table cases where vision should improve confidence even if text-only can sometimes answer
+- `t2_vision_map_location` / `t2_vision_d3_chart` / `t2_vision_captcha_detect` — map tiles, SVG chart perception, and honest CAPTCHA limitation reporting
+
+### OpenRouter vision on/off benchmark
+
+The three OpenRouter models that support image input are `google/gemini-3.1-pro-preview`, `anthropic/claude-opus-4.7`, and `openai/gpt-5.5`. The repo now has a dedicated live runner for the requested differential benchmark:
+
+```bash
+python -m evals.run_vision_benchmark --task both --force-llm-task3 --timeout 180
+```
+
+Default benchmark slice:
+
+| Task | Cases | Vision should help with |
+|---|---|---|
+| Task 2 | TradingView chart trend, Wikipedia image caption, Nobel table layout | Canvas/image/table cues that are weak or absent in AOM text |
+| Task 3 | Apple 2005 legacy, TSMC 20-F, IBM proxy-heavy | Typography/layout around uncertain SEC item boundaries; `--force-llm-task3` makes Stage 2 fire for controlled vision on/off comparison |
+
+Committed live slice: [`evals/vision_results/vision_benchmark_20260507T072543Z.md`](evals/vision_results/vision_benchmark_20260507T072543Z.md). This is a compact 1-case-per-task slice, not the full 3-case default sweep. Status/step/cost metrics are automatic; answer quality should still be manually spot-checked from the JSON preview for visual extraction cases.
+
+| Task | Model | Vision off | Vision on | Delta |
+|---|---|---:|---:|---|
+| Task 2 Mona Lisa image caption | Gemini 3.1 Pro | success, 3 steps, $0.003805, 21.8 s | success, 3 steps, $0.003800, 21.1 s | No material difference; text/AOM already sufficient |
+| Task 2 Mona Lisa image caption | Claude Opus 4.7 | partial, 15 steps, $0.782115, 118.9 s | success, 3 steps, $0.048690, 27.5 s | Vision prevented a costly max-step loop |
+| Task 2 Mona Lisa image caption | GPT-5.5 | success, 5 steps, $0.067510, 93.4 s | success, 4 steps, $0.035255, 49.8 s | Vision roughly halved cost and latency |
+| Task 3 Apple 2005 legacy filing | Gemini / Claude / GPT | 18/23 items, $0, 0 LLM calls | 18/23 items, $0, 0 LLM calls | No effect because Stage 2 did not fire; rule parser confidence was high |
+
+Interpretation: Task 2 is where vision clearly pays off when visual context prevents loops. Task 3 preserves cost discipline by default: `use_vision=true` remains a no-op on high-confidence filings unless `force_llm=true` / `--force-llm-task3` is used for a controlled benchmark.
+
+### Vision engineering decisions
+
+| Area | Implementation | Benefit |
+|---|---|---|
+| Task 2 screenshot history | `use_vision=true` sends a bounded chronological screenshot history to actor + verifier; visual/sparse-AOM pages use capped full-page screenshots | The model can see state changes, modals, maps/charts, and visual-only data instead of relying only on AOM text |
+| Task 2 focused callouts | `annotate_screenshot_with_markers()` can draw numbered bounding boxes for future element-level vision evals | Makes ambiguous UI targets auditable in screenshots without changing the LLM transport schema |
+| Task 3 multi-snapshot context | Stage 2 can attach header-zone, local-context, and neighbor/comparison snapshots around each boundary | Helps distinguish real item headings from ToC/prose mentions and classify `incorporated_by_reference`, `not_applicable`, and `reserved` statuses |
+| Cost guard | Task 3 vision only renders for vision-capable OpenRouter models and is capped by `T3_VISION_MAX`; forced benchmarks are capped by `T3_FORCE_LLM_MAX` | Reviewer demos can show multimodal gains without accidentally turning every filing into a high-cost full-LLM extraction |
 
 ### LLM provider live integration — 5/5 pass
 
@@ -629,7 +684,7 @@ We document what *doesn't* work — not just what does. This is what the held-ou
 ### Task 3 — SEC 10-K Extraction
 | Failure Mode | Frequency | Root Cause | Mitigation |
 |---|---|---|---|
-| Filings with no heading-structured HTML (pre-1996 plain text) | Rare | Rule parser relies on heading markers; plain text has none | LLM boundary refinement fires; coverage drops but does not crash |
+| Earliest EDGAR / plain-text filings | Rare | SEC says EDGAR data starts in 1994/1995, so true pre-1994 electronic filings are generally not available; early complete-submission text can be exhibit-heavy | Eval set includes American Express 1994 complete submission; LLM boundary refinement + vision snapshots can be forced for benchmark comparison |
 | `incorporated_by_reference` without finding the Proxy (DEF 14A) | Moderate | Proxy may not be in the same fiscal year's submissions | Status stays `incorporated_by_reference`; content_text contains the reference text |
 | Very large filings (> 10 MB normalized) hit memory pressure | Rare | SEC's 10-K can embed Base64 exhibits inline | `SEC_MAX_DOWNLOAD_MB` cap (default 50 MB); truncation logged |
 | XBRL cross-validation triggers false `needs_review` | Moderate | Older XBRL tags differ from current taxonomy | Only flags discrepancies > 5%; absolute-value mismatch, not percentage drift |
@@ -691,10 +746,29 @@ I treat the `prompts/` directory as a versioned ledger and the AI as a fast-but-
 | security-scan | $0 match | ~$0.001 (summary) | 5–15 s: file walk + bandit |
 | build-and-release | $0 match | ~$0.002 (summary) | 2–5 s: API only (dry-run) |
 | browser execute | N/A | $0.01–0.05 | 20–60 s: Playwright |
+| browser execute + vision | N/A | Provider-dependent | Adds bounded JPEG history to OpenRouter VLM calls; measure with `evals.run_vision_benchmark` |
 | SEC extraction (modern HTML) | **$0** rule-only | ~$0.01 | 1–2 s rule path; LLM only for low-confidence boundaries |
 | SEC extraction (legacy / messy) | $0 attempt | $0.02–0.05 | 5–30 s |
+| SEC boundary refine + vision | N/A | Provider-dependent | Only when Stage 2 fires; no effect on high-confidence rule-only filings |
 
 Per-task cost / latency / token counts are exposed live at `/metrics`.
+
+---
+
+## Latest Trace-Driven UX & Harness Tweaks
+
+This pass traced the FastAPI routes, UI templates, schemas, eval artifacts, and README against the reviewer flow. Changes made:
+
+| Area | Tweak | Why it matters for demo/review |
+|---|---|---|
+| System pages | `/health`, `/metrics`, `/api/v1/models` now render HTML dashboards for browser navigation while preserving JSON for API clients | Reviewers can inspect readiness, spend, and model routing without reading raw JSON |
+| Dashboard | Added a reviewer launchpad and shared in-session model/API-key controls | Faster video flow across Task 1/2/3 pages |
+| Task 2 UI | Fixed execution trace rendering from `[object Object]` to action + target + verification confidence; examples now prefill target URLs | Makes the PEOH loop visually auditable instead of hiding the agent's decisions |
+| Task 2 harness | Result metadata records `model_name`, `use_vision_requested`, and `use_vision_active`; v3 actor/verifier prompts consume multi-screenshot history | Makes OpenRouter vision experiments reproducible and shows whether vision really activated |
+| Task 2 tests | Playwright-heavy screenshot helpers run under `asyncio.wait_for`; opt-in live eval test executes a real BrowserAgent case | Confirms screenshot code paths do not hang and eval tests are not just render smoke |
+| Task 3 UI | Direct filing URL now sends `filing_url` (schema-correct), added `use_vision` + `force_llm` toggles, stage diagram, IBM/TSMC edge-case chips | Reviewers can exercise URL-based filings, 20-F, proxy-heavy cases, and forced multimodal refinement directly |
+| Task 3 evals | Added early EDGAR plain text, SPV not-applicable, duplicate-heading 20-F, and small-cap reserved-item cases | Expands LLM/vision-trigger candidates beyond clean rule-only modern 10-Ks |
+| Docs/evals | README updated from old 17/8-case claims to current 38-case Task 2 set and 27-case Task 3 set | Prevents stale documentation from understating the work |
 
 ---
 
@@ -724,7 +798,7 @@ signal-foundry/
 ├── evals/                   # Eval sets + committed Markdown / JSON reports
 ├── prompts/                 # Versioned prompt records per task
 ├── templates/               # Jinja2 HTML for /, /task1, /task2, /task3
-├── tests/                   # 193 unit + 5 opt-in live integration tests
+├── tests/                   # Offline tests + opt-in live LLM/eval tests
 ├── notes/                   # Architecture spec, progress notes, thoughts draft
 ├── CLAUDE.md                # Project brain (loaded by Claude Code each session)
 ├── AGENTS.md                # Per-task engineering notes + harness highlights

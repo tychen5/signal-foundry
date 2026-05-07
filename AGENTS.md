@@ -1,11 +1,15 @@
 # AGENTS.md — Agent Instructions for Signal-Foundry
 
+> Universal, tool-agnostic project instructions for any AI coding agent.
+> For Claude Code-specific configuration, see `CLAUDE.md`.
+
 ## Project Overview
 
 Signal-Foundry is a monorepo containing three AI systems demonstrating evaluation-first harness engineering:
 1. **Task 1 (CI/CD Skills)**: GitHub CI/CD workflows packaged as Claude Skills
 2. **Task 2 (Browser Agent)**: Self-healing browser automation with natural language input
 3. **Task 3 (SEC 10-K)**: Hybrid rule+LLM pipeline for structured extraction from SEC filings
+
 細節目標與詳細需求說明可以參考 @notes/_briefs/_TaskDescription.md
 實作時的一些細節與參考注意事項可以參閱 @notes/thoughts/_ThoughtsDraft.md
 
@@ -35,7 +39,7 @@ signal-foundry/
 └── notes/                  # Design docs & progress tracking
 ```
 
-## Build, Test, and Lint Commands
+## Build, Test, and Lint
 
 ```bash
 # Install
@@ -45,15 +49,26 @@ playwright install chromium
 # Run dev server
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8080
 
-# Test
+# Unit tests (offline, no API keys)
 pytest tests/ -v --cov=src --cov-report=term-missing
+
+# Live LLM integration tests (opt-in)
+RUN_LLM_INTEGRATION=1 pytest tests/test_llm_integration.py -v
+RUN_LIVE_EVALS=1 pytest tests/test_live_evals.py -v
+
+# Playwright-heavy tests (opt-in, needs Chromium)
+timeout 60s pytest tests/ -v -k "playwright or vision"
 
 # Lint & Format
 ruff check src/ tests/
 ruff format src/ tests/
 
-# Run evaluations
-python -m evals.run_all
+# Evals (each writes JSON + Markdown to evals/<task>/results/)
+python -m evals.task1.run_eval
+python -m evals.task2.run_eval --delay 5 --timeout 120
+python -m evals.task3.run_eval --skip-xbrl --timeout 300
+python -m evals.task3.run_eval --allow-llm --vision --force-llm --timeout 300
+python -m evals.run_vision_benchmark --task both --force-llm-task3 --timeout 180
 ```
 
 ## Engineering Conventions
@@ -65,6 +80,7 @@ python -m evals.run_all
 5. **Error handling** — catch specific exceptions, log context, return structured error responses
 6. **Conventional Commits**: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `perf:`, `chore:`
 7. **Docstrings** required on all public functions and classes
+8. **Chat content coercion** — always route `.content` through `coerce_message_text` (thinking-mode models return block lists)
 
 ## Security Constraints
 
@@ -79,7 +95,9 @@ python -m evals.run_all
 - Unit tests for all utility functions and parsers
 - Integration tests for API endpoints (use FastAPI TestClient)
 - Eval sets for each task with edge cases documented
+- Live evals hit real LLM + real sites — not just render smoke tests
 - Test names follow: `test_<function>_<scenario>_<expected_outcome>`
+- Playwright-heavy tests must use `asyncio.wait_for()` timeout guards
 
 ## Verification Checklist
 
@@ -90,10 +108,6 @@ Before declaring work complete:
 4. Cost tracker reports sane values
 5. Eval set runs produce expected metrics
 6. No secrets in committed code
-
-## ExecPlan Reference
-
-When tackling multi-step work, follow the plan in `PLANS.md`. Create a step-by-step execution plan, get approval, then execute incrementally with verification at each step.
 
 ---
 
@@ -135,17 +149,25 @@ Anything else inside Task 1 is deterministic.
 - Locator strategy is AOM-first (accessibility tree → semantic DOM → CSS/text), because the accessibility tree survives UI redesigns far better than CSS selectors.
 - Healer is *not* try/except retry. It classifies failures into a 9-class root cause taxonomy and selects a targeted recovery strategy per cause.
 
+**Vision integration**
+
+- `use_vision=True` is opt-in. Only activates for `VISION_CAPABLE_MODELS` (Gemini, Claude, GPT).
+- Screenshots captured during the reactive loop → labelled `vision_history` buffer tracks state changes over time.
+- Multi-snapshot history is passed to both the actor and verifier so the LLM can see what changed since the last action.
+- NVIDIA NIM text-only models accept the flag and silently fall back to AOM-only context.
+
 **Silent-failure guard (highest-value behavior)**
 
 - `BrowserAgent._guard_against_silent_success` runs after every "completed" run.
 - Hedging phrases ("I cannot find...", "頁面沒有...") in the final answer flip status to `not_found` — distinguishes "data doesn't exist" from "I succeeded".
 - Numeric tokens in the final answer that don't appear in any observed page text → `unverified` with the offending values logged in `failure_modes`. Catches the most common hallucination mode for finance scraping.
+- URL-based blocked-page detection (`_BLOCKED_URL_MARKERS`) catches /authwall, /login, /captcha, /cf-chl, /access-denied deterministically.
 
 **LLM touch points**
 
 1. `planner.plan_task` — initial decomposition.
-2. `planner.decide_next_action` — reactive next-step on every loop iteration.
-3. `planner.verify_with_llm` — every iteration, decides if task is complete.
+2. `planner.decide_next_action` — reactive next-step on every loop iteration (receives vision history when available).
+3. `planner.verify_with_llm` — every iteration, decides if task is complete (receives vision history).
 4. `healer.diagnose_with_llm` — only on the *second* heal attempt (the first uses deterministic diagnosis).
 
 **Red lines**
@@ -159,8 +181,14 @@ Anything else inside Task 1 is deterministic.
 **Context engineering decisions**
 
 - 4-stage hybrid pipeline: rule-based pre-segmentation → optional LLM boundary refinement → validation/auto-fix → optional XBRL cross-validation. Each stage explicitly logs whether it ran via `processing_metadata.stages_used`.
-- LLM only runs when rule-based confidence is low (`< 0.8`) or item count is suspiciously low (`< 10`). For modern HTML filings this means LLM cost is $0 in the typical case.
+- LLM only runs when rule-based confidence is low (`< 0.55`) or item count is suspiciously low (`< 10`), AND required items are missing. For modern HTML filings this means LLM cost is $0 in the typical case.
 - The validator uses the SAME strict header-zone heuristic from `rule_parser.detect_item_status`. Don't introduce a separate looser check (the previous bug was a `dict_check loose check` that misclassified Tesla 2023 Item 1 because the body mentions both "incorporated" and "reference" in unrelated contexts).
+
+**Vision integration**
+
+- `render_multi_snapshots` in `src/task3_sec/vision.py` generates labelled JPEGs of item boundaries (header zone, local context, neighbor context).
+- Vision only fires during Stage 2 LLM boundary refinement, and only for the first N boundaries (`T3_VISION_MAX` env).
+- High-confidence modern HTML filings stay rule-only ($0) regardless of the `use_vision` flag unless `force_llm=True` is explicitly used for a benchmark/demo. Forced refinement is capped by `T3_FORCE_LLM_MAX`.
 
 **LLM touch points**
 
@@ -181,4 +209,72 @@ Anything else inside Task 1 is deterministic.
 - **Cost tracker** (`src/shared/cost_tracker.py`) is the single source of truth for LLM spend. Every chat call goes through it with `(task, operation, trace_id)` so per-skill / per-task costs are auditable from the `/metrics` endpoint.
 - **LLM provider** (`src/llm_provider.py`) defaults to `langchain_openai.ChatOpenAI` pointed at NVIDIA NIM or OpenRouter base URLs — uniform code path that avoids the AssertionError / max_tokens-vs-max_completion_tokens bugs in the dedicated wrappers.
 - **Chat content coercion** (`src/shared/llm_utils.coerce_message_text`) flattens both string and `[{"type":"text","text":...}]` block-list responses. Use it everywhere we pull `.content` from a chat response — newer thinking-mode models return block lists and string slicing crashes.
+- **Multi-modal vision** — `src/task2_browser/vision.py` exposes `is_vision_capable()` + `make_multimodal_message()` + `make_multimodal_message_history()`. `use_vision=true` opt-in flag attaches downsampled JPEG (1024px @ q=72) as `image_url` content block; only fires for the 3 OpenRouter vision-language models. Silent fallback on NVIDIA NIM text-only models.
+- **LangSmith tracing** — `src/shared/tracing.py` provides `@traced(name, tags)` decorators on the 3 task entry points + `attach_metadata()` for richer span data. All no-ops when LangSmith env vars are absent.
 - **Verification before completion** — Task 2 enforces this at the agent level (silent-failure guard) and Task 3 enforces it via the validator + XBRL cross-check.
+
+---
+
+## Behavioral Guidelines
+
+> These reduce common AI coding mistakes. Bias toward caution over speed. For trivial tasks, use judgment.
+
+### 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+### 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+### 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

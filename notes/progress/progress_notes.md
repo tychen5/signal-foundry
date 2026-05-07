@@ -150,6 +150,7 @@
   2. [] https://signal-foundry.zeabur.app/ 針對Task 2 與Task 3的卡片也需要改成可以點選的方式，以讓reviewer可以更加容易去審閱結果並且真的去使用。請設計一個好的互動展示方式讓reviewer可以透過UI方式去interact with題目二和題目三，讓使用者可以透過UI點選或是輸入操作的方式，輕鬆調用背後的模型、agent、pipeline等等來展示demo出最後得到成果來。以利可以錄製影片，並且輕鬆測試各種不同的其他cases、或是調整不同可以進行配置的參數。也請盡可能可以透過視覺化美化的方式來展示最後得到的結果。
   3. [] 網頁 https://signal-foundry.zeabur.app/ 下方的 Health、Metrics、Models等按鈕點進去的頁面也不夠友善易讀，請思考應該要怎麼更好的視覺化呈現排版、增加易懂性易讀性，以讓使用者可以更加一目了然知道目前的狀況提升UX。
   4. [] 請再細細思考看看網頁 https://signal-foundry.zeabur.app/ 可以再怎麼美化優化，或是增加資訊。以能夠更好的展示harness engineering並且錄製成影片，並且讓reviewer能夠即時去操作控制輸入輸出來看真實的處理過程與結果。請想想看還有什麼可以多做得來提升使用者體驗，並讓reviewer覺得很讚的features。
+  5. [] 在網頁dashboard當中的task 1, task 2, task 3實際上去透過UI執行的時候有時候會需要等待非常久，但中間網頁的顯示都沒什麼更新，我希望可以streaming rendering目前系統處理到的狀況，以能夠提升UX，告訴使用者現在執行到哪一個步驟了，中間有什麼樣的input output。這可能也會設計更新優化對應背後的backend api/endpoint也會需要有相對應的一些改動更新，以能夠回傳相關的intermediate steps資訊給到前端去顯示，以能夠展示目前的狀況步驟而不是只是hang在那邊只能看網頁轉圈圈但遲遲看不到輸出結果。 請好好思考針對task 1, task 2, task 3 demo時要如何設計中間等待過程要展示給使用者看的資訊，以能夠視覺化呈現展示結果優化等代時的UX尷尬。 尤其task 2和task 3中間的等候操作loading或是下載過程特別久可能都會超過十分鐘以上，因此更需要好好設計展示中間的步驟過程系統死LLM正在做什麼事情。
 
 ---
 

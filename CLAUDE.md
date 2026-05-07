@@ -1,6 +1,7 @@
-# Signal-Foundry
+# Signal-Foundry — Claude Code Configuration
 
-> Evaluation-first AI systems: harness / eval / observability / tradeoffs / deployment
+> Claude Code-specific project context. For universal agent instructions (conventions,
+> per-task engineering notes, behavioral guidelines), see `AGENTS.md`.
 
 ## Project Architecture
 
@@ -18,22 +19,13 @@
 - **Parsing**: BeautifulSoup4 + lxml (SEC filings)
 - **Observability**: structlog + LangSmith
 
-## Build & Run
+## Build & Run (quick ref)
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-playwright install chromium
-
-# Run locally
+pip install -r requirements.txt && playwright install chromium
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8080
-
-# Run tests
 pytest tests/ -v --cov=src
-
-# Lint
-ruff check src/ tests/
-ruff format src/ tests/
+ruff check src/ tests/ && ruff format src/ tests/
 ```
 
 ## Project Structure
@@ -49,39 +41,29 @@ src/
 └── task3_sec/              # SEC 10-K extraction pipeline
 ```
 
-## Conventions
-
-- All code uses `ruff` for linting and formatting
-- Type hints required on all functions
-- Pydantic models for all I/O schemas
-- Structured logging via `structlog` (never print())
-- Every LLM call tracked in cost_tracker
-- Tests required for all non-trivial logic
-- Conventional Commits for git messages
-
-## Red Lines
+## Red Lines (non-negotiable constraints)
 
 - NEVER commit API keys or secrets to git
 - NEVER call LLM without cost tracking
 - NEVER skip input validation on API endpoints
 - NEVER use bare `except:` — always catch specific exceptions
 - NEVER force push to main branch
+- ALWAYS route chat-response `.content` through `src.shared.llm_utils.coerce_message_text` — newer thinking-mode models return block lists, raw `.content[:200]` crashes
 - ALWAYS verify char_range matches source text (Task 3)
 - ALWAYS run dry-run before destructive operations (Task 1)
-- ALWAYS route chat-response `.content` through `src.shared.llm_utils.coerce_message_text` — newer thinking-mode models return block lists, raw `.content[:200]` crashes
 - For Task 2, never trust an LLM "task complete" without grounding the answer in observed page text (`BrowserAgent._guard_against_silent_success`)
 - For Task 3, never tighten the coverage check to require Items 6 / 1C / 9C / 16 — they're conditionally optional by SEC year
 
-## Harness Engineering Quick Reference
+## Harness Quick Reference
 
-- **LLM provider** — `src/llm_provider.py` defaults to `langchain_openai.ChatOpenAI` pointed at NVIDIA NIM or OpenRouter base URLs. Both providers via one code path avoids the AssertionError / silent-kwargs-drop bugs in the dedicated wrappers. Per-model `extra_body` (NIM thinking toggles) lives in `MODEL_REGISTRY`.
-- **Cost tracker** — every chat call through `src/shared/cost_tracker.py` with `(task, operation, trace_id)`. Per-task / per-skill cost visible from the `/metrics` endpoint.
-- **Skill engine merge order** (Task 1) — `**raw_result` first, engine fields last so `summary` and `match_confidence` always win over skill-level keys with name collisions (the previous bug: `SecurityScanResult.summary` shadowed the LLM summary).
-- **Idempotency cache** (Task 1) — `cicd:v1:{owner}/{repo}:{branch}:{skill}:{sha[:12]}:{dry_run}`. HEAD SHA fetched *before* clone so cache hits skip the entire subprocess pipeline.
-- **Reactive planning** (Task 2) — agent observes after each step and `decide_next_action` re-decides on the new page state, rather than blindly following a pre-made plan.
-- **Selective LLM** (Task 3) — LLM only fires when rule-based confidence < 0.55 OR items_found < 10 (tightened from 0.8). Modern HTML filings stay $0.
-- **Multi-modal vision** (Task 2 + Task 3) — `src/task2_browser/vision.py` exposes `is_vision_capable()` + `make_multimodal_message()`. `use_vision=true` opt-in flag attaches a downsampled JPEG (1024px @ q=72) as `image_url` content block; only fires for the 3 OpenRouter models (gemini/claude/gpt) that natively support it. Silent fallback on the 4 NVIDIA NIM text-only models.
-- **LangSmith tracing** — `src/shared/tracing.py` provides `@traced(name, tags)` decorators on the 3 task entry points + `attach_metadata()` for richer span data + `trace_url(trace_id)` for deep-links. All no-ops when LangSmith env vars are absent — zero cost for users without an api_key.
-- **URL-based blocked-page detection** (Task 2) — `_BLOCKED_URL_MARKERS` table in `agent.py` deterministically catches /authwall, /login, accounts.google.com/signin, /captcha, /cf-chl, /access-denied, etc. Fires for both `success` AND `partial` status (the redirect itself is the evidence the task can't be completed).
+- **LLM provider** — `src/llm_provider.py` defaults to `ChatOpenAI` pointed at NVIDIA NIM or OpenRouter base URLs. Both providers via one code path avoids AssertionError / silent-kwargs-drop bugs. Per-model `extra_body` (NIM thinking toggles) lives in `MODEL_REGISTRY`.
+- **Cost tracker** — every chat call through `src/shared/cost_tracker.py` with `(task, operation, trace_id)`. Per-task / per-skill cost visible from `/metrics`.
+- **Skill engine merge order** (Task 1) — `**raw_result` first, engine fields last so `summary` and `match_confidence` always win.
+- **Idempotency cache** (Task 1) — `cicd:v1:{owner}/{repo}:{branch}:{skill}:{sha[:12]}:{dry_run}`. HEAD SHA fetched *before* clone.
+- **Reactive planning** (Task 2) — agent observes after each step; `decide_next_action` re-decides on new page state.
+- **Selective LLM** (Task 3) — LLM only fires when rule-based confidence < 0.55 OR items_found < 10 AND required items missing. Modern HTML filings stay $0.
+- **Multi-modal vision** (Task 2 + 3) — `src/task2_browser/vision.py` exposes `is_vision_capable()` + `make_multimodal_message()` + `make_multimodal_message_history()`. `use_vision=true` opt-in; only for OpenRouter vision-language models. NVIDIA NIM falls back silently.
+- **LangSmith tracing** — `src/shared/tracing.py` provides `@traced(name, tags)` decorators + `attach_metadata()`. No-ops when env vars absent.
+- **URL-based blocked-page detection** (Task 2) — `_BLOCKED_URL_MARKERS` catches /authwall, /login, /captcha, /cf-chl, /access-denied deterministically.
 
-For deeper per-task notes (context engineering decisions, LLM touch points, red lines), see `AGENTS.md`.
+For deeper per-task notes (context engineering decisions, LLM touch points, red lines per task), see `AGENTS.md` § Per-Task Engineering Notes.
