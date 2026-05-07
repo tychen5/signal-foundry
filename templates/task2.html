@@ -128,6 +128,10 @@
             <div class="status-banner">
                 <span class="status-badge running" id="status-badge">RUNNING</span>
                 <span id="status-text">Executing browser task...</span>
+                <span id="trace-info" class="trace-info" style="display:none">
+                    <span class="trace-id-pill" id="trace-id-pill"></span>
+                    <a href="#" target="_blank" id="langsmith-link" class="trace-link" style="display:none">View in LangSmith ↗</a>
+                </span>
             </div>
 
             <div class="stats-row" id="stats-row" style="display:none">
@@ -211,23 +215,44 @@
             }
         }
 
-        function renderAgentResult(data) {
-            const status = data.status || 'failed';
+        function renderAgentResult(envelope) {
+            // Server returns ExecutionResult — agent fields live in `envelope.result`
+            const data = envelope.result || envelope;
+            const status = data.status || envelope.status || 'failed';
             const isSuccess = status === 'success';
             const isPartial = status === 'partial';
+            const isNotFound = status === 'not_found';
+            const statusKind = isSuccess ? 'success'
+                : (isPartial || isNotFound) ? 'partial' : 'failed';
 
             setStatus(
-                isSuccess ? 'success' : isPartial ? 'partial' : 'failed',
+                statusKind,
                 status.toUpperCase(),
-                isSuccess ? 'Task completed successfully' : isPartial ? 'Task partially completed' : 'Task failed'
+                isSuccess ? 'Task completed successfully'
+                    : isNotFound ? 'Task not completable (anti-hallucination guard fired)'
+                    : isPartial ? 'Task partially completed' : 'Task failed'
             );
 
-            // Stats
+            // Trace ID + LangSmith link
+            const traceId = envelope.trace_id || data.trace_id;
+            if (traceId) {
+                document.getElementById('trace-id-pill').textContent = 'trace: ' + traceId.slice(0, 8);
+                document.getElementById('trace-info').style.display = 'inline-flex';
+            }
+            if (envelope.langsmith_trace_url) {
+                const link = document.getElementById('langsmith-link');
+                link.href = envelope.langsmith_trace_url;
+                link.style.display = 'inline-block';
+            }
+
+            // Stats — pull from inner result first
             document.getElementById('stat-steps').textContent = data.total_steps ?? '—';
             document.getElementById('stat-corrections').textContent = data.self_corrections ?? '—';
             document.getElementById('stat-healer').textContent = data.healer_activations ?? '—';
-            document.getElementById('stat-latency').textContent = data.total_duration_ms ? Math.round(data.total_duration_ms) + 'ms' : '—';
-            document.getElementById('stat-cost').textContent = data.cost_usd !== undefined ? '$' + data.cost_usd.toFixed(4) : '—';
+            const lat = data.total_duration_ms ?? envelope.latency_ms;
+            document.getElementById('stat-latency').textContent = lat ? Math.round(lat) + 'ms' : '—';
+            const cost = data.cost_usd ?? envelope.cost_metadata?.total_cost_usd;
+            document.getElementById('stat-cost').textContent = (cost !== undefined && cost !== null) ? '$' + Number(cost).toFixed(4) : '—';
             document.getElementById('stats-row').style.display = 'flex';
 
             // Final answer

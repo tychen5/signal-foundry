@@ -129,6 +129,10 @@
             <div class="result-header">
                 <span class="status-badge" id="status-badge">—</span>
                 <strong id="result-title">—</strong>
+                <span id="trace-info" class="trace-info" style="display:none">
+                    <span class="trace-id-pill" id="trace-id-pill"></span>
+                    <a href="#" target="_blank" id="langsmith-link" class="trace-link" style="display:none">View in LangSmith ↗</a>
+                </span>
             </div>
             <div class="meta-row" id="meta-row"></div>
             <div id="summary-section"></div>
@@ -205,6 +209,23 @@
             const detailSection = document.getElementById('skill-detail-section');
             const costRow = document.getElementById('cost-row');
             const rawJson = document.getElementById('raw-json');
+
+            // Trace ID + LangSmith deep-link
+            const traceInfo = document.getElementById('trace-info');
+            const tracePill = document.getElementById('trace-id-pill');
+            const lsLink = document.getElementById('langsmith-link');
+            if (data.trace_id) {
+                tracePill.textContent = 'trace: ' + data.trace_id.slice(0, 8);
+                traceInfo.style.display = 'inline-flex';
+            } else {
+                traceInfo.style.display = 'none';
+            }
+            if (data.langsmith_trace_url) {
+                lsLink.href = data.langsmith_trace_url;
+                lsLink.style.display = 'inline-block';
+            } else {
+                lsLink.style.display = 'none';
+            }
 
             if (httpStatus >= 400 || data.status === 'failed') {
                 badge.className = 'status-badge failed';

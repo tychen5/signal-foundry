@@ -147,6 +147,10 @@
                     <div class="meta-field"><label>Filing Date</label><span id="meta-date">—</span></div>
                     <div class="meta-field"><label>Accession</label><span id="meta-accession" style="font-family:monospace;font-size:0.85rem">—</span></div>
                 </div>
+                <div id="trace-info" class="trace-info" style="margin-top:0.75rem;display:none">
+                    <span class="trace-id-pill" id="trace-id-pill"></span>
+                    <a href="#" target="_blank" id="langsmith-link" class="trace-link" style="display:none">View in LangSmith ↗</a>
+                </div>
             </div>
 
             <div class="items-panel" id="items-panel" style="display:none">
@@ -246,7 +250,24 @@
             }
         }
 
-        function renderExtraction(data) {
+        function renderExtraction(envelope) {
+            // Server returns ExecutionResult — extraction fields are in `envelope.result`
+            const data = envelope.result || envelope;
+
+            // Trace ID + LangSmith deep-link
+            const traceInfo = document.getElementById('trace-info');
+            const tracePill = document.getElementById('trace-id-pill');
+            const lsLink = document.getElementById('langsmith-link');
+            const traceId = envelope.trace_id || data.trace_id;
+            if (traceId) {
+                tracePill.textContent = 'trace: ' + traceId.slice(0, 8);
+                traceInfo.style.display = 'inline-flex';
+            }
+            if (envelope.langsmith_trace_url) {
+                lsLink.href = envelope.langsmith_trace_url;
+                lsLink.style.display = 'inline-block';
+            }
+
             // Filing metadata
             const meta = data.filing_metadata || {};
             document.getElementById('meta-company').textContent = meta.company_name || '—';
