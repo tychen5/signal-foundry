@@ -107,6 +107,184 @@ python -m evals.task2.run_eval                # 17 cases (needs Playwright + LLM
 | `/api/v1/sec/extract` (Task 3, Apple 2023) | 200 OK | 23 items, all 4 stages including XBRL cross-validation, 537 ms, $0 |
 | `/api/v1/sec/extract` (Task 3, Tesla 2023 false-positive guard) | 200 OK | Item 1 correctly = `extracted` (not falsely flagged as incorporated despite mentioning "incorporated in 2003") |
 | `/api/v1/sec/extract` (Task 3, Apple 2005 legacy) | 200 OK | 23 items, 5 not_found for items that didn't exist in 2005 (1A/1B/1C/9C/16) |
+| `/api/v1/sec/extract` (Task 3, TSMC 20-F 2026) | 200 OK | 23 items, foreign-issuer form gracefully handled (12 extracted from 20-F's different schema) |
+| `/api/v1/sec/extract` (Task 3, Tesla 10-K/A 2025 amendment) | 200 OK | 6 items extracted (amendments are partial), 17 marked not_found honestly |
+
+---
+
+## API Reference (for reviewers)
+
+All examples use the live deployment at `https://signal-foundry.zeabur.app`. Replace with `http://localhost:8080` for local testing. JSON requests; responses are also JSON. The reviewer's own NVIDIA / OpenRouter API key can be passed in the `model` block per-request — never stored server-side.
+
+### POST `/api/v1/skills/run` — Task 1: CI/CD Skill against a real GitHub repo
+
+Request body:
+```json
+{
+  "repo_url": "https://github.com/tychen5/Medical-Summary-Builder",
+  "branch": "main",
+  "skill_name": "lint-and-test",
+  "dry_run": true,
+  "model": {
+    "model_id": "moonshotai/kimi-k2.6",
+    "user_openrouter_key": null
+  }
+}
+```
+- `skill_name`: one of `lint-and-test`, `dependency-audit`, `security-scan`, `build-and-release`
+- `dry_run`: required `true` for `build-and-release` unless reviewer explicitly opts in
+- `model.model_id`: any model from `/api/v1/models`
+- `model.user_openrouter_key`: optional — supply your own key for OpenRouter models (server uses its own key for NVIDIA models)
+
+Response (success):
+```json
+{
+  "status": "success",
+  "task": "task1_cicd",
+  "trace_id": "ad32a07b-a9a",
+  "result": {
+    "status": "warnings",
+    "language": "python",
+    "lint_tool": "ruff",
+    "lint_passed": false,
+    "lint_issues": [{"file": "...", "line": 3, "code": "F401", "message": "..."}],
+    "tests_passed": null,
+    "summary": "Ruff linting found 7 unused imports..."
+  },
+  "match_confidence": 1.0,
+  "skill_executed": "lint-and-test",
+  "cost_metadata": {"cost_usd": 0.001, "tokens_in": 800, "tokens_out": 200},
+  "latency_ms": 846.4
+}
+```
+
+### POST `/api/v1/browser/execute` — Task 2: Natural-language browser task
+
+Request body:
+```json
+{
+  "task_description": "Go to https://arxiv.org/abs/2509.13753 and report the paper's title and the first two authors",
+  "target_url": "https://arxiv.org/abs/2509.13753",
+  "max_steps": 10,
+  "model": {
+    "model_id": "google/gemini-3.1-pro-preview",
+    "user_openrouter_key": "sk-or-v1-..."
+  }
+}
+```
+
+Response (success):
+```json
+{
+  "status": "success",
+  "task": "task2_browser",
+  "trace_id": "...",
+  "result": {
+    "status": "success",
+    "task_description": "...",
+    "final_answer": "Title: ST-LINK ... Authors: Hyotaek Jeon, Hyunwook Lee",
+    "total_steps": 4,
+    "self_corrections": 0,
+    "healer_activations": 0,
+    "failure_modes": [],
+    "cost_usd": 0.0041,
+    "steps": [{"step_number": 1, "action": {...}, "verification": {...}}, ...]
+  }
+}
+```
+
+`status` field meaning:
+- `success` — task complete with grounded answer
+- `partial` — agent ran out of steps; last URL + best-effort answer returned
+- `not_found` — silent-failure guard fired: page is 404 / login wall / paywall / CAPTCHA OR LLM hedged. Honest "couldn't" report rather than hallucination
+- `unverified` — answer fields contain numbers that don't appear on observed pages (likely hallucination)
+- `failed` — uncaught exception (rare; system catches most error classes)
+
+### POST `/api/v1/sec/extract` — Task 3: SEC 10-K item-level extraction
+
+Request body (CIK + accession):
+```json
+{
+  "cik": "0000320193",
+  "accession_number": "0000320193-23-000106",
+  "skip_llm": false,
+  "skip_xbrl": false,
+  "model": {
+    "model_id": "moonshotai/kimi-k2.6"
+  }
+}
+```
+
+Or directly by URL:
+```json
+{
+  "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm"
+}
+```
+
+Response (success):
+```json
+{
+  "status": "success",
+  "task": "task3_sec",
+  "trace_id": "...",
+  "result": {
+    "filing_metadata": {
+      "cik": "0000320193",
+      "company_name": "Apple Inc.",
+      "accession_number": "0000320193-23-000106",
+      "filing_date": "2023-11-03",
+      "form_type": "10-K",
+      "filing_url": "..."
+    },
+    "items": [
+      {
+        "part": "I",
+        "item_number": "1",
+        "item_title": "Business",
+        "content_text": "Company Background...",
+        "char_range": [0, 45985],
+        "status": "extracted",
+        "confidence": 0.95,
+        "extraction_method": "rule_based"
+      },
+      ...
+    ],
+    "processing_metadata": {
+      "total_tokens_in": 0,
+      "total_tokens_out": 0,
+      "total_cost_usd": 0.0,
+      "total_latency_ms": 537,
+      "rule_only_items": 23,
+      "llm_refined_items": 0,
+      "stages_used": ["rule_based", "validation", "xbrl_cross_check"],
+      "validation_report": {"overall_valid": true, "issues": []},
+      "xbrl_report": {"status": "completed", "checks": [...]}
+    }
+  }
+}
+```
+
+`status` per item:
+- `extracted` — item content found and present
+- `incorporated_by_reference` — item refers to another doc (Proxy / DEF 14A)
+- `not_applicable` — item explicitly marked as N/A
+- `reserved` — SEC marked the item as Reserved
+- `not_found` — item not present in the filing (may be legitimate, e.g. 1C didn't exist before 2023)
+
+### Useful aux endpoints
+
+- `GET /api/v1/sec/filings/{cik}?filing_type=10-K&limit=10` — list a company's recent 10-Ks (find accession numbers)
+- `GET /api/v1/sec/company/{cik}` — company metadata: name, ticker, exchange, SIC code
+- `GET /api/v1/skills/list` — list available CI/CD skills + trigger phrases
+- `GET /api/v1/models` — model registry
+- `GET /metrics` — live cost/latency/token ledger
+- `GET /health` — readiness check
+
+### Authentication notes
+
+- **NVIDIA models** (default): server uses its own NVIDIA API key. Free tier has rate limits (~4 calls/min/model).
+- **OpenRouter models** (paid): if you DON'T supply `user_openrouter_key`, the server uses its own key (limited budget, may exhaust). For sustained / heavy use, pass your own key in the `model` block — never stored, only used for that request.
 
 ---
 

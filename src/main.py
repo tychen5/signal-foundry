@@ -27,12 +27,41 @@ from src.shared.logger import generate_trace_id, get_logger, setup_logging
 from src.shared.schemas import HealthResponse
 
 
+def _enable_langsmith_tracing(settings) -> None:
+    """Wire LangSmith env vars so the langchain ecosystem auto-traces calls.
+
+    LangSmith activates automatically when these env vars are present:
+      - LANGSMITH_API_KEY (or LANGCHAIN_API_KEY)
+      - LANGSMITH_TRACING=true (or LANGCHAIN_TRACING_V2=true)
+      - LANGSMITH_PROJECT (project name in the LangSmith UI)
+    We set BOTH naming conventions for compatibility with older + newer
+    langchain versions. No-op if api_key is empty (no accidental traces
+    leak to a misconfigured project).
+    """
+    if not settings.langsmith_api_key or not settings.langsmith_tracing:
+        return
+    os.environ.setdefault("LANGSMITH_API_KEY", settings.langsmith_api_key)
+    os.environ.setdefault("LANGCHAIN_API_KEY", settings.langsmith_api_key)
+    os.environ.setdefault("LANGSMITH_PROJECT", settings.langsmith_project)
+    os.environ.setdefault("LANGCHAIN_PROJECT", settings.langsmith_project)
+    os.environ.setdefault("LANGSMITH_TRACING", "true")
+    os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
+    os.environ.setdefault("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
     settings = get_settings()
     setup_logging(settings.log_level)
     logger = get_logger("main")
+    _enable_langsmith_tracing(settings)
+    if settings.langsmith_api_key and settings.langsmith_tracing:
+        logger.info(
+            "langsmith_tracing_enabled",
+            project=settings.langsmith_project,
+            endpoint="https://api.smith.langchain.com",
+        )
     logger.info("application_starting", environment=settings.environment)
     yield
     logger.info("application_shutting_down")

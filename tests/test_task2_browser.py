@@ -556,6 +556,23 @@ class TestSilentFailureGuard:
         agent._guard_against_silent_success(result)
         assert result.status == "not_found"
 
+    def test_clean_final_answer_strips_json_wrapper(self) -> None:
+        """When the LLM wraps the answer in ```json {...}```, extract the
+        inner answer field rather than leaking the whole JSON to the caller."""
+        from src.task2_browser.agent import _clean_final_answer
+
+        wrapped = '```json\n{"complete": true, "answer": "2,320", "confidence": 0.95}\n```'
+        assert _clean_final_answer(wrapped) == "2,320"
+
+        wrapped2 = '{"complete": true, "answer": "Tokyo population: 13.96 million", "confidence": 0.9}'
+        assert _clean_final_answer(wrapped2) == "Tokyo population: 13.96 million"
+
+        # Plain text passes through
+        assert _clean_final_answer("Just a plain answer") == "Just a plain answer"
+
+        # Empty/None safe
+        assert _clean_final_answer("") == ""
+
     def test_url_authwall_redirect_marked_not_found(self) -> None:
         """Deterministic URL-based check: if final URL contains /authwall,
         flip to not_found regardless of what the LLM answered. This is the

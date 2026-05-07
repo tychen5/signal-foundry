@@ -100,6 +100,42 @@ _NOT_FOUND_PHRASES = (
 
 _NUMBER_TOKEN = re.compile(r"\d{2,}(?:[.,]\d+)?")
 
+
+def _clean_final_answer(answer: str) -> str:
+    """Strip LLM markdown / JSON wrapping from a final-answer string.
+
+    Some models wrap their response in ```json ...``` or output a JSON
+    object literally (`{"complete": true, "answer": "X"}`) when the actor
+    prompt says to put the answer in `value` directly. Pull out the inner
+    `answer` / `final_answer` field and return that, or fall back to the
+    raw string with the code-fence stripped.
+    """
+    if not answer:
+        return answer
+    text = answer.strip()
+    # Strip markdown code-fence wrappers
+    if text.startswith("```"):
+        # Remove leading ```json\n or ```\n
+        lines = text.split("\n", 1)
+        if len(lines) > 1:
+            text = lines[1]
+        if text.endswith("```"):
+            text = text[:-3].rstrip()
+    # Try to extract a JSON answer field
+    try:
+        import json as _json
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            obj = _json.loads(m.group())
+            if isinstance(obj, dict):
+                inner = obj.get("answer") or obj.get("final_answer") or obj.get("value")
+                if isinstance(inner, str):
+                    return inner.strip()
+    except (ValueError, TypeError):
+        pass
+    return text
+
+
 # URL substring markers that indicate the final page is NOT the requested
 # content. These are deterministic — no LLM needed. If any appear in the
 # final URL, the silent-failure guard flips status to not_found.
@@ -248,7 +284,7 @@ class BrowserAgent:
                     result.llm_calls += 1
 
                     if is_complete and confidence > 0.6:
-                        result.final_answer = answer
+                        result.final_answer = _clean_final_answer(answer)
                         result.status = "success"
                         break
 
@@ -264,7 +300,9 @@ class BrowserAgent:
                     result.llm_calls += 1
 
                     if next_action.action_type == ActionType.DONE:
-                        result.final_answer = next_action.value or next_action.reasoning
+                        result.final_answer = _clean_final_answer(
+                            next_action.value or next_action.reasoning
+                        )
                         result.status = "success"
                         break
 
