@@ -79,6 +79,9 @@ src/
 - **Skill engine merge order** (Task 1) — `**raw_result` first, engine fields last so `summary` and `match_confidence` always win over skill-level keys with name collisions (the previous bug: `SecurityScanResult.summary` shadowed the LLM summary).
 - **Idempotency cache** (Task 1) — `cicd:v1:{owner}/{repo}:{branch}:{skill}:{sha[:12]}:{dry_run}`. HEAD SHA fetched *before* clone so cache hits skip the entire subprocess pipeline.
 - **Reactive planning** (Task 2) — agent observes after each step and `decide_next_action` re-decides on the new page state, rather than blindly following a pre-made plan.
-- **Selective LLM** (Task 3) — LLM only fires when rule-based confidence < 0.8 or items_found < 10. Modern HTML filings stay $0.
+- **Selective LLM** (Task 3) — LLM only fires when rule-based confidence < 0.55 OR items_found < 10 (tightened from 0.8). Modern HTML filings stay $0.
+- **Multi-modal vision** (Task 2 + Task 3) — `src/task2_browser/vision.py` exposes `is_vision_capable()` + `make_multimodal_message()`. `use_vision=true` opt-in flag attaches a downsampled JPEG (1024px @ q=72) as `image_url` content block; only fires for the 3 OpenRouter models (gemini/claude/gpt) that natively support it. Silent fallback on the 4 NVIDIA NIM text-only models.
+- **LangSmith tracing** — `src/shared/tracing.py` provides `@traced(name, tags)` decorators on the 3 task entry points + `attach_metadata()` for richer span data + `trace_url(trace_id)` for deep-links. All no-ops when LangSmith env vars are absent — zero cost for users without an api_key.
+- **URL-based blocked-page detection** (Task 2) — `_BLOCKED_URL_MARKERS` table in `agent.py` deterministically catches /authwall, /login, accounts.google.com/signin, /captcha, /cf-chl, /access-denied, etc. Fires for both `success` AND `partial` status (the redirect itself is the evidence the task can't be completed).
 
 For deeper per-task notes (context engineering decisions, LLM touch points, red lines), see `AGENTS.md`.
