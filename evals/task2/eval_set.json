@@ -395,5 +395,71 @@
     "difficulty": "normal",
     "tags": ["wikipedia", "table_extraction", "structured_data", "vision_optional"],
     "eval_dimensions": ["task_complexity_multi"]
+  },
+  {
+    "case_id": "t2_vision_color_indicator",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.timeanddate.com/weather/usa/new-york and report the current temperature, weather condition, and whether the UV index indicator shows low/moderate/high (look at the color of the UV bar if present).",
+      "target_url": "https://www.timeanddate.com/weather/usa/new-york",
+      "use_vision_recommended": true
+    },
+    "expected_behavior": "Weather page with color-coded indicators (UV index bar, weather icons). Vision helps interpret color-state indicators that AOM describes only as generic elements. Without vision, text extraction alone can get temperature but misses visual cues like the UV color bar.",
+    "difficulty": "hard",
+    "tags": ["vision_benefit", "color_indicator", "weather", "real_world"],
+    "eval_dimensions": ["edge_case_visual", "domain_diversity"]
+  },
+  {
+    "case_id": "t2_vision_d3_chart",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://observablehq.com/@d3/bar-chart/2 and describe what data the bar chart displays, including the approximate value of the tallest bar and its label.",
+      "target_url": "https://observablehq.com/@d3/bar-chart/2",
+      "use_vision_recommended": true
+    },
+    "expected_behavior": "Observable/D3 renders charts to SVG/canvas — AOM tree may contain some SVG text but not the full visual context. Vision-capable models can interpret the bar heights, axis labels, and data patterns directly from the rendered chart. Text-only models will struggle to describe the chart trend.",
+    "difficulty": "edge_case",
+    "tags": ["vision_benefit", "d3_chart", "svg_rendered", "data_visualization"],
+    "eval_dimensions": ["edge_case_visual", "domain_diversity"]
+  },
+  {
+    "case_id": "t2_vision_map_location",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.openstreetmap.org/#map=15/48.8584/2.2945 and describe what landmark or area is centered on the map.",
+      "target_url": "https://www.openstreetmap.org/#map=15/48.8584/2.2945",
+      "use_vision_recommended": true
+    },
+    "expected_behavior": "OpenStreetMap renders map tiles — AOM has no text about what's visually centered. Vision can identify the Eiffel Tower area from the map rendering. Without vision the agent can only report the coordinates from the URL, not what the map actually shows.",
+    "difficulty": "edge_case",
+    "tags": ["vision_benefit", "map", "geospatial", "canvas_rendered"],
+    "eval_dimensions": ["edge_case_visual"]
+  },
+  {
+    "case_id": "t2_vision_pdf_viewer",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.w3.org/WAI/WCAG21/Understanding/intro and report the main heading and the first sentence of the introduction.",
+      "target_url": "https://www.w3.org/WAI/WCAG21/Understanding/intro",
+      "use_vision_recommended": false
+    },
+    "expected_behavior": "W3C documentation page — well-structured semantic HTML. Both AOM and vision should work well. Serves as a control case where vision adds minimal benefit over well-structured semantic markup. Confirms vision doesn't DEGRADE performance on already-accessible pages.",
+    "difficulty": "normal",
+    "tags": ["accessibility", "semantic_html", "documentation", "vision_control"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_single"]
+  },
+  {
+    "case_id": "t2_vision_captcha_detect",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.google.com/recaptcha/api2/demo and describe what type of verification challenge is displayed on the page.",
+      "target_url": "https://www.google.com/recaptcha/api2/demo",
+      "use_vision_recommended": true
+    },
+    "expected_behavior": "Google reCAPTCHA demo page. Vision helps classify the CAPTCHA type (checkbox, image grid, etc.) while AOM only sees the iframe container. The agent should report what it sees and indicate it cannot solve the CAPTCHA — honest reporting of limitation rather than hallucinating a solution.",
+    "difficulty": "edge_case",
+    "tags": ["vision_benefit", "captcha", "anti_bot", "negative_case"],
+    "eval_dimensions": ["edge_case_visual", "failure_injection"]
   }
 ]
+

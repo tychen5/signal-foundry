@@ -51,3 +51,31 @@ All 7 supported models, 3 representative cases. LLM only fires when rule-parser 
 - **gemini-3.1-pro-preview (OpenRouter, paid)**: clear cost/quality sweet spot — $0.004/case, 20-25s typical latency, robust JSON-output. Best default for production.
 - **gpt-5.5 (OpenRouter, paid)**: highest cost ($0.06+/case), variable latency (sometimes hits step cap on simple Wikipedia tasks). Use sparingly for hardest reasoning.
 - All 3 models correctly handle the silent-failure guard case (example.com → not_found) without hallucinating.
+
+# OpenRouter Vision On/Off Benchmark Status
+
+`evals/run_vision_benchmark.py` runs the live differential sweep requested for the 3 OpenRouter vision-language models:
+
+```bash
+python -m evals.run_vision_benchmark --task both --force-llm-task3 --timeout 180
+```
+
+Default slice:
+
+| Task | Cases | Why these cases |
+|---|---|---|
+| Task 2 | `t2_vision_chart_trend`, `t2_vision_image_caption`, `t2_vision_table_layout` | Canvas/image/table layout cues where AOM-only context can miss visual state |
+| Task 3 | `t3_apple_2005_old_format`, `t3_tsmc_20f_2026_foreign_issuer`, `t3_ibm_2025_proxy_heavy` | Legacy text, foreign issuer form, proxy-heavy incorporation; use `--force-llm-task3` to guarantee Stage 2 runs for on/off comparison |
+
+Important interpretation notes:
+
+- Task 2 is the real vision-benefit benchmark: `use_vision=false` sends AOM/text only; `use_vision=true` sends bounded viewport JPEG history to both actor and verifier.
+- Task 3 only attaches vision when Stage 2 LLM boundary refinement fires. High-confidence modern filings stay rule-only, so use `--force-llm-task3` / API `force_llm=true` when the goal is controlled text-only vs vision-assisted comparison.
+- Committed live slice: `evals/vision_results/vision_benchmark_20260507T072543Z.md`. Status/step/cost metrics are automatic; visual-answer quality still needs spot-checking from the JSON previews.
+
+| Task | Model | Vision off | Vision on | Delta |
+|---|---|---:|---:|---|
+| Task 2 Mona Lisa image caption | Gemini 3.1 Pro | success, 3 steps, $0.003805, 21.8s | success, 3 steps, $0.003800, 21.1s | No material difference; text/AOM already sufficient |
+| Task 2 Mona Lisa image caption | Claude Opus 4.7 | partial, 15 steps, $0.782115, 118.9s | success, 3 steps, $0.048690, 27.5s | Vision prevented a costly max-step loop |
+| Task 2 Mona Lisa image caption | GPT-5.5 | success, 5 steps, $0.067510, 93.4s | success, 4 steps, $0.035255, 49.8s | Vision roughly halved cost and latency |
+| Task 3 Apple 2005 legacy filing | Gemini / Claude / GPT | 18/23 items, $0, 0 LLM calls | 18/23 items, $0, 0 LLM calls | No effect because Stage 2 did not fire; rule parser confidence was high |

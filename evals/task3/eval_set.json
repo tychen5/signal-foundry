@@ -377,5 +377,194 @@
       "min_items_extracted": 14,
       "required_items": ["1", "1A", "7", "8", "15"]
     }
+  },
+  {
+    "case_id": "t3_ford_2023_large_filing",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000037996",
+      "accession_number": "0000037996-24-000014"
+    },
+    "expected_behavior": "Ford Motor 10-K: large filing (~8MB normalized) with extensive Item 1 (business segments: Ford Blue, Model e, Ford Pro), dense Item 7 MD&A, and Ford Credit subsidiary disclosures. Tests parser performance on large filings with complex multi-segment structures. May trigger LLM refinement on lower-confidence boundaries between business segments.",
+    "difficulty": "hard",
+    "tags": ["large_cap", "auto", "large_filing", "multi_segment", "llm_trigger_candidate"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000037996.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/37996/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 17,
+      "required_items": ["1", "1A", "7", "7A", "8", "15"]
+    }
+  },
+  {
+    "case_id": "t3_ge_2023_conglomerate_complex",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000040554",
+      "accession_number": "0000040554-24-000012"
+    },
+    "expected_behavior": "General Electric 10-K during the GE Vernova / GE Aerospace spin-off transition. Complex conglomerate structure with multiple reporting segments being divested. Item headings may be non-standard due to transitional disclosures. High probability of triggering LLM boundary refinement due to unusual narrative structure around the spin-off.",
+    "difficulty": "edge_case",
+    "tags": ["large_cap", "conglomerate", "spinoff_transition", "complex_structure", "llm_trigger_candidate"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000040554.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/40554/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 15,
+      "required_items": ["1", "1A", "7", "8"]
+    }
+  },
+  {
+    "case_id": "t3_nvidia_2024_tech_boom",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001045810",
+      "accession_number": "0001045810-24-000029"
+    },
+    "expected_behavior": "NVIDIA 10-K during the AI/GPU boom. Extremely long Item 1 (Business) and Item 1A (Risk Factors) discussing AI/ML hardware demand. Tests parser on contemporary high-profile tech filing with dense technical language. Modern HTML format with inline XBRL — should stay rule-only ($0).",
+    "difficulty": "normal",
+    "tags": ["large_cap", "tech", "gpu", "ai_boom", "modern_html", "long_risk_factors"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001045810.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1045810/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 18,
+      "required_items": ["1", "1A", "7", "7A", "8", "15"]
+    }
+  },
+  {
+    "case_id": "t3_att_2023_telecom_heavy_proxy",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000732717",
+      "accession_number": "0000732717-24-000010"
+    },
+    "expected_behavior": "AT&T 10-K with heavy proxy incorporation in Part III plus extensive regulatory disclosures in Item 1 (FCC, state PUCs). Tests both proxy-detection accuracy and the parser's handling of dense regulated-industry language. Part III items should be marked incorporated_by_reference.",
+    "difficulty": "hard",
+    "tags": ["large_cap", "telecom", "regulated", "proxy_heavy", "incorporated_dominant", "llm_trigger_candidate"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000732717.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/732717/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 15,
+      "required_items": ["1", "1A", "7", "8", "15"],
+      "expected_status_items": {
+        "10": "incorporated_by_reference",
+        "11": "incorporated_by_reference"
+      }
+    }
+  },
+  {
+    "case_id": "t3_wells_fargo_2023_banking",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000072971",
+      "accession_number": "0000072971-24-000143"
+    },
+    "expected_behavior": "Wells Fargo 10-K: major banking institution with very long Item 1 (business), extremely dense Item 1A (risk factors covering credit, market, operational, compliance risks), and complex Item 8 financial statements. Tests rule parser on the longest risk-factor sections in the S&P 500. Vision could help identify section boundaries in dense financial prose.",
+    "difficulty": "hard",
+    "tags": ["large_cap", "banking", "finance", "dense_risk_factors", "long_filing", "vision_benefit_candidate"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000072971.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/72971/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 17,
+      "required_items": ["1", "1A", "7", "7A", "8", "15"]
+    }
+  },
+  {
+    "case_id": "t3_american_express_1994_plain_text",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000004962",
+      "accession_number": "0000004962-94-000006"
+    },
+    "expected_behavior": "American Express 1994 10-K, one of the earliest EDGAR-era annual reports. This is the practical substitute for a pre-1994 electronic filing because SEC states EDGAR begins in 1994/1995. Exercises complete-submission plain-text fallback, exhibit-heavy SGML selection, and old-form optional-item policy.",
+    "difficulty": "edge_case",
+    "tags": ["early_edgar", "plain_text", "finance", "pre_modern_html", "llm_trigger_candidate", "vision_benefit_candidate"],
+    "source": {
+      "kind": "official_sec_archive_index",
+      "index_url": "https://www.sec.gov/Archives/edgar/data/4962/000000496294000006/0000004962-94-000006-index.html",
+      "complete_submission": "https://www.sec.gov/Archives/edgar/data/4962/000000496294000006/0000004962-94-000006.txt"
+    },
+    "assertions": {
+      "min_items_extracted": 8,
+      "required_items": ["1", "6", "7", "8", "15"],
+      "allow_missing_recent_items": ["1A", "1B", "1C", "9A", "9B", "9C", "16"]
+    }
+  },
+  {
+    "case_id": "t3_asset_backed_trust_2011_not_applicable",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001266832",
+      "accession_number": "0001193125-11-084951"
+    },
+    "expected_behavior": "Asset-backed trust 10-K where many required operating-company items are explicitly 'Not Applicable'. Tests status classification: the parser should preserve each item object and mark short N/A sections as not_applicable rather than not_found or hallucinated content.",
+    "difficulty": "edge_case",
+    "tags": ["spv", "asset_backed", "trust", "not_applicable_dominant", "status_classification", "llm_trigger_candidate"],
+    "source": {
+      "kind": "official_sec_archive_document",
+      "filing_url": "https://www.sec.gov/Archives/edgar/data/1266832/000119312511084951/d10k.htm"
+    },
+    "assertions": {
+      "min_items_extracted": 10,
+      "required_items": ["1", "5", "7", "8", "15"],
+      "expected_status_items": {
+        "1": "not_applicable",
+        "1A": "not_applicable",
+        "7": "not_applicable",
+        "8": "not_applicable"
+      },
+      "allow_missing_recent_items": ["1C", "9C", "16"]
+    }
+  },
+  {
+    "case_id": "t3_kingsoft_cloud_2022_20f_duplicate_heading",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001795589",
+      "accession_number": "0001104659-23-050820"
+    },
+    "expected_behavior": "Kingsoft Cloud 2022 20-F. Foreign issuer form with a known awkward Item 13 line ('ITEM 13. ITEM DEFAULTS...') in the table of contents. Tests heading-vs-ToC discrimination, duplicated item words, and 20-F schema mismatch handling.",
+    "difficulty": "edge_case",
+    "tags": ["foreign_private_issuer", "20_f", "china", "duplicate_heading_text", "toc_confusion", "vision_benefit_candidate"],
+    "source": {
+      "kind": "official_sec_archive_document",
+      "filing_url": "https://www.sec.gov/Archives/edgar/data/1795589/000110465923050820/kc-20221231x20f.htm"
+    },
+    "assertions": {
+      "min_items_extracted": 5,
+      "allow_missing_recent_items": ["1A", "1B", "1C", "5", "6", "9C", "13", "14", "16"]
+    }
+  },
+  {
+    "case_id": "t3_red_metal_2025_20f_smallcap_reserved",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001358654",
+      "accession_number": "0001139020-25-000153"
+    },
+    "expected_behavior": "Red Metal Resources 2025 20-F small-cap mining issuer. The filing has 20-F-specific headings plus Item 16 [Reserved]. Tests small-company formatting, mining-sector language, and reserved-item classification in a non-10-K form.",
+    "difficulty": "edge_case",
+    "tags": ["foreign_private_issuer", "20_f", "small_cap", "mining", "reserved", "status_classification", "vision_benefit_candidate"],
+    "source": {
+      "kind": "official_sec_archive_document",
+      "filing_url": "https://www.sec.gov/Archives/edgar/data/1358654/000113902025000153/rmes-20250131.htm"
+    },
+    "assertions": {
+      "min_items_extracted": 5,
+      "allow_missing_recent_items": ["1A", "1B", "1C", "5", "6", "9C", "13", "14", "16"]
+    }
   }
 ]

@@ -6,6 +6,10 @@ Tests cover schemas, observer, executor, healer, planner, and agent integration.
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import contextlib
+
 import pytest
 
 from src.task2_browser.schemas import (
@@ -594,6 +598,90 @@ class TestSilentFailureGuard:
 
         msg = make_multimodal_message("hello", None)
         assert msg.content == "hello"
+
+    def test_make_multimodal_history_labels_images(self) -> None:
+        """Multi-screenshot messages should preserve chronological labels."""
+        from src.task2_browser.vision import make_multimodal_message_history
+
+        msg = make_multimodal_message_history(
+            "context",
+            [("step 1 viewport", "AAA="), ("step 2 viewport", "BBB=")],
+        )
+        assert isinstance(msg.content, list)
+        assert msg.content[0]["text"] == "[step 1 viewport]"
+        assert msg.content[2]["text"] == "[step 2 viewport]"
+        assert msg.content[-1]["text"] == "context"
+
+    def test_annotate_screenshot_with_markers(self) -> None:
+        """Marker annotation produces a decodable JPEG for focused vision."""
+        import io
+
+        from PIL import Image
+
+        from src.task2_browser.vision import annotate_screenshot_with_markers
+
+        img = Image.new("RGB", (160, 100), "white")
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG")
+        raw = base64.b64encode(buf.getvalue()).decode("ascii")
+
+        annotated = annotate_screenshot_with_markers(
+            raw,
+            [{"x": 20, "y": 20, "width": 80, "height": 30, "label": "button"}],
+        )
+        assert annotated is not None
+        assert len(base64.b64decode(annotated)) > 100
+
+    @pytest.mark.asyncio
+    async def test_playwright_screenshot_helpers_do_not_hang(self) -> None:
+        """Screenshot helpers run against a real Chromium page under timeout."""
+        from playwright.async_api import async_playwright
+
+        from src.task2_browser.vision import (
+            capture_element_screenshot_b64,
+            capture_full_page_screenshot_b64,
+            capture_screenshot_b64,
+        )
+
+        async def scenario() -> None:
+            manager = async_playwright()
+            browser = None
+            try:
+                pw = await manager.start()
+                try:
+                    browser = await asyncio.wait_for(
+                        pw.chromium.launch(headless=True),
+                        timeout=10,
+                    )
+                except Exception as exc:
+                    pytest.skip(f"Chromium is not launchable in this environment: {exc}")
+                page = await browser.new_page(viewport={"width": 640, "height": 480})
+                await page.set_content(
+                    """
+                    <html><body>
+                      <main style="height:1400px">
+                        <button id="cta">Run benchmark</button>
+                        <section style="margin-top:900px">Below fold content</section>
+                      </main>
+                    </body></html>
+                    """,
+                    wait_until="domcontentloaded",
+                )
+                viewport = await capture_screenshot_b64(page, max_width_px=400)
+                full_page = await capture_full_page_screenshot_b64(page, max_width_px=400)
+                element = await capture_element_screenshot_b64(page, "#cta", max_width_px=300)
+            finally:
+                if browser is not None:
+                    with contextlib.suppress(BaseException):
+                        await browser.close()
+                with contextlib.suppress(BaseException):
+                    await manager.stop()
+
+            assert viewport and len(base64.b64decode(viewport)) > 100
+            assert full_page and len(base64.b64decode(full_page)) > 100
+            assert element and len(base64.b64decode(element)) > 100
+
+        await asyncio.wait_for(scenario(), timeout=20)
 
     @pytest.mark.asyncio
     async def test_t3_vision_render_real_text(self) -> None:

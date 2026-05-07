@@ -118,17 +118,24 @@ def _classify_failure(case_score: dict[str, Any]) -> str | None:
     return FailureType.PARSING_ERROR.value
 
 
-async def _run_case(case: dict[str, Any], allow_llm: bool, skip_xbrl: bool) -> dict[str, Any]:
+async def _run_case(
+    case: dict[str, Any], allow_llm: bool, skip_xbrl: bool,
+    use_vision: bool = False, force_llm: bool = False,
+    timeout_s: float = 300.0,
+) -> dict[str, Any]:
     """Run one eval case through the live Task 3 pipeline."""
     started = time.time()
     try:
-        result = await extract_10k(
+        coro = extract_10k(
             cik=case["input_data"].get("cik"),
             accession_number=case["input_data"].get("accession_number"),
             filing_url=case["input_data"].get("filing_url"),
-            skip_llm=not allow_llm,
+            skip_llm=not allow_llm and not force_llm,
             skip_xbrl=skip_xbrl,
+            use_vision=use_vision,
+            force_llm=force_llm,
         )
+        result = await asyncio.wait_for(coro, timeout=timeout_s)
         score = _score_case(case, result)
         score["failure_type"] = _classify_failure(score)
         score["error"] = None
@@ -200,12 +207,18 @@ def _write_markdown_report(report_path: Path, payload: dict[str, Any]) -> None:
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-async def run_eval(eval_set: Path, results_dir: Path, allow_llm: bool, skip_xbrl: bool) -> dict[str, Any]:
+async def run_eval(
+    eval_set: Path, results_dir: Path, allow_llm: bool, skip_xbrl: bool,
+    use_vision: bool = False, force_llm: bool = False, timeout_s: float = 300.0,
+) -> dict[str, Any]:
     """Run all Task 3 eval cases and persist JSON/Markdown reports."""
     cases = _load_cases(eval_set)
     scores = []
     for case in cases:
-        scores.append(await _run_case(case, allow_llm=allow_llm, skip_xbrl=skip_xbrl))
+        scores.append(await _run_case(
+            case, allow_llm=allow_llm, skip_xbrl=skip_xbrl,
+            use_vision=use_vision, force_llm=force_llm, timeout_s=timeout_s,
+        ))
 
     run_at = datetime.now(timezone.utc).isoformat()
     payload = {
@@ -214,6 +227,9 @@ async def run_eval(eval_set: Path, results_dir: Path, allow_llm: bool, skip_xbrl
         "mode": {
             "allow_llm": allow_llm,
             "skip_xbrl": skip_xbrl,
+            "use_vision": use_vision,
+            "force_llm": force_llm,
+            "timeout_s": timeout_s,
         },
         "summary": _summarize(scores),
         "scores": scores,
@@ -236,6 +252,12 @@ def main() -> None:
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--allow-llm", action="store_true", help="Allow LLM boundary refinement.")
     parser.add_argument("--skip-xbrl", action="store_true", help="Skip XBRL cross-validation.")
+    parser.add_argument("--force-llm", action="store_true",
+                        help="Force Stage 2 LLM refinement even on high-confidence filings.")
+    parser.add_argument("--vision", action="store_true",
+                        help="Pass use_vision=True (only effective with vision-capable models).")
+    parser.add_argument("--timeout", type=float, default=300.0,
+                        help="Max seconds per case before timeout (default: 300).")
     args = parser.parse_args()
 
     payload = asyncio.run(
@@ -244,6 +266,9 @@ def main() -> None:
             results_dir=args.results_dir,
             allow_llm=args.allow_llm,
             skip_xbrl=args.skip_xbrl,
+            use_vision=args.vision,
+            force_llm=args.force_llm,
+            timeout_s=args.timeout,
         )
     )
     sys.stdout.write(json.dumps(payload["summary"], indent=2) + "\n")

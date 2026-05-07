@@ -80,16 +80,22 @@ def _score_case(case: dict[str, Any], result: AgentResult) -> dict[str, Any]:
     }
 
 
-async def _run_case(case: dict[str, Any], model_name: str | None) -> dict[str, Any]:
+async def _run_case(
+    case: dict[str, Any], model_name: str | None, use_vision: bool = False,
+    timeout_s: float = 120.0,
+) -> dict[str, Any]:
     """Run one eval case through the live browser agent."""
     started = time.time()
     try:
-        agent = BrowserAgent(model_name=model_name, headless=True)
-        result = await agent.run(
+        agent = BrowserAgent(
+            model_name=model_name, headless=True, use_vision=use_vision,
+        )
+        coro = agent.run(
             task_description=case["input_data"]["task_description"],
             target_url=case["input_data"].get("target_url"),
             max_steps=case["input_data"].get("max_steps", 15),
         )
+        result = await asyncio.wait_for(coro, timeout=timeout_s)
         return _score_case(case, result)
     except Exception as exc:
         return {
@@ -131,6 +137,8 @@ async def run_eval(
     model_name: str | None = None,
     skip_hard: bool = False,
     inter_case_delay: float = 5.0,
+    use_vision: bool = False,
+    timeout_s: float = 120.0,
 ) -> dict[str, Any]:
     """Run all Task 2 eval cases.
 
@@ -138,6 +146,8 @@ async def run_eval(
         inter_case_delay: Seconds to sleep between cases to avoid rate-limiting.
             NVIDIA NIM kimi-k2.6 allows ~4 calls/min on free tier; 5 s gap helps.
             Set to 0 for no delay (may hit 429 on batch runs).
+        use_vision: Pass use_vision=True to the browser agent.
+        timeout_s: Max seconds per case before forceful cancellation.
     """
     import asyncio as _asyncio
 
@@ -147,7 +157,9 @@ async def run_eval(
 
     scores = []
     for i, case in enumerate(cases):
-        scores.append(await _run_case(case, model_name))
+        scores.append(await _run_case(
+            case, model_name, use_vision=use_vision, timeout_s=timeout_s,
+        ))
         if inter_case_delay > 0 and i < len(cases) - 1:
             await _asyncio.sleep(inter_case_delay)
 
@@ -180,10 +192,24 @@ def main() -> None:
         default=5.0,
         help="Seconds between cases to avoid rate-limiting (default: 5.0)",
     )
+    parser.add_argument(
+        "--vision",
+        action="store_true",
+        help="Run with use_vision=True (only effective with OpenRouter vision models)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=120.0,
+        help="Max seconds per case before timeout (default: 120)",
+    )
     args = parser.parse_args()
 
     payload = asyncio.run(
-        run_eval(args.eval_set, args.results_dir, args.model, args.skip_hard, args.delay)
+        run_eval(
+            args.eval_set, args.results_dir, args.model, args.skip_hard,
+            args.delay, args.vision, args.timeout,
+        )
     )
     sys.stdout.write(json.dumps(payload["summary"], indent=2) + "\n")
 

@@ -8,6 +8,9 @@ Covers:
 - Pipeline integration (end-to-end with mock data)
 """
 
+import asyncio
+import base64
+
 import pytest
 
 from src.task3_sec.fetcher import (
@@ -744,6 +747,33 @@ class TestPipelineIntegration:
         result = rule_based_parse(normalized)
         assert result.items_found >= 3  # Should find at least Item 1, 1A, 2
 
+    def test_llm_status_hint_can_mark_short_items(self):
+        """LLM status hints from vision refinement survive item construction."""
+        from src.task3_sec.pipeline import _build_items
+        from src.task3_sec.rule_parser import ItemBoundary, ParseResult
+
+        text = "Item 4. Mine Safety Disclosures\nNo mining operations are shown in a table-only note."
+        parse_result = ParseResult(
+            boundaries=[
+                ItemBoundary(
+                    item_number="4",
+                    start_pos=0,
+                    end_pos=len(text),
+                    heading_text="Mine Safety Disclosures",
+                    confidence=0.9,
+                    source="llm_refined",
+                    status_hint="not_applicable",
+                )
+            ],
+            total_chars=len(text),
+            items_found=1,
+            confidence_avg=0.9,
+        )
+
+        items = _build_items(text, parse_result)
+        assert items[0].status == ItemStatus.NOT_APPLICABLE
+        assert items[0].extraction_method == ExtractionMethod.LLM_REFINED
+
     def test_status_detection_in_html(self):
         """Status detection should work on normalized HTML."""
         normalized, _ = normalize_filing(SAMPLE_HTML)
@@ -778,3 +808,111 @@ class TestPipelineIntegration:
         assert "SEC 10-K" in BOUNDARY_REFINE_PROMPT
         assert len(MISSING_ITEM_PROMPT) > 100
         assert "{prev_item}" in MISSING_ITEM_PROMPT
+
+    @pytest.mark.asyncio
+    async def test_llm_refine_preserves_known_item_number(self):
+        """Boundary refinement must not let the LLM rename known items."""
+        from src.task3_sec.llm_refiner import _refine_single_boundary
+        from src.task3_sec.rule_parser import ItemBoundary
+
+        class FakeResponse:
+            content = (
+                '{"is_item_heading": true, "item_number": "8", '
+                '"item_title": "Financial Statements", "content_start_offset": 0, '
+                '"status": "extracted", "confidence": 0.91}'
+            )
+
+        class FakeLLM:
+            async def ainvoke(self, messages):
+                return FakeResponse()
+
+        text = "Item 7. Management Discussion\nRevenue was stable."
+        boundary = ItemBoundary(
+            item_number="7",
+            start_pos=0,
+            heading_text="Management Discussion",
+            confidence=0.5,
+        )
+
+        refined = await _refine_single_boundary(
+            text=text,
+            boundary=boundary,
+            llm=FakeLLM(),
+            model_name="test-model",
+            trace_id="test-trace",
+        )
+
+        assert refined is not None
+        assert refined.item_number == "7"
+
+    @pytest.mark.asyncio
+    async def test_task3_vision_renderers_do_not_hang(self):
+        """HTML and comparison snapshot renderers use real Playwright under timeout."""
+        from src.task3_sec.vision import (
+            render_comparison_snapshots,
+            render_html_to_jpeg_b64,
+        )
+
+        async def scenario():
+            html_b64 = await render_html_to_jpeg_b64(
+                "<h2>Item 7. MD&A</h2><table><tr><td>Revenue</td><td>$100</td></tr></table>",
+                width_px=640,
+            )
+            text = (
+                "Item 1. Business\nWe make products.\n\n"
+                "Item 1A. Risk Factors\nRisks include demand shocks."
+            )
+            boundary = text.index("Item 1A")
+            comparison = await render_comparison_snapshots(text, boundary, "1A", width_px=640)
+            return html_b64, comparison
+
+        html_b64, comparison = await asyncio.wait_for(scenario(), timeout=20)
+        if not html_b64 or not comparison:
+            pytest.skip("Chromium is not launchable in this environment.")
+        assert html_b64 and len(base64.b64decode(html_b64)) > 100
+        assert comparison and len(base64.b64decode(comparison[0][1])) > 100
+
+    @pytest.mark.asyncio
+    async def test_pipeline_force_llm_invokes_refiner(self, monkeypatch):
+        """force_llm should call Stage 2 even when rule parsing is confident."""
+        from src.task3_sec.pipeline import extract_10k
+
+        calls = {}
+
+        async def fake_find_10k_filing(cik, accession_number=None, year=None):
+            return {
+                "cik": cik,
+                "company_name": "Example Corp",
+                "accession_number": accession_number or "0000000000-00-000000",
+                "filing_date": "2024-02-01",
+                "filing_url": "https://www.sec.gov/Archives/example.htm",
+                "primary_document": "example.htm",
+                "form_type": "10-K",
+            }
+
+        async def fake_fetch_filing_content(url):
+            return SAMPLE_HTML
+
+        async def fake_refine_boundaries(text, parse_result, **kwargs):
+            calls["force_refine"] = kwargs.get("force_refine")
+            calls["use_vision"] = kwargs.get("use_vision")
+            return parse_result
+
+        async def fake_find_proxy_statement(cik, year):
+            return None
+
+        monkeypatch.setattr("src.task3_sec.pipeline.find_10k_filing", fake_find_10k_filing)
+        monkeypatch.setattr("src.task3_sec.pipeline.fetch_filing_content", fake_fetch_filing_content)
+        monkeypatch.setattr("src.task3_sec.pipeline.refine_boundaries", fake_refine_boundaries)
+        monkeypatch.setattr("src.task3_sec.pipeline.find_proxy_statement", fake_find_proxy_statement)
+
+        result = await extract_10k(
+            cik="0000000001",
+            accession_number="0000000001-24-000001",
+            skip_xbrl=True,
+            use_vision=True,
+            force_llm=True,
+        )
+
+        assert calls == {"force_refine": True, "use_vision": True}
+        assert "llm_refine" in result.processing_metadata.stages_used
