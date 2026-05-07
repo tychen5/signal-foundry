@@ -556,6 +556,45 @@ class TestSilentFailureGuard:
         agent._guard_against_silent_success(result)
         assert result.status == "not_found"
 
+    def test_vision_capability_check(self) -> None:
+        """Only the 3 vision-capable OpenRouter models should return True."""
+        from src.task2_browser.vision import is_vision_capable
+
+        # Vision-capable
+        assert is_vision_capable("google/gemini-3.1-pro-preview")
+        assert is_vision_capable("anthropic/claude-opus-4.7")
+        assert is_vision_capable("openai/gpt-5.5")
+
+        # NVIDIA models are text-only
+        assert not is_vision_capable("moonshotai/kimi-k2.6")
+        assert not is_vision_capable("deepseek-ai/deepseek-v4-pro")
+        assert not is_vision_capable("z-ai/glm-5.1")
+        assert not is_vision_capable("minimaxai/minimax-m2.7")
+
+        # Edge cases
+        assert not is_vision_capable("")
+        assert not is_vision_capable(None)
+        assert not is_vision_capable("unknown-model")
+
+    def test_make_multimodal_message_with_image(self) -> None:
+        """When screenshot is provided, output a content list with image_url."""
+        from src.task2_browser.vision import make_multimodal_message
+
+        msg = make_multimodal_message("hello", "FAKE_BASE64==")
+        assert isinstance(msg.content, list)
+        assert len(msg.content) == 2
+        assert msg.content[0]["type"] == "image_url"
+        assert "data:image/jpeg;base64,FAKE_BASE64==" in msg.content[0]["image_url"]["url"]
+        assert msg.content[1]["type"] == "text"
+        assert msg.content[1]["text"] == "hello"
+
+    def test_make_multimodal_message_text_only_fallback(self) -> None:
+        """When no screenshot, return a plain text HumanMessage."""
+        from src.task2_browser.vision import make_multimodal_message
+
+        msg = make_multimodal_message("hello", None)
+        assert msg.content == "hello"
+
     def test_clean_final_answer_strips_json_wrapper(self) -> None:
         """When the LLM wraps the answer in ```json {...}```, extract the
         inner answer field rather than leaking the whole JSON to the caller."""

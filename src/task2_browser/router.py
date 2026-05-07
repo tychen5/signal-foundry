@@ -32,6 +32,14 @@ class BrowserTaskRequest(BaseModel):
     target_url: Optional[str] = Field(default=None, description="Starting URL (optional — agent can navigate)")
     max_steps: int = Field(default=15, ge=1, le=50, description="Maximum steps before timeout")
     screenshot: bool = Field(default=True, description="Capture screenshots at each step")
+    use_vision: bool = Field(
+        default=False,
+        description=(
+            "If true AND model is vision-capable (gemini-3.1-pro / claude-opus-4.7 / "
+            "gpt-5.5), the verifier receives the current viewport as a JPEG alongside "
+            "the AOM tree. Helps with visually-encoded data (charts, captchas, layout)."
+        ),
+    )
     model: ModelSelectionRequest = Field(default_factory=ModelSelectionRequest)
 
 
@@ -67,6 +75,7 @@ async def execute_browser_task(request: BrowserTaskRequest):
             user_api_key=request.model.user_openrouter_key,
             headless=True,
             screenshot_dir="/tmp/signal_foundry_browser" if request.screenshot else "",
+            use_vision=request.use_vision,
         )
 
         result = await agent.run(

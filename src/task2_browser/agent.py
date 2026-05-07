@@ -174,11 +174,16 @@ class BrowserAgent:
         user_api_key: Optional[str] = None,
         headless: bool = True,
         screenshot_dir: str = "/tmp/signal_foundry_browser",
+        use_vision: bool = False,
     ):
         self.model_name = model_name
         self.user_api_key = user_api_key
         self.headless = headless
         self.screenshot_dir = screenshot_dir
+        # Multi-modal vision: only effective with gemini/claude/gpt-5.5.
+        # When True and the model supports it, the verifier receives the
+        # current viewport as an inline JPEG alongside the AOM text.
+        self.use_vision = use_vision
 
     async def run(
         self,
@@ -272,6 +277,18 @@ class BrowserAgent:
                     # Observe current state
                     current_state = await observe(page, self.screenshot_dir)
 
+                    # Capture screenshot for multi-modal verification (opt-in).
+                    # Only fires for vision-capable models — capture is cheap
+                    # but the LLM cost is what we're guarding against.
+                    screenshot_b64 = None
+                    if self.use_vision:
+                        from src.task2_browser.vision import (
+                            capture_screenshot_b64,
+                            is_vision_capable,
+                        )
+                        if is_vision_capable(self.model_name):
+                            screenshot_b64 = await capture_screenshot_b64(page)
+
                     # Check if task is complete
                     is_complete, answer, confidence = await verify_with_llm(
                         task_description=task_description,
@@ -280,6 +297,7 @@ class BrowserAgent:
                         model_name=self.model_name,
                         user_api_key=self.user_api_key,
                         trace_id=trace_id,
+                        screenshot_b64=screenshot_b64,
                     )
                     result.llm_calls += 1
 

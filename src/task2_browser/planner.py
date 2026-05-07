@@ -209,15 +209,26 @@ async def verify_with_llm(
     model_name: Optional[str] = None,
     user_api_key: Optional[str] = None,
     trace_id: str = "",
+    screenshot_b64: Optional[str] = None,
 ) -> tuple[bool, str, float]:
     """
     LLM-based verification: has the task been completed?
+
+    Args:
+        screenshot_b64: optional base64-encoded JPEG of current viewport.
+            When provided AND model is vision-capable (gemini/claude/gpt),
+            it's added as an image_url content block alongside the text
+            context — gives the verifier a visual grounding signal that
+            the AOM tree alone can't provide (chart values, captcha,
+            visual layout cues). See `src.task2_browser.vision`.
 
     Returns:
         Tuple of (is_complete, final_answer, confidence)
     """
     if not VERIFIER_PROMPT:
         return False, "", 0.5
+
+    from src.task2_browser.vision import is_vision_capable, make_multimodal_message
 
     llm = get_llm(
         model_name=model_name,
@@ -236,12 +247,22 @@ async def verify_with_llm(
         f"STEPS TAKEN:\n{steps_summary}\n"
     )
 
+    # Vision: include screenshot only when model supports it AND a screenshot
+    # was captured. Silently degrades to text-only otherwise — this keeps
+    # the function usable across the full model registry.
+    use_vision = bool(screenshot_b64) and is_vision_capable(model_name)
+    user_msg = (
+        make_multimodal_message(context, screenshot_b64)
+        if use_vision
+        else HumanMessage(content=context)
+    )
+
     try:
         _t0 = time.time()
         response = await llm.ainvoke(
             [
                 SystemMessage(content=VERIFIER_PROMPT),
-                HumanMessage(content=context),
+                user_msg,
             ]
         )
 

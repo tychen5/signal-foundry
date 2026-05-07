@@ -1,0 +1,103 @@
+{
+  "results": [
+    {
+      "model": "moonshotai/kimi-k2.6",
+      "case": "wikipedia_search",
+      "status": "success",
+      "steps": 6,
+      "self_corrections": 0,
+      "cost_usd": 0.011748,
+      "latency_ms": 37316.1,
+      "answer_preview": "\"AI\" redirects here. For other uses, see AI (disambiguation).",
+      "ok": true
+    },
+    {
+      "model": "moonshotai/kimi-k2.6",
+      "case": "arxiv_paper",
+      "status": "success",
+      "steps": 4,
+      "self_corrections": 0,
+      "cost_usd": 0.005904,
+      "latency_ms": 8073.7,
+      "answer_preview": "Paper title: ST-LINK: Spatially-Aware Large Language Models for Spatio-Temporal Forecasting; First author: Hyotaek Jeon",
+      "ok": true
+    },
+    {
+      "model": "moonshotai/kimi-k2.6",
+      "case": "anuse_silent_failure",
+      "status": "not_found",
+      "steps": 4,
+      "self_corrections": 0,
+      "cost_usd": 0.005474,
+      "latency_ms": 7900.7,
+      "answer_preview": "not_found: example.com is a reserved placeholder domain with no contact information",
+      "ok": true
+    },
+    {
+      "model": "google/gemini-3.1-pro-preview",
+      "case": "wikipedia_search",
+      "status": "success",
+      "steps": 5,
+      "self_corrections": 0,
+      "cost_usd": 0.003991,
+      "latency_ms": 24997.2,
+      "answer_preview": "{\n  \"complete\": false,\n  \"answer\": \"not_",
+      "ok": true
+    },
+    {
+      "model": "google/gemini-3.1-pro-preview",
+      "case": "arxiv_paper",
+      "status": "success",
+      "steps": 4,
+      "self_corrections": 0,
+      "cost_usd": 0.00418,
+      "latency_ms": 19532.6,
+      "answer_preview": "Title: ST-LINK: Spatially-Aware Large Language Models for Spatio-Temporal Forecasting, First Author: Hyotaek Jeon",
+      "ok": true
+    },
+    {
+      "model": "google/gemini-3.1-pro-preview",
+      "case": "anuse_silent_failure",
+      "status": "not_found",
+      "steps": 3,
+      "self_corrections": 0,
+      "cost_usd": 0.003375,
+      "latency_ms": 16797.8,
+      "answer_preview": "not_found: example.com is a reserved placeholder domain with no contact information",
+      "ok": true
+    },
+    {
+      "model": "openai/gpt-5.5",
+      "case": "wikipedia_search",
+      "status": "partial",
+      "steps": 8,
+      "self_corrections": 0,
+      "cost_usd": 0.06228,
+      "latency_ms": 89079.5,
+      "answer_preview": "Reached max steps (8). Last page: https://en.wikipedia.org/wiki/Artificial_intelligence",
+      "ok": true
+    },
+    {
+      "model": "openai/gpt-5.5",
+      "case": "arxiv_paper",
+      "status": "success",
+      "steps": 4,
+      "self_corrections": 0,
+      "cost_usd": 0.01575,
+      "latency_ms": 17118.4,
+      "answer_preview": "Title: ST-LINK: Spatially-Aware Large Language Models for Spatio-Temporal Forecasting; First author: Hyotaek Jeon",
+      "ok": true
+    },
+    {
+      "model": "openai/gpt-5.5",
+      "case": "anuse_silent_failure",
+      "status": "not_found",
+      "steps": 3,
+      "self_corrections": 0,
+      "cost_usd": 0.0128,
+      "latency_ms": 13219.8,
+      "answer_preview": "not_found: example.com is a reserved documentation example domain and the visible page contains no email or European trademark dispute officer informa",
+      "ok": true
+    }
+  ]
+}
