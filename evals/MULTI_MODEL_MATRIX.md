@@ -71,7 +71,8 @@ Important interpretation notes:
 
 - Task 2 is the real vision-benefit benchmark: `use_vision=false` sends AOM/text only; `use_vision=true` sends bounded viewport JPEG history to both actor and verifier.
 - Task 3 only attaches vision when Stage 2 LLM boundary refinement fires. High-confidence modern filings stay rule-only, so use `--force-llm-task3` / API `force_llm=true` when the goal is controlled text-only vs vision-assisted comparison.
-- Committed live slice: `evals/vision_results/vision_benchmark_20260507T072543Z.md`. Status/step/cost metrics are automatic; visual-answer quality still needs spot-checking from the JSON previews.
+- Committed Task 2 live slice: `evals/vision_results/vision_benchmark_20260507T072543Z.md`. Status/step/cost metrics are automatic; visual-answer quality still needs spot-checking from the JSON previews.
+- Committed forced Task 3 slice: `evals/vision_results/vision_benchmark_20260507T084355Z.md`, run with `T3_FORCE_LLM_MAX=1`.
 
 | Task | Model | Vision off | Vision on | Delta |
 |---|---|---:|---:|---|
@@ -79,3 +80,9 @@ Important interpretation notes:
 | Task 2 Mona Lisa image caption | Claude Opus 4.7 | partial, 15 steps, $0.782115, 118.9s | success, 3 steps, $0.048690, 27.5s | Vision prevented a costly max-step loop |
 | Task 2 Mona Lisa image caption | GPT-5.5 | success, 5 steps, $0.067510, 93.4s | success, 4 steps, $0.035255, 49.8s | Vision roughly halved cost and latency |
 | Task 3 Apple 2005 legacy filing | Gemini / Claude / GPT | 18/23 items, $0, 0 LLM calls | 18/23 items, $0, 0 LLM calls | No effect because Stage 2 did not fire; rule parser confidence was high |
+
+| Task 3 forced Stage 2 case | Model | Vision off | Vision on | Delta |
+|---|---|---:|---:|---|
+| Apple 2023 forced boundary refine | Gemini 3.1 Pro | 23/23 items, 1 call, $0.002044, 83.4s | 23/23 items, 1 call, $0.002059, 29.7s | Vision cut latency by ~64%; cost unchanged |
+| Apple 2023 forced boundary refine | Claude Opus 4.7 | 23/23 items, 1 call, $0.024240, 5.8s | 23/23 items, 1 call, $0.025365, 10.7s | Vision adds small cost/latency; both correct |
+| Apple 2023 forced boundary refine | GPT-5.5 | 23/23 items, 1 call, $0.008155, 112.4s | 23/23 items, 1 call, $0.008275, 42.3s | Vision cut latency by ~62%; cost unchanged |

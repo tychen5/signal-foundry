@@ -581,7 +581,7 @@ Default benchmark slice:
 | Task 2 | TradingView chart trend, Wikipedia image caption, Nobel table layout | Canvas/image/table cues that are weak or absent in AOM text |
 | Task 3 | Apple 2005 legacy, TSMC 20-F, IBM proxy-heavy | Typography/layout around uncertain SEC item boundaries; `--force-llm-task3` makes Stage 2 fire for controlled vision on/off comparison |
 
-Committed live slice: [`evals/vision_results/vision_benchmark_20260507T072543Z.md`](evals/vision_results/vision_benchmark_20260507T072543Z.md). This is a compact 1-case-per-task slice, not the full 3-case default sweep. Status/step/cost metrics are automatic; answer quality should still be manually spot-checked from the JSON preview for visual extraction cases.
+Committed Task 2 live slice: [`evals/vision_results/vision_benchmark_20260507T072543Z.md`](evals/vision_results/vision_benchmark_20260507T072543Z.md). This is a compact 1-case-per-task slice, not the full 3-case default sweep. Status/step/cost metrics are automatic; answer quality should still be manually spot-checked from the JSON preview for visual extraction cases.
 
 | Task | Model | Vision off | Vision on | Delta |
 |---|---|---:|---:|---|
@@ -590,7 +590,15 @@ Committed live slice: [`evals/vision_results/vision_benchmark_20260507T072543Z.m
 | Task 2 Mona Lisa image caption | GPT-5.5 | success, 5 steps, $0.067510, 93.4 s | success, 4 steps, $0.035255, 49.8 s | Vision roughly halved cost and latency |
 | Task 3 Apple 2005 legacy filing | Gemini / Claude / GPT | 18/23 items, $0, 0 LLM calls | 18/23 items, $0, 0 LLM calls | No effect because Stage 2 did not fire; rule parser confidence was high |
 
-Interpretation: Task 2 is where vision clearly pays off when visual context prevents loops. Task 3 preserves cost discipline by default: `use_vision=true` remains a no-op on high-confidence filings unless `force_llm=true` / `--force-llm-task3` is used for a controlled benchmark.
+Committed forced Task 3 slice: [`evals/vision_results/vision_benchmark_20260507T084355Z.md`](evals/vision_results/vision_benchmark_20260507T084355Z.md). Run command: `T3_FORCE_LLM_MAX=1 python -m evals.run_vision_benchmark --task task3 --task3-cases t3_apple_2023 --force-llm-task3 --timeout 240`.
+
+| Task 3 Apple 2023 forced Stage 2 | Vision off | Vision on | Delta |
+|---|---:|---:|---|
+| Gemini 3.1 Pro | 23/23 items, 1 call, $0.002044, 83.4 s | 23/23 items, 1 call, $0.002059, 29.7 s | Vision cut latency by ~64%; cost unchanged |
+| Claude Opus 4.7 | 23/23 items, 1 call, $0.024240, 5.8 s | 23/23 items, 1 call, $0.025365, 10.7 s | Vision adds small cost/latency; both correct |
+| GPT-5.5 | 23/23 items, 1 call, $0.008155, 112.4 s | 23/23 items, 1 call, $0.008275, 42.3 s | Vision cut latency by ~62%; cost unchanged |
+
+Interpretation: Task 2 is where vision clearly pays off when visual context prevents loops. Task 3 preserves cost discipline by default, and the forced benchmark proves the multimodal Stage 2 path is live. A regression surfaced during the forced run: one model tried to rename a known Item 7 boundary. The harness now locks the original item number during boundary refinement and only lets the LLM adjust offset/title/status/confidence.
 
 ### Vision engineering decisions
 
