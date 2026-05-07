@@ -237,12 +237,27 @@
                     : isPartial ? 'Task partially completed' : 'Task failed'
             );
 
-            // Trace ID + LangSmith link
+            // Trace ID + LangSmith link (click pill to copy full id)
             const traceId = envelope.trace_id || data.trace_id;
             if (traceId) {
-                document.getElementById('trace-id-pill').textContent = 'trace: ' + traceId.slice(0, 8);
+                const pill = document.getElementById('trace-id-pill');
+                pill.textContent = 'trace: ' + traceId.slice(0, 8);
+                pill.title = 'Click to copy full trace id: ' + traceId;
+                pill.onclick = () => {
+                    navigator.clipboard.writeText(traceId).then(() => {
+                        pill.classList.add('copied');
+                        const orig = pill.textContent;
+                        pill.textContent = '✓ copied';
+                        setTimeout(() => {
+                            pill.textContent = orig;
+                            pill.classList.remove('copied');
+                        }, 1500);
+                    });
+                };
                 document.getElementById('trace-info').style.display = 'inline-flex';
             }
+            // Auto-scroll to result after run completes
+            document.getElementById('result-panel').scrollIntoView({behavior:'smooth', block:'start'});
             if (envelope.langsmith_trace_url) {
                 const link = document.getElementById('langsmith-link');
                 link.href = envelope.langsmith_trace_url;

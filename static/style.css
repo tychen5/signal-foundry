@@ -176,6 +176,41 @@ body {
     color: #c4b5fd;
 }
 
+/* Copy-trace-id micro-interaction */
+.trace-id-pill {
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.trace-id-pill:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+}
+.trace-id-pill.copied {
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--accent-green);
+    border-color: var(--accent-green);
+}
+
+/* Smooth scroll to results when run completes */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Loading dots animation while running */
+.status-text-running::after {
+    content: '';
+    display: inline-block;
+    width: 1em;
+    text-align: left;
+    animation: ellipsis 1.5s infinite;
+}
+@keyframes ellipsis {
+    0% { content: ''; }
+    33% { content: '.'; }
+    66% { content: '..'; }
+    100% { content: '...'; }
+}
+
 .hero-stats {
     display: flex;
     flex-wrap: wrap;

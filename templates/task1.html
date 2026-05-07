@@ -216,12 +216,24 @@
             const costRow = document.getElementById('cost-row');
             const rawJson = document.getElementById('raw-json');
 
-            // Trace ID + LangSmith deep-link
+            // Trace ID + LangSmith deep-link (click pill to copy full id)
             const traceInfo = document.getElementById('trace-info');
             const tracePill = document.getElementById('trace-id-pill');
             const lsLink = document.getElementById('langsmith-link');
             if (data.trace_id) {
                 tracePill.textContent = 'trace: ' + data.trace_id.slice(0, 8);
+                tracePill.title = 'Click to copy full trace id: ' + data.trace_id;
+                tracePill.onclick = () => {
+                    navigator.clipboard.writeText(data.trace_id).then(() => {
+                        tracePill.classList.add('copied');
+                        const orig = tracePill.textContent;
+                        tracePill.textContent = '✓ copied';
+                        setTimeout(() => {
+                            tracePill.textContent = orig;
+                            tracePill.classList.remove('copied');
+                        }, 1500);
+                    });
+                };
                 traceInfo.style.display = 'inline-flex';
             } else {
                 traceInfo.style.display = 'none';
@@ -232,6 +244,8 @@
             } else {
                 lsLink.style.display = 'none';
             }
+            // Auto-scroll to result after run completes
+            document.getElementById('result-panel').scrollIntoView({behavior:'smooth', block:'start'});
 
             if (httpStatus >= 400 || data.status === 'failed') {
                 badge.className = 'status-badge failed';
