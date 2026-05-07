@@ -145,8 +145,11 @@
   11. [x] /health + /api/v1/models sanity-checked on every deploy. Final verification table in README "Live deployment verification".
   12. [x] Task 2 live eval — 3 sweeps committed (kimi rate-limited, claude-opus baseline, gemini after improvements). Best run: 13/21 genuine success.
 
-7. [x] Phase 7 UI/UX 美化 ✅ (2026-05-07)
+7. [] Phase 7 UI/UX 美化 
   1. [x] Index page rewritten: each task card is now a full `<a>` link wrapping a card div — entire card is clickable, hover state highlights the whole card with blue border + lift. Added `.card-bullets` block showing 3-4 highlight features per task. Added `.quick-actions` panel below cards with direct links to /api/v1/skills/list (View Skills), example SEC filings list, and example SEC company info — gives reviewers fast jumping-off points without typing URLs.
+  2. [] https://signal-foundry.zeabur.app/ 針對Task 2 與Task 3的卡片也需要改成可以點選的方式，以讓reviewer可以更加容易去審閱結果並且真的去使用。請設計一個好的互動展示方式讓reviewer可以透過UI方式去interact with題目二和題目三，讓使用者可以透過UI點選或是輸入操作的方式，輕鬆調用背後的模型、agent、pipeline等等來展示demo出最後得到成果來。以利可以錄製影片，並且輕鬆測試各種不同的其他cases、或是調整不同可以進行配置的參數。也請盡可能可以透過視覺化美化的方式來展示最後得到的結果。
+  3. [] 網頁 https://signal-foundry.zeabur.app/ 下方的 Health、Metrics、Models等按鈕點進去的頁面也不夠友善易讀，請思考應該要怎麼更好的視覺化呈現排版、增加易懂性易讀性，以讓使用者可以更加一目了然知道目前的狀況提升UX。
+  4. [] 請再細細思考看看網頁 https://signal-foundry.zeabur.app/ 可以再怎麼美化優化，或是增加資訊。以能夠更好的展示harness engineering並且錄製成影片，並且讓reviewer能夠即時去操作控制輸入輸出來看真實的處理過程與結果。請想想看還有什麼可以多做得來提升使用者體驗，並讓reviewer覺得很讚的features。
 
 ---
 
