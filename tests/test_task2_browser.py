@@ -595,6 +595,25 @@ class TestSilentFailureGuard:
         msg = make_multimodal_message("hello", None)
         assert msg.content == "hello"
 
+    @pytest.mark.asyncio
+    async def test_t3_vision_render_real_text(self) -> None:
+        """Task 3's text-to-image renderer produces a non-empty JPEG b64."""
+        from src.task3_sec.vision import render_text_to_jpeg_b64
+
+        sample = "Item 1. Business\nThe Company makes things.\n\nItem 1A. Risk Factors\nRisks include..."
+        b64 = await render_text_to_jpeg_b64(sample, width_px=600)
+        # Either succeeds (returns base64) or fails gracefully (returns None
+        # when playwright isn't available). Both are acceptable; the test
+        # asserts the function never raises.
+        if b64 is not None:
+            assert len(b64) > 100, "rendered output should be non-trivial"
+            # base64 decodes OK
+            import base64
+            try:
+                base64.b64decode(b64)
+            except Exception as e:
+                raise AssertionError(f"Invalid base64: {e}")
+
     def test_clean_final_answer_strips_json_wrapper(self) -> None:
         """When the LLM wraps the answer in ```json {...}```, extract the
         inner answer field rather than leaking the whole JSON to the caller."""

@@ -299,7 +299,24 @@ def detect_item_status(content: str) -> ItemStatus:
     if re.match(r"(?i)^\s*\[?\s*reserved\s*\]?\s*\.?\s*$", content_stripped):
         return ItemStatus.RESERVED
 
-    # Check for incorporated by reference
+    # Check for incorporated by reference.
+    #
+    # 1) A "Refer to ... in ... Proxy Statement" pattern in the first 3000 chars
+    #    is a stronger signal than the loose proxy-anywhere check — IBM-style
+    #    filings list 10+ caption titles between "Refer to" and "Proxy
+    #    Statement", pushing the trigger past the original 500-char window.
+    head = content_stripped[:3000]
+    if re.search(
+        r"(?is)\brefer(?:red)?\s+to\b[\s\S]{0,2500}\b(?:proxy|definitive\s+proxy|DEF\s*14A)\b",
+        head,
+    ):
+        return ItemStatus.INCORPORATED_BY_REFERENCE
+    # 2) "incorporated by reference" near the start (highly specific)
+    if re.search(r"(?i)incorporat\w*\s+(?:herein\s+)?by\s+reference", head):
+        return ItemStatus.INCORPORATED_BY_REFERENCE
+    # 3) Original loose check (proxy-statement mention) — keep tight at 500
+    #    chars so we don't false-fire on long Item 1 sections that mention
+    #    a proxy in passing.
     for pattern in _INCORPORATED_PATTERNS:
         if pattern.search(content_stripped[:500]):
             return ItemStatus.INCORPORATED_BY_REFERENCE

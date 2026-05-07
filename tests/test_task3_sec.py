@@ -447,6 +447,31 @@ The following risk factors should be considered.
         assert detect_item_status("[Reserved]") == ItemStatus.RESERVED
         assert detect_item_status("Reserved") == ItemStatus.RESERVED
 
+    def test_detect_item_status_refer_to_proxy_pattern(self):
+        """IBM-style filings have content like 'Refer to ... 10+ caption titles ...
+        in IBMs definitive Proxy Statement'. The proxy mention is far past
+        the 500-char loose-pattern window, so we need a wider 'refer to ...
+        proxy' regex. Real Item 11 from IBM 2025 had this pattern."""
+        ibm_item_11 = (
+            "Refer to the information under the captions 2024 Summary "
+            "Compensation Table and Related Narrative, 2024 Summary "
+            "Compensation Table, 2024 Compensation Discussion and Analysis, "
+            "2024 Grants of Plan-Based Awards Table, 2024 Outstanding Equity "
+            "Awards at Fiscal Year-End Table, 2024 Option Exercises and Stock "
+            "Vested Table, and Severance and Change-in-Control Provisions "
+            "in the definitive Proxy Statement to be filed with the SEC."
+        )
+        assert detect_item_status(ibm_item_11) == ItemStatus.INCORPORATED_BY_REFERENCE
+
+    def test_detect_item_status_proxy_far_into_content(self):
+        """Even when 'Proxy Statement' appears 1500+ chars in (because the item
+        starts with caption titles), a 'Refer to' antecedent should trigger
+        incorporated_by_reference."""
+        long_caption_list = "Refer to the information under " + (
+            '"' + ("Caption Title " * 50) + '" '
+        ) + "in the Proxy Statement filed with the SEC."
+        assert detect_item_status(long_caption_list) == ItemStatus.INCORPORATED_BY_REFERENCE
+
     def test_full_parse_result(self):
         """Full rule-based parse should return complete ParseResult."""
         normalized, _ = normalize_filing(SAMPLE_HTML)

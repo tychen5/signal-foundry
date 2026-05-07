@@ -333,5 +333,49 @@
       "min_items_extracted": 1,
       "allow_missing_recent_items": ["1", "1A", "1B", "1C", "2", "3", "4", "5", "6", "7", "7A", "8", "9", "9A", "9B", "9C", "10", "11", "12", "13", "14", "15", "16"]
     }
+  },
+  {
+    "case_id": "t3_ibm_2025_proxy_heavy",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000051143",
+      "accession_number": "0000051143-25-000015"
+    },
+    "expected_behavior": "IBM 2025 10-K — extreme proxy-incorporation pattern. Most Part II + III items reference the 2025 Proxy Statement / Annual Report rather than including the content inline. Validates that incorporation-by-reference status detection works for a filing that uses this pattern heavily (10+ incorporated items).",
+    "difficulty": "edge_case",
+    "tags": ["large_cap", "tech", "proxy_heavy", "incorporated_dominant"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000051143.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/51143/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 7,
+      "expected_status_items": {
+        "10": "incorporated_by_reference",
+        "11": "incorporated_by_reference",
+        "12": "incorporated_by_reference"
+      }
+    }
+  },
+  {
+    "case_id": "t3_hertz_2025_post_bankruptcy",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000047129",
+      "accession_number": "0001657853-25-000015"
+    },
+    "expected_behavior": "Hertz 10-K post Chapter 11 emergence (2021 bankruptcy reorganized into 2022 fresh-start accounting). Validates extraction on a filing whose Item 1 / 1A / 7 reference fresh-start accounting + reorganization, plus heavy regulated-industry risk language. Post-bankruptcy auto-rental sector has unique ASC 852 adjustments that show up in Item 7/8.",
+    "difficulty": "edge_case",
+    "tags": ["bankruptcy_post_emergence", "fresh_start_accounting", "regulated", "edge_case"],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000047129.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/47129/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 14,
+      "required_items": ["1", "1A", "7", "8", "15"]
+    }
   }
 ]
