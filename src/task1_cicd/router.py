@@ -102,3 +102,80 @@ async def run_skill(request: SkillRunRequest):
                 "retryable": info.retryable,
             },
         )
+
+
+@router.post("/stream")
+async def stream_run_skill(request: SkillRunRequest):
+    """SSE stream of CI/CD skill execution milestones.
+
+    Reviewer-facing events (per skill run):
+        stream_start, skill_start, skill_resolved, repo_validated, sha_fetched,
+        cache_hit | cache_miss, clone_start, clone_done, language_detected,
+        skill_run_start, skill_run_done, summarize_start, summarize_done,
+        skill_complete, error, stream_end
+
+    Task 1 runs can take 30-90 s on a fresh clone of a large repo + slow
+    OSV.dev / Bandit subprocess. Streaming makes the wait observable.
+    """
+    import asyncio
+    import json as _json
+
+    from fastapi.responses import StreamingResponse
+
+    from src.shared.llm_errors import classify_llm_error, to_dict
+    from src.task1_cicd.github_client import FastFailError
+    from src.task1_cicd.skill_engine import run_skill as engine_run_skill
+
+    trace_id = generate_trace_id()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+
+    async def progress_callback(event: dict) -> None:
+        await queue.put(event)
+
+    async def run_engine() -> None:
+        try:
+            await engine_run_skill(request, trace_id, progress_callback=progress_callback)
+        except FastFailError as e:
+            await queue.put(
+                {
+                    "event": "error",
+                    "category": "invalid_input",
+                    "user_message": str(e),
+                    "suggested_action": "Check the request payload (skill_name / repo_url / branch).",
+                    "raw_error": str(e),
+                    "retryable": False,
+                    "trace_id": trace_id,
+                }
+            )
+        except Exception as e:
+            err = to_dict(classify_llm_error(e))
+            err["trace_id"] = trace_id
+            await queue.put({"event": "error", **err})
+        finally:
+            await queue.put({"event": "stream_end", "trace_id": trace_id})
+
+    runner = asyncio.create_task(run_engine())
+
+    async def event_generator():
+        yield f"data: {_json.dumps({'event': 'stream_start', 'trace_id': trace_id})}\n\n"
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=20.0)
+            except asyncio.TimeoutError:
+                yield ": keep-alive\n\n"
+                continue
+            yield f"data: {_json.dumps(event)}\n\n"
+            if event.get("event") == "stream_end":
+                break
+        if not runner.done():
+            runner.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

@@ -140,6 +140,10 @@
                     <a href="#" target="_blank" id="langsmith-link" class="trace-link" style="display:none">View in LangSmith ↗</a>
                 </span>
             </div>
+            <div class="live-trace" id="live-trace" style="display:none">
+                <h4>📡 Skill Engine Progress</h4>
+                <ul id="live-events" class="live-events"></ul>
+            </div>
             <div class="meta-row" id="meta-row"></div>
             <div id="summary-section"></div>
             <div id="skill-detail-section"></div>
@@ -201,7 +205,41 @@
             };
             if (apiKey) payload.model.user_openrouter_key = apiKey;
 
+            // Reset live trace
+            const liveTrace = document.getElementById('live-trace');
+            const liveEvents = document.getElementById('live-events');
+            if (liveTrace) {
+                liveEvents.innerHTML = '';
+                liveTrace.style.display = 'block';
+            }
+
             try {
+                // Stream first for live progress, then re-fetch full result via /run
+                const streamResp = await fetch('/api/v1/skills/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                    body: JSON.stringify(payload),
+                });
+                if (streamResp.ok && streamResp.body) {
+                    const reader = streamResp.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buf = '';
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buf += decoder.decode(value, { stream: true });
+                        const lines = buf.split('\n');
+                        buf = lines.pop() || '';
+                        for (const ln of lines) {
+                            if (!ln.startsWith('data: ')) continue;
+                            try {
+                                const ev = JSON.parse(ln.slice(6));
+                                appendT1LiveEvent(ev);
+                            } catch (_) {}
+                        }
+                    }
+                }
+
                 const resp = await fetch('/api/v1/skills/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -216,6 +254,54 @@
                 btn.disabled = false;
                 btn.textContent = 'Run Skill';
             }
+        }
+
+        function appendT1LiveEvent(event) {
+            const list = document.getElementById('live-events');
+            if (!list) return;
+            const li = document.createElement('li');
+            li.className = 'live-event live-event-' + event.event;
+            const ts = new Date().toLocaleTimeString();
+            let text = `[${ts}] `;
+            if (event.event === 'stream_start') {
+                text += `🔌 stream open · trace ${event.trace_id ? event.trace_id.slice(0,8) : ''}`;
+            } else if (event.event === 'skill_start') {
+                text += `🚀 ${event.repo}@${event.branch} · skill="${event.requested_skill}" · model=${event.model || 'default'}` +
+                        (event.dry_run ? ' · dry-run' : '');
+            } else if (event.event === 'skill_resolved') {
+                text += `✓ skill resolved: ${event.skill} (conf ${(event.confidence*100|0)}%)`;
+            } else if (event.event === 'repo_validated') {
+                text += `✓ repo validated: ${event.owner}/${event.repo}@${event.branch}`;
+            } else if (event.event === 'sha_fetched') {
+                text += `✓ HEAD sha: ${event.commit_sha}`;
+            } else if (event.event === 'cache_hit') {
+                text += `⚡ cache HIT — skipping clone+run`;
+            } else if (event.event === 'cache_miss') {
+                text += `cache miss — fresh run`;
+            } else if (event.event === 'clone_start') {
+                text += `📥 cloning ${event.owner}/${event.repo}...`;
+            } else if (event.event === 'clone_done') {
+                text += `✓ clone done · sha ${event.commit_sha}`;
+            } else if (event.event === 'language_detected') {
+                text += `✓ language: ${event.language}`;
+            } else if (event.event === 'skill_run_start') {
+                text += `🛠️ running ${event.skill} (${event.language})...`;
+            } else if (event.event === 'skill_run_done') {
+                text += `✓ ${event.skill} done · status="${event.status}"`;
+            } else if (event.event === 'summarize_start') {
+                text += `📝 LLM summarizing (${event.model})...`;
+            } else if (event.event === 'summarize_done') {
+                text += `✓ summary ready · ${event.summary_preview ? event.summary_preview.slice(0, 80) + '…' : ''}`;
+            } else if (event.event === 'skill_complete') {
+                text += `🏁 ${event.status} in ${event.latency_ms|0} ms · $${(event.cost_usd||0).toFixed(4)}`;
+            } else if (event.event === 'error') {
+                text += `❌ ${event.user_message || event.category || 'error'}`;
+            } else {
+                text += `${event.event}`;
+            }
+            li.textContent = text;
+            list.appendChild(li);
+            list.scrollTop = list.scrollHeight;
         }
 
         function renderResult(data, httpStatus) {

@@ -65,10 +65,25 @@ def _make_cache_key(
 async def run_skill(
     request: SkillRunRequest,
     trace_id: str,
+    progress_callback: Optional[callable] = None,
 ) -> ExecutionResult:
     """
     Full skill execution pipeline with idempotency, caching, and cost tracking.
+
+    Args:
+        progress_callback: Optional async fn(dict) called at each milestone
+            (skill_resolved, sha_fetched, cache_hit/miss, clone_start/done,
+            skill_run_start/done, summarize_start/done, skill_complete).
+            Used by the SSE streaming endpoint.
     """
+    async def _emit(event: str, **payload) -> None:
+        if not progress_callback:
+            return
+        try:
+            await progress_callback({"event": event, **payload})
+        except Exception as e:
+            logger.warning("t1_progress_callback_failed", error=str(e)[:120])
+
     attach_metadata({
         "trace_id": trace_id,
         "skill_name": request.skill_name,
@@ -77,6 +92,14 @@ async def run_skill(
         "dry_run": request.dry_run,
         "model_name": request.model.model_id if request.model else "default",
     })
+    await _emit(
+        "skill_start",
+        repo=request.repo_url,
+        branch=request.branch,
+        requested_skill=request.skill_name,
+        dry_run=request.dry_run,
+        model=request.model.model_id if request.model else "default",
+    )
     start_time = time.monotonic()
     token = _get_github_token()
     temp_dir: Optional[str] = None
@@ -94,6 +117,7 @@ async def run_skill(
             return _fail_result(str(e), FailureType.SKILL_MISMATCH, trace_id, start_time)
 
         logger.info("skill_resolved", skill=skill_name, confidence=match_confidence, trace_id=trace_id)
+        await _emit("skill_resolved", skill=skill_name, confidence=match_confidence)
 
         # [2] Validate repo exists
         try:
@@ -104,12 +128,14 @@ async def run_skill(
         owner = repo_info["owner"]
         repo = repo_info["repo"]
         branch = request.branch
+        await _emit("repo_validated", owner=owner, repo=repo, branch=branch)
 
         # [3] Get HEAD SHA (fast, no clone)
         try:
             commit_sha = await github_client.get_repo_head_sha(owner, repo, branch, token)
         except FastFailError as e:
             return _fail_result(str(e), FailureType.REPO_NOT_FOUND, trace_id, start_time)
+        await _emit("sha_fetched", commit_sha=commit_sha[:12])
 
         # [4] Check idempotency cache
         cache_key = _make_cache_key(owner, repo, branch, skill_name, commit_sha, request.dry_run)
@@ -117,6 +143,7 @@ async def run_skill(
             cached = _result_cache.get(cache_key)
             if cached and (time.monotonic() - cached["cached_at"]) < CACHE_TTL_SECONDS:
                 logger.info("cache_hit", cache_key=cache_key, trace_id=trace_id)
+                await _emit("cache_hit", cache_key=cache_key[:48])
                 elapsed = (time.monotonic() - start_time) * 1000
                 return ExecutionResult(
                     status=ExecutionStatus.SUCCESS,
@@ -126,12 +153,14 @@ async def run_skill(
                     cost_metadata={"cache_hit": True, "cost_usd": 0.0},
                     latency_ms=elapsed,
                 )
+        await _emit("cache_miss", cache_key=cache_key[:48])
 
         # [5] Make temp dir
         temp_dir = make_temp_dir()
 
         # [6] Clone repo
         logger.info("cloning_repo", owner=owner, repo=repo, branch=branch, trace_id=trace_id)
+        await _emit("clone_start", owner=owner, repo=repo, branch=branch)
         try:
             actual_sha = await github_client.clone_repo(
                 request.repo_url, branch, temp_dir, token, timeout_seconds=120
@@ -140,9 +169,11 @@ async def run_skill(
             commit_sha = actual_sha or commit_sha
         except FastFailError as e:
             return _fail_result(str(e), FailureType.SANDBOX_ERROR, trace_id, start_time)
+        await _emit("clone_done", commit_sha=commit_sha[:12])
 
         # [7] Detect language
         language = detect_language(temp_dir)
+        await _emit("language_detected", language=language)
         base = Path(temp_dir)
 
         # [8] Build RepoContext
@@ -164,9 +195,17 @@ async def run_skill(
 
         # [9] Dispatch to skill module
         logger.info("dispatching_skill", skill=skill_name, language=language, trace_id=trace_id)
+        await _emit("skill_run_start", skill=skill_name, language=language)
         raw_result = await _dispatch(skill_name, ctx, request.dry_run, token, sandbox_cfg)
+        await _emit(
+            "skill_run_done",
+            skill=skill_name,
+            status=raw_result.get("status", ""),
+            preview=str({k: v for k, v in list(raw_result.items())[:3] if not isinstance(v, list) and k != "summary"})[:240],
+        )
 
         # [10] LLM summarize
+        await _emit("summarize_start", model=request.model.model_id if request.model else "default")
         summary = await skill_registry.llm_summarize(
             skill_name=skill_name,
             result=raw_result,
@@ -174,6 +213,7 @@ async def run_skill(
             user_api_key=request.model.user_openrouter_key,
             trace_id=trace_id,
         )
+        await _emit("summarize_done", summary_preview=(summary or "")[:200])
 
         # Build final result dict. Spread `raw_result` first so engine-level
         # fields (`summary`, `match_confidence`, etc.) always win — this
@@ -208,6 +248,14 @@ async def run_skill(
             latency_ms=round(elapsed),
             cost_usd=cost_metadata.get("cost_usd", 0),
             trace_id=trace_id,
+        )
+
+        await _emit(
+            "skill_complete",
+            skill=skill_name,
+            status="success",
+            latency_ms=round(elapsed),
+            cost_usd=cost_metadata.get("cost_usd", 0),
         )
 
         return ExecutionResult(
