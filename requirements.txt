@@ -29,6 +29,7 @@ python-dotenv>=1.0.1
 
 # --- Browser Automation (Task 2) ---
 playwright>=1.49.0
+pillow>=10.4.0
 
 # --- HTML/SEC Parsing (Task 3) ---
 beautifulsoup4>=4.12.3

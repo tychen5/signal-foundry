@@ -4,7 +4,7 @@ Planner: LLM-powered task decomposition and step-by-step action planning.
 Takes a natural language task description and produces an ordered sequence
 of BrowserActions, with predicted failure points for proactive healing.
 
-Uses prompts from prompts/browser_agent/v1_planner.txt and v1_actor.txt.
+Uses versioned prompts from prompts/browser_agent/.
 """
 
 from __future__ import annotations
@@ -55,16 +55,16 @@ def _load_prompt(filename: str) -> str:
 
 
 def _load_prompt_versioned(stem: str) -> str:
-    """Load latest prompt version (v2 preferred, v1 fallback). Audit-trail kept."""
-    for version in ("v2", "v1"):
+    """Load latest prompt version (v3 -> v2 -> v1 fallback)."""
+    for version in ("v3", "v2", "v1"):
         text = _load_prompt(f"{version}_{stem}.txt")
         if text:
             return text
     return ""
 
 
-# v2 prompts add explicit anti-hallucination + numeric grounding rules.
-# Falls back to v1 if v2 not present.
+# v3 actor/verifier prompts add multi-screenshot vision instructions.
+# Falls back to v2/v1 if newer prompts are absent.
 PLANNER_PROMPT = _load_prompt_versioned("planner")
 ACTOR_PROMPT = _load_prompt_versioned("actor")
 VERIFIER_PROMPT = _load_prompt_versioned("verifier")

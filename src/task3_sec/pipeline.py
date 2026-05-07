@@ -57,6 +57,7 @@ async def extract_10k(
     skip_llm: bool = False,
     skip_xbrl: bool = False,
     use_vision: bool = False,
+    force_llm: bool = False,
     trace_id: Optional[str] = None,
 ) -> ExtractionResult:
     """
@@ -72,6 +73,11 @@ async def extract_10k(
         user_api_key: User's API key for LLM calls
         skip_llm: If True, skip Stage 2 (LLM refinement)
         skip_xbrl: If True, skip Stage 4 (XBRL cross-validation)
+        use_vision: If True, attach rendered filing snapshots to Stage 2 for
+            vision-capable models.
+        force_llm: If True, run Stage 2 on the lowest-confidence boundaries
+            even when the rule parser is otherwise confident. Used for live
+            differential benchmarks.
         trace_id: Request trace ID
 
     Returns:
@@ -98,6 +104,7 @@ async def extract_10k(
         "model_name": model_name or "default",
         "skip_llm": skip_llm,
         "use_vision": use_vision,
+        "force_llm": force_llm,
     })
 
     # ========== FETCH FILING ==========
@@ -153,11 +160,11 @@ async def extract_10k(
     required_for_modern = {"1", "1A", "7", "7A", "8", "15"}
     found_items = {b.item_number for b in parse_result.boundaries}
     has_all_required = required_for_modern.issubset(found_items)
-    needs_llm = not skip_llm and (
+    needs_llm = force_llm or (not skip_llm and (
         parse_result.items_found < 10
         or parse_result.confidence_avg < 0.55
         or (parse_result.confidence_avg < 0.75 and not has_all_required)
-    )
+    ))
     if needs_llm:
         stage2_start = time.time()
         try:
@@ -168,6 +175,7 @@ async def extract_10k(
                 model_name=model_name,
                 user_api_key=user_api_key,
                 use_vision=use_vision,
+                force_refine=force_llm,
                 trace_id=trace_id,
             )
             stages_used.append("llm_refine")
@@ -287,6 +295,17 @@ def _build_items(text: str, parse_result: ParseResult) -> list[ExtractedItem]:
 
         # Detect status from content
         status = detect_item_status(content_body)
+        if boundary.status_hint:
+            try:
+                hinted_status = ItemStatus(boundary.status_hint)
+                # Deterministic non-extracted statuses are more trustworthy
+                # than an LLM "extracted" hint. LLM hints mainly help when
+                # visual context catches N/A / Reserved / Proxy-reference
+                # language that text heuristics missed.
+                if status == ItemStatus.EXTRACTED or hinted_status != ItemStatus.EXTRACTED:
+                    status = hinted_status
+            except ValueError:
+                pass
 
         # Determine extraction method
         method = ExtractionMethod.RULE_BASED

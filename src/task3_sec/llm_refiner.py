@@ -70,6 +70,7 @@ async def refine_boundaries(
     user_api_key: Optional[str] = None,
     confidence_threshold: float = 0.5,
     use_vision: bool = False,
+    force_refine: bool = False,
     trace_id: str = "",
 ) -> ParseResult:
     """
@@ -84,6 +85,8 @@ async def refine_boundaries(
         model_name: LLM model to use
         user_api_key: User's API key (optional)
         confidence_threshold: Only refine boundaries below this score
+        force_refine: Refine a small set of lowest-confidence boundaries even
+            when all boundaries are above the normal threshold.
 
     Returns:
         Updated ParseResult with refined boundaries
@@ -92,6 +95,15 @@ async def refine_boundaries(
         b for b in parse_result.boundaries
         if b.confidence < confidence_threshold
     ]
+    if force_refine:
+        try:
+            forced_limit = max(1, int(os.environ.get("T3_FORCE_LLM_MAX", "3")))
+        except (TypeError, ValueError):
+            forced_limit = 3
+        low_confidence = sorted(
+            parse_result.boundaries,
+            key=lambda b: (b.confidence, b.start_pos),
+        )[:forced_limit]
 
     if not low_confidence:
         logger.info("no_refinement_needed", all_above_threshold=confidence_threshold)
@@ -102,6 +114,7 @@ async def refine_boundaries(
         total=len(parse_result.boundaries),
         low_confidence=len(low_confidence),
         threshold=confidence_threshold,
+        forced=force_refine,
     )
 
     # Boundary refinement is a small, focused task — use a fast non-thinking
@@ -291,12 +304,21 @@ async def _refine_single_boundary(
         result = json.loads(content)
 
         if result.get("is_item_heading", False):
+            item_number = str(result.get("item_number", boundary.item_number)).upper()
+            if item_number != boundary.item_number:
+                logger.warning(
+                    "llm_item_number_mismatch",
+                    expected=boundary.item_number,
+                    actual=item_number,
+                )
+                item_number = boundary.item_number
             return ItemBoundary(
-                item_number=result.get("item_number", boundary.item_number).upper(),
+                item_number=item_number,
                 start_pos=ctx_start + result.get("content_start_offset", boundary.start_pos - ctx_start),
                 heading_text=result.get("item_title", boundary.heading_text),
                 confidence=result.get("confidence", 0.8),
                 source="llm_refined",
+                status_hint=str(result.get("status", "")).strip(),
             )
     except (json.JSONDecodeError, KeyError) as e:
         logger.warning("llm_parse_failed", error=str(e), raw=response_text[:200])

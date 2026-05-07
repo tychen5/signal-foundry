@@ -26,6 +26,13 @@ class SECExtractionRequest(BaseModel):
     filing_url: Optional[str] = Field(default=None, description="Direct URL to 10-K filing")
     skip_llm: bool = Field(default=False, description="Skip LLM refinement (rule-only mode)")
     skip_xbrl: bool = Field(default=False, description="Skip XBRL cross-validation")
+    force_llm: bool = Field(
+        default=False,
+        description=(
+            "Force Stage 2 LLM refinement on the lowest-confidence boundaries. "
+            "Useful for reviewer benchmarks that compare text-only vs vision-assisted parsing."
+        ),
+    )
     use_vision: bool = Field(
         default=False,
         description=(
@@ -79,6 +86,7 @@ async def extract_10k(request: SECExtractionRequest):
             skip_llm=request.skip_llm,
             skip_xbrl=request.skip_xbrl,
             use_vision=request.use_vision,
+            force_llm=request.force_llm,
             trace_id=trace_id,
         )
 

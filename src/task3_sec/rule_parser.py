@@ -36,6 +36,7 @@ class ItemBoundary:
     heading_text: str = ""
     confidence: float = 0.0
     source: str = ""  # "heading_regex", "toc", "part_boundary"
+    status_hint: str = ""  # optional LLM-refined status hint
 
 
 @dataclass

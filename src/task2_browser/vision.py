@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import base64
 import io
+import os
+from collections.abc import Mapping, Sequence
 from typing import Optional
 
 from langchain_core.messages import HumanMessage
@@ -100,6 +102,143 @@ async def capture_screenshot_b64(
         return base64.b64encode(jpg_bytes).decode("ascii")
 
     return base64.b64encode(jpg_bytes).decode("ascii")
+
+
+def vision_history_max() -> int:
+    """Return the configurable max screenshot history depth.
+
+    Controls how many labelled screenshots are kept in the rolling buffer
+    and passed to the LLM. More screenshots = richer temporal context but
+    higher token cost. Default 3 is a good balance.
+    """
+    try:
+        return int(os.environ.get("T2_VISION_HISTORY_MAX", "3"))
+    except (TypeError, ValueError):
+        return 3
+
+
+async def capture_full_page_screenshot_b64(
+    page: Page,
+    max_width_px: int = 1024,
+    quality: int = 65,
+    max_height_px: int = 2048,
+) -> Optional[str]:
+    """Capture the full page (including below-fold) as base64-encoded JPEG.
+
+    Useful when the agent suspects relevant content is below the viewport
+    (e.g., long tables, search results page 1 vs 2, footer contact info).
+    Height is capped at max_height_px to avoid huge token payloads.
+    Returns None on failure.
+    """
+    try:
+        png_bytes = await page.screenshot(
+            full_page=True,
+            type="png",
+            timeout=10000,
+        )
+    except Exception:
+        return None
+
+    try:
+        from PIL import Image  # type: ignore
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+        if img.width > max_width_px:
+            ratio = max_width_px / img.width
+            img = img.resize(
+                (max_width_px, int(img.height * ratio)),
+                Image.LANCZOS,
+            )
+        if img.height > max_height_px:
+            img = img.crop((0, 0, img.width, max_height_px))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        jpg_bytes = buf.getvalue()
+    except Exception:
+        jpg_bytes = png_bytes
+
+    return base64.b64encode(jpg_bytes).decode("ascii")
+
+
+async def capture_element_screenshot_b64(
+    page: Page,
+    selector: str,
+    max_width_px: int = 1024,
+    quality: int = 72,
+) -> Optional[str]:
+    """Capture a specific element as base64-encoded JPEG.
+
+    Useful for focused vision on a chart, table, or specific widget where
+    the full viewport includes too much irrelevant content. Selector can be
+    CSS or ARIA role-based. Returns None on failure (element not found,
+    not visible, etc).
+    """
+    try:
+        element = page.locator(selector).first
+        png_bytes = await element.screenshot(type="png", timeout=5000)
+    except Exception:
+        return None
+
+    try:
+        from PIL import Image  # type: ignore
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+        if img.width > max_width_px:
+            ratio = max_width_px / img.width
+            img = img.resize(
+                (max_width_px, int(img.height * ratio)),
+                Image.LANCZOS,
+            )
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        jpg_bytes = buf.getvalue()
+    except Exception:
+        jpg_bytes = png_bytes
+
+    return base64.b64encode(jpg_bytes).decode("ascii")
+
+
+def annotate_screenshot_with_markers(
+    screenshot_b64: str,
+    markers: Sequence[Mapping[str, object]],
+    quality: int = 72,
+) -> Optional[str]:
+    """Draw numbered bounding boxes on a screenshot for LLM grounding.
+
+    Markers use pixel coordinates: {"x": 10, "y": 20, "width": 120,
+    "height": 40, "label": "Search button"}. Returns a JPEG base64
+    string, or None when the input is invalid. This helper is intentionally
+    provider-agnostic so browser evals can add visual callouts without
+    changing planner prompts.
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageFont  # type: ignore
+
+        raw = base64.b64decode(screenshot_b64)
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        font = ImageFont.load_default()
+
+        for idx, marker in enumerate(markers, start=1):
+            x = int(float(marker.get("x", 0)))
+            y = int(float(marker.get("y", 0)))
+            w = int(float(marker.get("width", 0)))
+            h = int(float(marker.get("height", 0)))
+            if w <= 0 or h <= 0:
+                continue
+            color = "#2563eb"
+            draw.rectangle((x, y, x + w, y + h), outline=color, width=3)
+            tag = str(idx)
+            label = str(marker.get("label", "")).strip()
+            if label:
+                tag = f"{idx}: {label[:24]}"
+            bbox = draw.textbbox((x, y), tag, font=font)
+            draw.rectangle((bbox[0] - 3, bbox[1] - 2, bbox[2] + 3, bbox[3] + 2), fill=color)
+            draw.text((x, y), tag, fill="#ffffff", font=font)
+
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        return base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:
+        return None
 
 
 def make_multimodal_message(

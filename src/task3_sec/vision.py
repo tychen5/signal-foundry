@@ -23,6 +23,7 @@ can override via env `T3_VISION_MAX=N`.
 from __future__ import annotations
 
 import base64
+import contextlib
 import io
 import os
 from typing import Optional
@@ -95,7 +96,10 @@ async def render_multi_snapshots(
         nb_end = min(n, boundary_pos + 2000)
         neighbor = full_text[nb_start:nb_end]
         snap = await render_text_to_jpeg_b64(
-            neighbor, width_px=width_px, quality=quality
+            neighbor,
+            width_px=width_px,
+            quality=quality,
+            mark_position=boundary_pos - nb_start,
         )
         if snap:
             snapshots.append(
@@ -108,6 +112,36 @@ async def render_multi_snapshots(
         snapshots=len(snapshots),
         text_len=n,
     )
+    return snapshots
+
+
+async def render_comparison_snapshots(
+    full_text: str,
+    boundary_pos: int,
+    item_number: str,
+    width_px: int = 1024,
+    quality: int = 70,
+) -> list[tuple[str, str]]:
+    """Render before/after comparison views around a candidate boundary.
+
+    This is useful for edge filings where the parser needs to decide whether a
+    candidate "Item" string is a real heading or just a body reference. The
+    generated images put the candidate boundary in a yellow mark inside a
+    wider before/after window so the LLM can compare typography and spacing
+    across the transition.
+    """
+    n = len(full_text)
+    snapshots: list[tuple[str, str]] = []
+    start = max(0, boundary_pos - 1200)
+    end = min(n, boundary_pos + 1200)
+    snap = await render_text_to_jpeg_b64(
+        full_text[start:end],
+        width_px=width_px,
+        quality=quality,
+        mark_position=boundary_pos - start,
+    )
+    if snap:
+        snapshots.append((f"item_{item_number} before/after comparison", snap))
     return snapshots
 
 
@@ -157,20 +191,27 @@ async def render_text_to_jpeg_b64(
     except ImportError:
         return None
 
+    manager = async_playwright()
+    browser = None
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            ctx = await browser.new_context(
-                viewport={"width": width_px, "height": 768},
-                device_scale_factor=1.0,
-            )
-            page = await ctx.new_page()
-            await page.set_content(html, wait_until="domcontentloaded", timeout=timeout_ms)
-            png_bytes = await page.screenshot(full_page=True, type="png", timeout=timeout_ms)
-            await browser.close()
+        p = await manager.start()
+        browser = await p.chromium.launch(headless=True)
+        ctx = await browser.new_context(
+            viewport={"width": width_px, "height": 768},
+            device_scale_factor=1.0,
+        )
+        page = await ctx.new_page()
+        await page.set_content(html, wait_until="domcontentloaded", timeout=timeout_ms)
+        png_bytes = await page.screenshot(full_page=True, type="png", timeout=timeout_ms)
     except Exception as e:
         logger.warning("t3_vision_render_failed", error=str(e)[:200])
         return None
+    finally:
+        if browser is not None:
+            with contextlib.suppress(BaseException):
+                await browser.close()
+        with contextlib.suppress(BaseException):
+            await manager.stop()
 
     # Downsample PNG → JPEG q=75 to keep token cost reasonable.
     try:
@@ -184,6 +225,78 @@ async def render_text_to_jpeg_b64(
         jpg_bytes = buf.getvalue()
     except Exception:
         # PIL not present — send the raw PNG anyway, just heavier
+        jpg_bytes = png_bytes
+
+    return base64.b64encode(jpg_bytes).decode("ascii")
+
+
+async def render_html_to_jpeg_b64(
+    html_fragment: str,
+    width_px: int = 1024,
+    quality: int = 75,
+    timeout_ms: int = 8000,
+) -> Optional[str]:
+    """Render an HTML fragment preserving original SEC filing formatting.
+
+    Unlike render_text_to_jpeg_b64 which wraps plain text in <pre>, this
+    function takes raw HTML (e.g., a slice of the normalized filing) and
+    renders it with a minimal wrapper. Preserves:
+    - Bold/italic text (often used for item headings)
+    - Tables and multi-column layouts
+    - Indentation and whitespace patterns
+    - ALL-CAPS text styling
+
+    This gives the LLM much richer visual context for boundary detection
+    than plain-text rendering, especially for filings where typography
+    is the primary signal that distinguishes headings from body text.
+    """
+    # Wrap the fragment in a minimal document with 10-K-like styling
+    html = f"""<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  body {{ font-family: 'Times New Roman', Times, serif; padding: 24px;
+         color: #111; background: #fff; line-height: 1.4;
+         max-width: {width_px}px; font-size: 14px; }}
+  table {{ border-collapse: collapse; margin: 8px 0; }}
+  td, th {{ border: 1px solid #ccc; padding: 4px 8px; font-size: 13px; }}
+  b, strong {{ font-weight: bold; }}
+</style></head><body>{html_fragment}</body></html>"""
+
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return None
+
+    manager = async_playwright()
+    browser = None
+    try:
+        p = await manager.start()
+        browser = await p.chromium.launch(headless=True)
+        ctx = await browser.new_context(
+            viewport={"width": width_px, "height": 768},
+            device_scale_factor=1.0,
+        )
+        page = await ctx.new_page()
+        await page.set_content(html, wait_until="domcontentloaded", timeout=timeout_ms)
+        png_bytes = await page.screenshot(full_page=True, type="png", timeout=timeout_ms)
+    except Exception as e:
+        logger.warning("t3_html_vision_render_failed", error=str(e)[:200])
+        return None
+    finally:
+        if browser is not None:
+            with contextlib.suppress(BaseException):
+                await browser.close()
+        with contextlib.suppress(BaseException):
+            await manager.stop()
+
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+        if img.height > 1500:
+            img = img.crop((0, 0, img.width, 1500))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        jpg_bytes = buf.getvalue()
+    except Exception:
         jpg_bytes = png_bytes
 
     return base64.b64encode(jpg_bytes).decode("ascii")

@@ -224,13 +224,42 @@ class BrowserAgent:
             task_description=task_description,
             target_url=target_url or "",
         )
+        result.metadata["model_name"] = self.model_name or "default"
+        result.metadata["use_vision_requested"] = self.use_vision
 
         # Vision history: rolling buffer of the last N screenshots labelled
         # by step number. Only populated when use_vision=True and model is
-        # vision-capable. Cap at 3 so we don't blow token budget — the LLM
-        # mostly cares about the chronological diff between adjacent states.
+        # vision-capable. Configurable via T2_VISION_HISTORY_MAX env var
+        # (default 3) — the LLM mostly cares about the chronological diff.
         vision_history: list[tuple[str, str]] = []
-        _MAX_VISION_HISTORY = 3
+        _vision_is_active = False
+        if self.use_vision:
+            from src.task2_browser.vision import is_vision_capable, vision_history_max
+            _vision_is_active = is_vision_capable(self.model_name)
+            _max_vision_hist = vision_history_max()
+        else:
+            _max_vision_hist = 3
+        result.metadata["use_vision_active"] = _vision_is_active
+
+        async def capture_vision_snapshot(page, label: str, *, full_page: bool = False) -> Optional[str]:
+            """Capture and append one bounded vision snapshot when active."""
+            if not _vision_is_active:
+                return None
+            from src.task2_browser.vision import (
+                capture_full_page_screenshot_b64,
+                capture_screenshot_b64,
+            )
+
+            screenshot = (
+                await capture_full_page_screenshot_b64(page)
+                if full_page
+                else await capture_screenshot_b64(page)
+            )
+            if screenshot:
+                vision_history.append((label, screenshot))
+                if len(vision_history) > _max_vision_hist:
+                    vision_history.pop(0)
+            return screenshot
 
         logger.info(
             "agent_start",
@@ -284,6 +313,12 @@ class BrowserAgent:
                     if step_result.after_state and step_result.after_state.screenshot_path:
                         result.screenshots.append(step_result.after_state.screenshot_path)
 
+                    # Capture screenshot during planned steps too — gives
+                    # the verifier temporal context from the very start
+                    if _vision_is_active:
+                        step_no = result.total_steps
+                        await capture_vision_snapshot(page, f"step {step_no} planned")
+
                     # Track completed steps for context
                     action_desc = f"{step_result.action.action_type.value}: {step_result.action.target_description}"
                     if step_result.error:
@@ -299,22 +334,22 @@ class BrowserAgent:
                     # Only fires for vision-capable models — capture is cheap
                     # but the LLM cost is what we're guarding against.
                     screenshot_b64 = None
-                    if self.use_vision:
-                        from src.task2_browser.vision import (
-                            capture_screenshot_b64,
-                            is_vision_capable,
+                    if _vision_is_active:
+                        # Use a capped full-page capture when the task is
+                        # explicitly visual or when AOM text is sparse. This
+                        # helps charts/maps/image-heavy pages without sending
+                        # huge screenshots on normal text pages.
+                        visual_terms = ("chart", "graph", "map", "image", "canvas", "screenshot", "color")
+                        wants_visual_context = any(
+                            term in task_description.lower() for term in visual_terms
                         )
-                        if is_vision_capable(self.model_name):
-                            screenshot_b64 = await capture_screenshot_b64(page)
-                            if screenshot_b64:
-                                # Roll into bounded history so the LLM sees
-                                # what changed since the last action
-                                step_no = result.total_steps + 1
-                                vision_history.append(
-                                    (f"step {step_no} viewport", screenshot_b64)
-                                )
-                                if len(vision_history) > _MAX_VISION_HISTORY:
-                                    vision_history.pop(0)
+                        sparse_aom = len((current_state.visible_text_summary or "").strip()) < 400
+                        step_no = result.total_steps + 1
+                        screenshot_b64 = await capture_vision_snapshot(
+                            page,
+                            f"step {step_no} {'full page' if wants_visual_context or sparse_aom else 'viewport'}",
+                            full_page=wants_visual_context or sparse_aom,
+                        )
 
                     # Check if task is complete — pass the FULL vision history
                     # so the verifier can confirm action effects (modal
