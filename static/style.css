@@ -201,6 +201,29 @@ body {
     border-color: var(--accent-blue);
 }
 
+/* Example chip buttons (used on Task 1, 2, 3 forms) */
+.examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+.example-btn {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+}
+.example-btn:hover {
+    border-color: #475569;
+    color: #e2e8f0;
+    background: #243046;
+}
+
 /* Badges */
 .badge {
     display: inline-block;
