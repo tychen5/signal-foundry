@@ -358,5 +358,42 @@
     "difficulty": "easy",
     "tags": ["static", "extract", "edge_case_uncommon_site"],
     "eval_dimensions": ["domain_diversity"]
+  },
+  {
+    "case_id": "t2_vision_chart_trend",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.tradingview.com/symbols/NASDAQ-AAPL/ and describe the visual trend of the AAPL price chart over the visible period (rising / falling / flat).",
+      "target_url": "https://www.tradingview.com/symbols/NASDAQ-AAPL/",
+      "use_vision_recommended": true
+    },
+    "expected_behavior": "TradingView is a heavy SPA where the price chart is rendered to canvas — text-only AOM cannot describe the trend. With use_vision=true (gemini/claude/gpt) the verifier sees the chart pixels and can describe the trend; without vision, the silent-failure guard correctly returns not_found.",
+    "difficulty": "edge_case",
+    "tags": ["vision_benefit", "chart", "canvas_rendered", "real_world"],
+    "eval_dimensions": ["edge_case_visual", "domain_diversity"]
+  },
+  {
+    "case_id": "t2_vision_image_caption",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://en.wikipedia.org/wiki/Mona_Lisa and report the caption text of the main painting image at the top of the article.",
+      "target_url": "https://en.wikipedia.org/wiki/Mona_Lisa"
+    },
+    "expected_behavior": "Wikipedia infobox with image + caption. Both AOM-only and vision modes should succeed — but vision should produce a more confident answer because it can verify the caption matches the image.",
+    "difficulty": "normal",
+    "tags": ["wikipedia", "image_caption", "extract", "vision_optional"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_single"]
+  },
+  {
+    "case_id": "t2_vision_table_layout",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://en.wikipedia.org/wiki/List_of_Nobel_laureates_in_Physics and report the name of the 2023 Physics Nobel laureate(s) (most recent year shown in the table).",
+      "target_url": "https://en.wikipedia.org/wiki/List_of_Nobel_laureates_in_Physics"
+    },
+    "expected_behavior": "Long sortable table — the answer is in a row near the top. AOM extraction returns the table text; vision can additionally verify visual layout (which row is in which year column).",
+    "difficulty": "normal",
+    "tags": ["wikipedia", "table_extraction", "structured_data", "vision_optional"],
+    "eval_dimensions": ["task_complexity_multi"]
   }
 ]
