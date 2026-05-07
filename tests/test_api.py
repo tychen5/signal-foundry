@@ -138,6 +138,52 @@ class TestTask2Routes:
         assert data["status"] == "success"
         assert data["result"]["total_steps"] == 3
 
+    async def test_stream_task_emits_sse_events(self, client, monkeypatch):
+        """SSE stream endpoint emits stream_start, milestone events, and stream_end."""
+        from src.task2_browser.schemas import AgentResult
+
+        async def fake_run(self, **kwargs):
+            # Push a couple of events through the progress callback to simulate
+            # a real run, then return.
+            cb = self.progress_callback
+            if cb is not None:
+                await cb({"event": "phase_start", "phase": "plan", "model": "test"})
+                await cb({"event": "phase_done", "phase": "plan", "plan_steps": 2})
+                await cb({"event": "step_start", "step": 1, "action": "navigate", "target": "wiki"})
+                await cb({"event": "step_done", "step": 1, "url": "https://wiki/", "healer": False, "diagnosis": "", "confidence": 0.95, "error": ""})
+                await cb({"event": "agent_complete", "status": "success", "steps": 1, "self_corrections": 0, "cost_usd": 0.0, "duration_ms": 100, "answer": "ok", "failure_modes": []})
+            return AgentResult(
+                trace_id="test-stream",
+                task_description="test",
+                target_url="",
+                status="success",
+                total_steps=1,
+                final_answer="ok",
+            )
+
+        monkeypatch.setattr("src.task2_browser.agent.BrowserAgent.run", fake_run)
+
+        async with client.stream(
+            "POST",
+            "/api/v1/browser/stream",
+            json={"task_description": "test", "max_steps": 5},
+        ) as resp:
+            assert resp.status_code == 200
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+            chunks = []
+            async for line in resp.aiter_lines():
+                chunks.append(line)
+                # Read enough events; stop once we see stream_end to avoid infinite poll
+                if "stream_end" in line or "agent_complete" in line:
+                    if len([c for c in chunks if c.startswith("data:")]) >= 6:
+                        break
+
+        events = [c for c in chunks if c.startswith("data:")]
+        assert any("stream_start" in e for e in events)
+        assert any("phase_done" in e for e in events)
+        assert any("step_done" in e for e in events)
+        assert any("agent_complete" in e for e in events)
+
 
 class TestTask3Routes:
     """Test SEC 10-K Extraction API routes."""

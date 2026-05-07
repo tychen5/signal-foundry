@@ -157,10 +157,17 @@
 
             <div id="failure-section"></div>
 
+            <div class="live-trace" id="live-trace" style="display:none">
+                <h4>📡 Live Progress</h4>
+                <ul id="live-events" class="live-events"></ul>
+            </div>
+
             <div class="steps-panel" id="steps-panel" style="display:none">
                 <h4>Execution Trace</h4>
                 <div id="steps-list"></div>
             </div>
+
+            <div class="error-banner" id="error-banner" style="display:none"></div>
 
             <button class="raw-toggle" id="raw-toggle" onclick="toggleRaw()" style="display:none">Show raw JSON</button>
             <div class="raw-json" id="raw-json"></div>
@@ -184,6 +191,47 @@
             apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
         }
         hydrateSharedControls();
+
+        function appendLiveEvent(event) {
+            const list = document.getElementById('live-events');
+            const li = document.createElement('li');
+            li.className = 'live-event live-event-' + event.event;
+            const ts = new Date().toLocaleTimeString();
+            let text = `[${ts}] `;
+            if (event.event === 'phase_start') {
+                text += `🧭 planning task with ${event.model || 'default'}`;
+                if (event.use_vision) text += ' (vision)';
+            } else if (event.event === 'phase_done' && event.phase === 'plan') {
+                text += `✅ plan ready — ${event.plan_steps} step(s)`;
+            } else if (event.event === 'step_start') {
+                text += `▶️ step ${event.step}: ${event.action} → ${event.target || ''}`.slice(0, 240);
+            } else if (event.event === 'step_done') {
+                const heal = event.healer ? ` 🩹 healer:${event.diagnosis||'unknown'}` : '';
+                const conf = event.confidence != null ? ` conf:${Number(event.confidence).toFixed(2)}` : '';
+                const err = event.error ? ` ⚠️ ${event.error.slice(0, 80)}` : '';
+                text += `✓ step ${event.step}${heal}${conf}${err}`;
+            } else if (event.event === 'agent_complete') {
+                text += `🏁 ${event.status} in ${event.steps} step(s) — $${(event.cost_usd||0).toFixed(4)}`;
+            } else if (event.event === 'error') {
+                text += `❌ ${event.user_message || event.category}`;
+            } else {
+                text += `${event.event}`;
+            }
+            li.textContent = text;
+            list.appendChild(li);
+            list.scrollTop = list.scrollHeight;
+        }
+
+        function showLLMError(info) {
+            const banner = document.getElementById('error-banner');
+            banner.className = 'error-banner error-' + (info.category || 'unknown');
+            banner.style.display = 'block';
+            banner.innerHTML = `
+                <strong>${escHtml(info.user_message || 'LLM error')}</strong>
+                ${info.suggested_action ? `<div class="hint">💡 ${escHtml(info.suggested_action)}</div>` : ''}
+                ${info.raw_error ? `<details><summary>raw error</summary><pre>${escHtml(info.raw_error)}</pre></details>` : ''}
+            `;
+        }
 
         async function executeTask() {
             const btn = document.getElementById('run-btn');
@@ -210,6 +258,13 @@
             document.getElementById('raw-json').classList.remove('visible');
             document.getElementById('trace-info').style.display = 'none';
             document.getElementById('langsmith-link').style.display = 'none';
+            const liveTrace = document.getElementById('live-trace');
+            const liveEvents = document.getElementById('live-events');
+            liveEvents.innerHTML = '';
+            liveTrace.style.display = 'block';
+            const errorBanner = document.getElementById('error-banner');
+            errorBanner.style.display = 'none';
+            errorBanner.innerHTML = '';
             panel.classList.add('visible');
 
             const useVision = document.getElementById('use-vision').checked;
@@ -222,16 +277,68 @@
             if (targetUrl) payload.target_url = targetUrl;
             if (apiKey) payload.model.user_openrouter_key = apiKey;
 
+            // Use SSE streaming endpoint for live progress, then call /execute for full result
             try {
-                const resp = await fetch('/api/v1/browser/execute', {
+                // 1) Open the SSE stream — we emit live events as the agent runs.
+                //    The stream is the source of truth; we don't double-call /execute.
+                const resp = await fetch('/api/v1/browser/stream', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                    body: JSON.stringify(payload),
                 });
-                const data = await resp.json();
-                renderAgentResult(data);
+                if (!resp.ok || !resp.body) throw new Error('Stream failed: ' + resp.status);
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buf = '';
+                let lastError = null;
+                let agentComplete = null;
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buf += decoder.decode(value, { stream: true });
+                    const lines = buf.split('\n');
+                    buf = lines.pop() || '';
+                    for (const ln of lines) {
+                        if (!ln.startsWith('data: ')) continue;
+                        try {
+                            const ev = JSON.parse(ln.slice(6));
+                            appendLiveEvent(ev);
+                            if (ev.event === 'error') lastError = ev;
+                            if (ev.event === 'agent_complete') agentComplete = ev;
+                        } catch (_) {}
+                    }
+                }
+                // After stream ends, surface result or error
+                if (lastError) {
+                    setStatus('failed', 'ERROR', lastError.user_message || lastError.category);
+                    showLLMError(lastError);
+                } else if (agentComplete) {
+                    // Build a synthetic envelope so the existing renderer works
+                    renderAgentResult({
+                        status: agentComplete.status === 'success' ? 'success' :
+                                agentComplete.status === 'partial' ? 'partial' : 'failed',
+                        result: {
+                            status: agentComplete.status,
+                            total_steps: agentComplete.steps,
+                            self_corrections: agentComplete.self_corrections,
+                            healer_activations: 0,
+                            failure_modes: agentComplete.failure_modes || [],
+                            final_answer: agentComplete.answer,
+                            cost_usd: agentComplete.cost_usd,
+                            total_duration_ms: agentComplete.duration_ms,
+                            steps: [],
+                        },
+                        cost_metadata: { total_cost_usd: agentComplete.cost_usd },
+                    });
+                }
             } catch (err) {
                 setStatus('failed', 'ERROR', String(err));
+                showLLMError({
+                    category: 'unknown',
+                    user_message: 'Stream error: ' + String(err),
+                    suggested_action: 'Check the browser console and the Zeabur deploy logs.',
+                    raw_error: String(err),
+                });
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Execute Task';

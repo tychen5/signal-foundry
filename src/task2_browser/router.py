@@ -110,13 +110,110 @@ async def execute_browser_task(request: BrowserTaskRequest):
 
     except Exception as e:
         logger.error("browser_task_failed", error=str(e), trace_id=trace_id)
+        from src.shared.llm_errors import classify_llm_error
+        info = classify_llm_error(e)
         return ExecutionResult(
             status=ExecutionStatus.FAILED,
             task=TaskType.BROWSER_AGENT,
             trace_id=trace_id,
             error=str(e),
             failure_type=FailureType.TOOL_ERROR,
+            cost_metadata={
+                "error_category": info.category,
+                "user_message": info.user_message,
+                "suggested_action": info.suggested_action,
+                "retryable": info.retryable,
+            },
         )
+
+
+@router.post("/stream")
+async def stream_browser_task(request: BrowserTaskRequest):
+    """Server-Sent Events stream for live agent progress.
+
+    Frontend opens an EventSource and receives milestone events:
+        phase_start    {phase, task, model, use_vision}
+        phase_done     {phase, plan_steps, plan_summary}
+        step_start     {step, action, target, phase}
+        step_done      {step, url, healer, diagnosis, confidence, error}
+        agent_complete {status, steps, cost_usd, answer, failure_modes}
+        error          {category, user_message, raw_error, suggested_action}
+
+    The agent runs in a background task; the endpoint pumps events from an
+    asyncio.Queue. When a queue dequeue waits >120 s without an event, we
+    emit a `heartbeat` so reverse proxies (and the browser) don't time out
+    the connection.
+    """
+    import asyncio
+    import json as _json
+
+    from fastapi.responses import StreamingResponse
+
+    from src.shared.llm_errors import classify_llm_error, to_dict
+
+    trace_id = generate_trace_id()
+    if not request.task_description.strip():
+        raise HTTPException(status_code=400, detail="task_description is required")
+
+    queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+
+    async def progress_callback(event: dict) -> None:
+        await queue.put(event)
+
+    async def run_agent() -> None:
+        try:
+            from src.task2_browser.agent import BrowserAgent
+            agent = BrowserAgent(
+                model_name=request.model.model_id,
+                user_api_key=request.model.user_openrouter_key,
+                headless=True,
+                screenshot_dir="/tmp/signal_foundry_browser" if request.screenshot else "",
+                use_vision=request.use_vision,
+                progress_callback=progress_callback,
+            )
+            await agent.run(
+                task_description=request.task_description,
+                target_url=request.target_url,
+                max_steps=request.max_steps,
+                trace_id=trace_id,
+            )
+        except Exception as e:
+            err_info = to_dict(classify_llm_error(e))
+            err_info["trace_id"] = trace_id
+            await queue.put({"event": "error", **err_info})
+        finally:
+            await queue.put({"event": "stream_end", "trace_id": trace_id})
+
+    runner_task = asyncio.create_task(run_agent())
+
+    async def event_generator():
+        # Initial event so the client immediately knows trace_id
+        yield f"data: {_json.dumps({'event': 'stream_start', 'trace_id': trace_id})}\n\n"
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=20.0)
+            except asyncio.TimeoutError:
+                # Heartbeat to keep the connection alive through proxies
+                yield ": keep-alive\n\n"
+                continue
+            yield f"data: {_json.dumps(event)}\n\n"
+            if event.get("event") in ("stream_end", "agent_complete", "error"):
+                # After stream_end OR a terminal event, drain any tail then break
+                if event.get("event") == "stream_end":
+                    break
+
+        if not runner_task.done():
+            runner_task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/status/{trace_id}")

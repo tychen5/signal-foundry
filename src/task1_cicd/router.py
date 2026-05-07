@@ -88,9 +88,17 @@ async def run_skill(request: SkillRunRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("skill_run_unhandled_error", error=str(e), trace_id=trace_id)
+        from src.shared.llm_errors import classify_llm_error
+        info = classify_llm_error(e)
         return ExecutionResult(
             status=ExecutionStatus.FAILED,
             task=TaskType.CICD_SKILLS,
             trace_id=trace_id,
             error=f"Internal error: {e}",
+            cost_metadata={
+                "error_category": info.category,
+                "user_message": info.user_message,
+                "suggested_action": info.suggested_action,
+                "retryable": info.retryable,
+            },
         )

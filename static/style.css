@@ -236,6 +236,75 @@ html {
     border-color: var(--accent-blue);
 }
 
+/* Live SSE progress trace (Task 2) */
+.live-trace {
+    background: rgba(59, 130, 246, 0.05);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-top: 1rem;
+}
+.live-trace h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--accent-blue);
+    font-size: 0.95rem;
+}
+.live-events {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.65;
+}
+.live-event {
+    padding: 0.1rem 0;
+    color: var(--text-secondary);
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.04);
+    word-break: break-word;
+}
+.live-event-step_done { color: var(--text-primary); }
+.live-event-agent_complete {
+    color: var(--accent-green);
+    font-weight: 600;
+    background: rgba(34, 197, 94, 0.08);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+.live-event-error {
+    color: var(--accent-red);
+    font-weight: 600;
+}
+
+/* LLM error banner */
+.error-banner {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    margin-top: 1rem;
+    color: #fecaca;
+}
+.error-banner strong { display: block; color: #fff; margin-bottom: 0.35rem; font-size: 0.95rem; }
+.error-banner .hint { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.4rem; }
+.error-banner details { margin-top: 0.5rem; font-size: 0.78rem; }
+.error-banner pre {
+    background: rgba(0, 0, 0, 0.35);
+    padding: 0.5rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+}
+.error-rate_limit { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.4); color: #fde68a; }
+.error-rate_limit strong { color: #fff; }
+.error-invalid_key { background: rgba(239, 68, 68, 0.18); }
+.error-insufficient_credit { background: rgba(139, 92, 246, 0.12); border-color: rgba(139, 92, 246, 0.4); color: #ddd6fe; }
+.error-insufficient_credit strong { color: #fff; }
+
 /* Example chip buttons (used on Task 1, 2, 3 forms) */
 .examples {
     display: flex;

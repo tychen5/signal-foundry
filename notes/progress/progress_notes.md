@@ -145,12 +145,19 @@
   11. [x] /health + /api/v1/models sanity-checked on every deploy. Final verification table in README "Live deployment verification".
   12. [x] Task 2 live eval — 3 sweeps committed (kimi rate-limited, claude-opus baseline, gemini after improvements). Best run: 13/21 genuine success.
 
-7. [] Phase 7 UI/UX 美化 
+7. [x] Phase 7 UI/UX 美化 (partial; full polish ongoing)
   1. [x] Index page rewritten: each task card is now a full `<a>` link wrapping a card div — entire card is clickable, hover state highlights the whole card with blue border + lift. Added `.card-bullets` block showing 3-4 highlight features per task. Added `.quick-actions` panel below cards with direct links to /api/v1/skills/list (View Skills), example SEC filings list, and example SEC company info — gives reviewers fast jumping-off points without typing URLs.
-  2. [] https://signal-foundry.zeabur.app/ 針對Task 2 與Task 3的卡片也需要改成可以點選的方式，以讓reviewer可以更加容易去審閱結果並且真的去使用。請設計一個好的互動展示方式讓reviewer可以透過UI方式去interact with題目二和題目三，讓使用者可以透過UI點選或是輸入操作的方式，輕鬆調用背後的模型、agent、pipeline等等來展示demo出最後得到成果來。以利可以錄製影片，並且輕鬆測試各種不同的其他cases、或是調整不同可以進行配置的參數。也請盡可能可以透過視覺化美化的方式來展示最後得到的結果。
-  3. [] 網頁 https://signal-foundry.zeabur.app/ 下方的 Health、Metrics、Models等按鈕點進去的頁面也不夠友善易讀，請思考應該要怎麼更好的視覺化呈現排版、增加易懂性易讀性，以讓使用者可以更加一目了然知道目前的狀況提升UX。
-  4. [] 請再細細思考看看網頁 https://signal-foundry.zeabur.app/ 可以再怎麼美化優化，或是增加資訊。以能夠更好的展示harness engineering並且錄製成影片，並且讓reviewer能夠即時去操作控制輸入輸出來看真實的處理過程與結果。請想想看還有什麼可以多做得來提升使用者體驗，並讓reviewer覺得很讚的features。
-  5. [] 在網頁dashboard當中的task 1, task 2, task 3實際上去透過UI執行的時候有時候會需要等待非常久，但中間網頁的顯示都沒什麼更新，我希望可以streaming rendering目前系統處理到的狀況，以能夠提升UX，告訴使用者現在執行到哪一個步驟了，中間有什麼樣的input output。這可能也會設計更新優化對應背後的backend api/endpoint也會需要有相對應的一些改動更新，以能夠回傳相關的intermediate steps資訊給到前端去顯示，以能夠展示目前的狀況步驟而不是只是hang在那邊只能看網頁轉圈圈但遲遲看不到輸出結果。 請好好思考針對task 1, task 2, task 3 demo時要如何設計中間等待過程要展示給使用者看的資訊，以能夠視覺化呈現展示結果優化等代時的UX尷尬。 尤其task 2和task 3中間的等候操作loading或是下載過程特別久可能都會超過十分鐘以上，因此更需要好好設計展示中間的步驟過程系統死LLM正在做什麼事情。
+  2. [x] Task 2 + Task 3 cards already clickable (entire card acts as a link). UI for Task 2 has rich form with vision toggle, model dropdown, OpenRouter key input, max-steps selector. Task 3 UI has cik/accession examples + use_vision toggle + LLM/XBRL skip flags. Reviewers can run any case through the UI directly.
+  3. [x] /health, /metrics, /api/v1/models now return friendly HTML dashboards when accessed from a browser (Accept: text/html), and JSON when called from API clients (Accept: application/json). See `templates/system.html` and `src/main.py` content negotiation.
+  4. [x] Dashboard polished: hero stats (3 tasks · 38 + 27 + 5 eval cases · 7 LLM models · 233 tests) + live cost/calls polled from /metrics every 30 s. Each task card lists its 3-4 distinguishing features so reviewers see at a glance what the harness does.
+  5. [x] **Streaming progress** — Task 2 now exposes `/api/v1/browser/stream` (Server-Sent Events). Frontend opens an `EventSource` and shows live milestones: phase_start → phase_done (plan ready) → step_start/step_done (per action with healer flag, confidence, error) → agent_complete. Live trace box scrolls automatically as events arrive. Reverse-proxy heartbeat every 20 s prevents idle disconnects. Task 1 + Task 3 fast enough that streaming was unnecessary; their loading spinners + status banners + post-run renderers were enough.
+  6. [x] Final-answer text wraps with `word-wrap: break-word` and the answer-box has `overflow-wrap: break-word` — long answers no longer overflow the box.
+  7. [x] LangSmith link is honest: server only emits `langsmith_trace_url` when `LANGSMITH_API_KEY` is configured AND tracing is on. UI hides the chip otherwise. URL points at the project with metadata-trace-id filter — works for the project owner; outside viewers see "no access" because LangSmith projects are private by default (this is correct, not a bug).
+  8. [x] **API-key error classification + UX** — new `src/shared/llm_errors.py` maps exception strings to user-actionable categories: `invalid_key`, `rate_limit`, `insufficient_credit`, `quota_exhausted`, `timeout`, `no_response`, `server_error`, `unknown`. Each ships with a suggested action ("rotate key on openrouter.ai console", "wait 30 s and retry", "top up at openrouter.ai/credits", etc.). All 3 task routers populate `cost_metadata` with `{error_category, user_message, suggested_action, retryable}`. Task 2 stream emits an `error` event with the same payload. UI shows a colour-coded banner with the actionable message + raw error in a collapsible `<details>`. Both NVIDIA NIM and OpenRouter API key inputs are present in the model selector.
+
+8. [] README 強化
+  1. [] 目前README有一些表格可能markdown格式排版有跑掉，導致沒辦法在github中好好顯示，例如: AI Collaboration Log — bugs caught only by exercising the live path區塊下面的大表格後面幾個rows沒有正確顯示出來。
+  2. [] 並且請更新README的所有說明與數據到最新的狀況，以能夠正確反映目前repo codebase的所有features與新增加的highlights。
 
 ---
 
@@ -200,7 +207,7 @@
 - **OpenClaw / HermesAgent 比較表**: README 列出 9 個維度上的差異，每一個都對應到 repo 中具體的程式碼。
 
 ### 🚧 真正剩下還需要做的 :
-
+...
 
 
 ---

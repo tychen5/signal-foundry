@@ -115,12 +115,20 @@ async def extract_10k(request: SECExtractionRequest):
 
     except Exception as e:
         logger.error("extraction_failed", error=str(e), trace_id=trace_id)
+        from src.shared.llm_errors import classify_llm_error
+        info = classify_llm_error(e)
         return ExecutionResult(
             status=ExecutionStatus.FAILED,
             task=TaskType.SEC_EXTRACTION,
             trace_id=trace_id,
             error=str(e),
             failure_type=FailureType.PARSING_ERROR,
+            cost_metadata={
+                "error_category": info.category,
+                "user_message": info.user_message,
+                "suggested_action": info.suggested_action,
+                "retryable": info.retryable,
+            },
         )
 
 

@@ -177,6 +177,7 @@ class BrowserAgent:
         headless: bool = True,
         screenshot_dir: str = "/tmp/signal_foundry_browser",
         use_vision: bool = False,
+        progress_callback: Optional[callable] = None,
     ):
         self.model_name = model_name
         self.user_api_key = user_api_key
@@ -186,6 +187,20 @@ class BrowserAgent:
         # When True and the model supports it, the verifier receives the
         # current viewport as an inline JPEG alongside the AOM text.
         self.use_vision = use_vision
+        # Optional async callback for live progress streaming. The agent
+        # awaits this with a dict event after each milestone (plan_done,
+        # step_start, step_done, healer_active, agent_complete). Used by
+        # the SSE endpoint to push intermediate state to the UI.
+        self.progress_callback = progress_callback
+
+    async def _emit(self, event: str, **payload) -> None:
+        """Best-effort progress emit; never let a callback failure break the run."""
+        if not self.progress_callback:
+            return
+        try:
+            await self.progress_callback({"event": event, **payload})
+        except Exception as e:
+            logger.warning("progress_callback_failed", error=str(e)[:120])
 
     @traced(name="task2_browser_agent_run", tags=["task2", "browser_agent"])
     async def run(
@@ -280,6 +295,13 @@ class BrowserAgent:
             page = await context.new_page()
 
             try:
+                await self._emit(
+                    "phase_start",
+                    phase="plan",
+                    task=task_description[:200],
+                    model=self.model_name,
+                    use_vision=self.use_vision,
+                )
                 # Phase 1: Plan the task
                 plan = await plan_task(
                     task_description=task_description,
@@ -290,6 +312,15 @@ class BrowserAgent:
                 )
                 result.metadata["plan_steps"] = len(plan.steps)
                 result.metadata["estimated_complexity"] = plan.estimated_complexity
+                await self._emit(
+                    "phase_done",
+                    phase="plan",
+                    plan_steps=len(plan.steps),
+                    plan_summary=[
+                        {"action": s.action_type.value, "target": s.target_description[:80]}
+                        for s in plan.steps[:8]
+                    ],
+                )
 
                 # Phase 2: Execute plan steps + reactive loop
                 completed_step_descriptions: list[str] = []
@@ -298,6 +329,14 @@ class BrowserAgent:
                 for planned_action in plan.steps:
                     if result.total_steps >= max_steps:
                         break
+
+                    await self._emit(
+                        "step_start",
+                        step=result.total_steps + 1,
+                        action=planned_action.action_type.value,
+                        target=planned_action.target_description[:120],
+                        phase="planned",
+                    )
 
                     step_result = await self._execute_step(
                         page=page,
@@ -311,6 +350,19 @@ class BrowserAgent:
                     if step_result.healer_activated:
                         result.healer_activations += 1
                         result.self_corrections += 1
+
+                    await self._emit(
+                        "step_done",
+                        step=result.total_steps,
+                        url=step_result.after_state.url if step_result.after_state else "",
+                        healer=step_result.healer_activated,
+                        diagnosis=step_result.healer_diagnosis or "",
+                        confidence=(
+                            step_result.verification.confidence
+                            if step_result.verification else None
+                        ),
+                        error=step_result.error or "",
+                    )
 
                     if step_result.after_state and step_result.after_state.screenshot_path:
                         result.screenshots.append(step_result.after_state.screenshot_path)
@@ -437,6 +489,17 @@ class BrowserAgent:
         # downgrade the result if the answer is a hedge or the cited numbers
         # can't be sourced from observed page text.
         self._guard_against_silent_success(result)
+
+        await self._emit(
+            "agent_complete",
+            status=result.status,
+            steps=result.total_steps,
+            self_corrections=result.self_corrections,
+            cost_usd=result.cost_usd,
+            duration_ms=result.total_duration_ms,
+            answer=(result.final_answer or "")[:300],
+            failure_modes=result.failure_modes,
+        )
 
         logger.info(
             "agent_complete",
