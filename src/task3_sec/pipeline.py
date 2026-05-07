@@ -58,6 +58,7 @@ async def extract_10k(
     skip_xbrl: bool = False,
     use_vision: bool = False,
     force_llm: bool = False,
+    progress_callback: Optional[callable] = None,
     trace_id: Optional[str] = None,
 ) -> ExtractionResult:
     """
@@ -96,6 +97,25 @@ async def extract_10k(
         trace_id=trace_id,
     )
 
+    async def _emit(event: str, **payload) -> None:
+        """Best-effort progress emit; never break the pipeline if callback fails."""
+        if not progress_callback:
+            return
+        try:
+            await progress_callback({"event": event, **payload})
+        except Exception as e:
+            logger.warning("t3_progress_callback_failed", error=str(e)[:120])
+
+    await _emit(
+        "pipeline_start",
+        cik=cik or "",
+        accession=accession_number or "",
+        url=filing_url or "",
+        model=model_name or "default",
+        use_vision=use_vision,
+        skip_llm=skip_llm,
+    )
+
     # Attach metadata to LangSmith span (no-op if not enabled)
     attach_metadata(
         {
@@ -110,6 +130,7 @@ async def extract_10k(
     )
 
     # ========== FETCH FILING ==========
+    await _emit("fetch_start", url=filing_url or "(via SEC API)")
     if filing_url:
         # Direct URL provided
         parsed_url_metadata = parse_filing_url_metadata(filing_url)
@@ -129,6 +150,13 @@ async def extract_10k(
         raw_content = await fetch_filing_content(filing_info["filing_url"])
     else:
         raise ValueError("Must provide either (cik + accession_number) or filing_url")
+    await _emit(
+        "fetch_done",
+        bytes=len(raw_content),
+        company=filing_info.get("company_name", ""),
+        form_type=filing_info.get("form_type", "10-K"),
+        filing_date=filing_info.get("filing_date", ""),
+    )
 
     filing_metadata = FilingMetadata(
         cik=filing_info.get("cik", cik or ""),
@@ -140,6 +168,7 @@ async def extract_10k(
     )
 
     # ========== STAGE 1: NORMALIZE + RULE-BASED PARSE ==========
+    await _emit("stage1_start", stage="normalize_and_rule_parse")
     stage1_start = time.time()
     normalized_text, format_type = normalize_filing(raw_content)
     parse_result = rule_based_parse(normalized_text)
@@ -147,6 +176,13 @@ async def extract_10k(
 
     logger.info(
         "stage1_complete",
+        items_found=parse_result.items_found,
+        avg_confidence=round(parse_result.confidence_avg, 3),
+        format=format_type,
+        duration_ms=round((time.time() - stage1_start) * 1000, 1),
+    )
+    await _emit(
+        "stage1_done",
         items_found=parse_result.items_found,
         avg_confidence=round(parse_result.confidence_avg, 3),
         format=format_type,
@@ -171,6 +207,14 @@ async def extract_10k(
         )
     )
     if needs_llm:
+        await _emit(
+            "stage2_start",
+            stage="llm_refine",
+            model=model_name or "default",
+            use_vision=use_vision,
+            current_confidence=round(parse_result.confidence_avg, 3),
+            items_below_threshold=sum(1 for b in parse_result.boundaries if b.confidence < 0.55),
+        )
         stage2_start = time.time()
         try:
             cost_before = cost_tracker.get_session_summary()
@@ -195,9 +239,24 @@ async def extract_10k(
                 llm_calls_added=calls_added,
                 duration_ms=round((time.time() - stage2_start) * 1000, 1),
             )
+            await _emit(
+                "stage2_done",
+                items_found=parse_result.items_found,
+                avg_confidence=round(parse_result.confidence_avg, 3),
+                llm_calls=calls_added,
+                duration_ms=round((time.time() - stage2_start) * 1000, 1),
+            )
         except Exception as e:
             logger.warning("stage2_failed", error=str(e))
             stages_used.append("llm_refine_failed")
+            await _emit("stage2_failed", error=str(e)[:120])
+    else:
+        await _emit(
+            "stage2_skipped",
+            reason="rule_parser_confident",
+            avg_confidence=round(parse_result.confidence_avg, 3),
+            items_found=parse_result.items_found,
+        )
 
     # ========== BUILD EXTRACTED ITEMS ==========
     items = _build_items(normalized_text, parse_result)
@@ -219,13 +278,20 @@ async def extract_10k(
         ),
     )
 
+    await _emit("stage3_start", stage="validation")
     result = fix_common_issues(result, normalized_text)
     validation_report = validate_extraction(result, normalized_text)
     stages_used.append("validation")
+    await _emit(
+        "stage3_done",
+        overall_valid=validation_report.get("overall_valid", True),
+        issue_count=len(validation_report.get("issues", [])),
+    )
 
     # ========== STAGE 4: XBRL CROSS-VALIDATION ==========
     xbrl_report = {}
     if not skip_xbrl and cik:
+        await _emit("stage4_start", stage="xbrl_cross_check")
         try:
             fiscal_year = _extract_fiscal_year(filing_metadata.filing_date)
             xbrl_report = await cross_validate_financials(
@@ -234,8 +300,14 @@ async def extract_10k(
                 fiscal_year=fiscal_year,
             )
             stages_used.append("xbrl_cross_check")
+            await _emit(
+                "stage4_done",
+                xbrl_status=xbrl_report.get("status", ""),
+                checks=len(xbrl_report.get("checks", [])),
+            )
         except Exception as e:
             logger.warning("stage4_failed", error=str(e))
+            await _emit("stage4_failed", error=str(e)[:120])
 
     # ========== FINALIZE PROCESSING METADATA ==========
     total_duration = (time.time() - pipeline_start) * 1000
@@ -272,6 +344,22 @@ async def extract_10k(
         latency_ms=round(total_duration, 1),
         stages=stages_used,
         trace_id=trace_id,
+    )
+
+    # Status counts for the streaming UI summary line
+    status_counts: dict[str, int] = {}
+    for it in items:
+        s = it.status.value if hasattr(it.status, "value") else str(it.status)
+        status_counts[s] = status_counts.get(s, 0) + 1
+    await _emit(
+        "pipeline_complete",
+        items=len(items),
+        rule_only=rule_only,
+        llm_refined=llm_refined,
+        cost_usd=round(result.processing_metadata.total_cost_usd, 6),
+        latency_ms=round(total_duration, 1),
+        stages=stages_used,
+        status_counts=status_counts,
     )
 
     return result

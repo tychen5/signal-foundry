@@ -235,3 +235,58 @@ class TestTask3Routes:
             json={},
         )
         assert response.status_code == 400
+
+    async def test_stream_extract_emits_pipeline_events(self, client, monkeypatch):
+        """SSE endpoint streams pipeline_start → fetch → stage1 → stage2 →
+        pipeline_complete events through the progress callback."""
+
+        async def fake_extract_10k(**kwargs):
+            cb = kwargs.get("progress_callback")
+            if cb:
+                await cb({"event": "pipeline_start", "cik": kwargs.get("cik", "")})
+                await cb({"event": "fetch_start", "url": "https://test/10k.htm"})
+                await cb({"event": "fetch_done", "bytes": 12345, "company": "Apple Inc."})
+                await cb({"event": "stage1_start", "stage": "rule_parse"})
+                await cb({"event": "stage1_done", "items_found": 22, "avg_confidence": 0.95})
+                await cb({"event": "stage2_skipped", "reason": "rule_parser_confident"})
+                await cb({"event": "stage3_start", "stage": "validation"})
+                await cb({"event": "stage3_done", "overall_valid": True})
+                await cb({
+                    "event": "pipeline_complete",
+                    "items": 23,
+                    "rule_only": 23,
+                    "llm_refined": 0,
+                    "cost_usd": 0.0,
+                    "stages": ["rule_based", "validation"],
+                    "status_counts": {"extracted": 14, "incorporated_by_reference": 6, "not_applicable": 3},
+                })
+            # Return value isn't used by the stream consumer
+            return ExtractionResult(
+                filing_metadata=FilingMetadata(
+                    cik=kwargs.get("cik", ""),
+                    accession_number=kwargs.get("accession_number", ""),
+                ),
+                items=[],
+                processing_metadata=ProcessingMetadata(),
+            )
+
+        monkeypatch.setattr("src.task3_sec.pipeline.extract_10k", fake_extract_10k)
+
+        async with client.stream(
+            "POST",
+            "/api/v1/sec/extract" + "/" if False else "/api/v1/sec/stream",
+            json={"cik": "0000320193", "accession_number": "0000320193-23-000106"},
+        ) as resp:
+            assert resp.status_code == 200
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+            chunks: list[str] = []
+            async for line in resp.aiter_lines():
+                chunks.append(line)
+                if "stream_end" in line and len([c for c in chunks if c.startswith("data:")]) >= 6:
+                    break
+
+        events = [c for c in chunks if c.startswith("data:")]
+        assert any("stream_start" in e for e in events)
+        assert any("fetch_done" in e for e in events)
+        assert any("stage1_done" in e for e in events)
+        assert any("pipeline_complete" in e for e in events)

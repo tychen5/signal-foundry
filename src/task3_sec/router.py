@@ -132,6 +132,100 @@ async def extract_10k(request: SECExtractionRequest):
         )
 
 
+@router.post("/stream")
+async def stream_extract_10k(request: SECExtractionRequest):
+    """SSE stream for live SEC extraction progress.
+
+    Reviewer-facing milestones:
+        stream_start      {trace_id}
+        pipeline_start    {cik, accession, model, use_vision, skip_llm}
+        fetch_start       {url}
+        fetch_done        {bytes, company, form_type, filing_date}
+        stage1_start      {stage}
+        stage1_done       {items_found, avg_confidence, format, duration_ms}
+        stage2_start      {model, use_vision, current_confidence}
+        stage2_done       {items_found, llm_calls, duration_ms}  OR
+        stage2_skipped    {reason, avg_confidence}                OR
+        stage2_failed     {error}
+        stage3_start/done {overall_valid, issue_count}
+        stage4_start/done {xbrl_status, checks}                   OR  stage4_failed
+        pipeline_complete {items, rule_only, llm_refined, cost_usd, status_counts}
+        error             {category, user_message, suggested_action, raw_error}
+        stream_end        {trace_id}
+
+    Long filings + LLM refinement can take 60+ seconds; streaming lets the
+    UI show what's happening rather than spinner-and-wait.
+    """
+    import asyncio
+    import json as _json
+
+    from fastapi.responses import StreamingResponse
+
+    from src.shared.llm_errors import classify_llm_error, to_dict
+
+    trace_id = generate_trace_id()
+    if not request.cik and not request.filing_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either 'cik' (with optional 'accession_number') or 'filing_url'",
+        )
+
+    queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+
+    async def progress_callback(event: dict) -> None:
+        await queue.put(event)
+
+    async def run_pipeline() -> None:
+        try:
+            from src.task3_sec.pipeline import extract_10k as run
+
+            await run(
+                cik=request.cik,
+                accession_number=request.accession_number,
+                filing_url=request.filing_url,
+                model_name=request.model.model_id,
+                user_api_key=request.model.user_openrouter_key,
+                skip_llm=request.skip_llm,
+                skip_xbrl=request.skip_xbrl,
+                use_vision=request.use_vision,
+                force_llm=getattr(request, "force_llm", False),
+                progress_callback=progress_callback,
+                trace_id=trace_id,
+            )
+        except Exception as e:
+            err = to_dict(classify_llm_error(e))
+            err["trace_id"] = trace_id
+            await queue.put({"event": "error", **err})
+        finally:
+            await queue.put({"event": "stream_end", "trace_id": trace_id})
+
+    runner = asyncio.create_task(run_pipeline())
+
+    async def event_generator():
+        yield f"data: {_json.dumps({'event': 'stream_start', 'trace_id': trace_id})}\n\n"
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=20.0)
+            except asyncio.TimeoutError:
+                yield ": keep-alive\n\n"
+                continue
+            yield f"data: {_json.dumps(event)}\n\n"
+            if event.get("event") == "stream_end":
+                break
+        if not runner.done():
+            runner.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @router.get("/filings/{cik}")
 async def list_filings(cik: str, filing_type: str = "10-K", limit: int = 10):
     """
