@@ -52,7 +52,14 @@ Decide the SINGLE next action to take. Output a JSON object:
 7. Use `wait` (with value as ms) when a click triggers async loading and the new content is not yet visible.
 8. **Step budget awareness**: After 6+ steps without progress, use `done` with the best partial answer you have. A partial-but-grounded answer ranks higher than running out of steps with nothing.
 9. **For data tables / financial data**: After scrolling once and seeing the relevant rows, extract immediately. Don't keep scrolling to find "more complete" data — if the top entries are visible, that's enough.
-10. **For SPA / async sites (Yahoo Finance, MOPS, cnyes)**: Numbers may be inside `<span>` or rendered post-hydration. If you see numerical data in visible_text that matches the task, use it — don't insist on perfect formatting.
+
+9b. **CRITICAL — DO NOT scroll repeatedly looking for sidebar / infobox data.** Wikipedia infoboxes, financial-quote panels, and "facts at a glance" panels live on the RIGHT side of the page or at the very top, NOT below the fold. Scrolling DOWN reveals article body, not the infobox. If the target you're looking for is in a structured widget:
+   • Use the `extract` action FIRST with a specific target description (e.g. "population row in Tokyo infobox"). The executor runs JS to find `.infobox`, `<table>`, and key-value pairs that match your description's keywords, and returns a structured excerpt that appears in the next step's STEPS ALREADY TAKEN log under `[EXTRACTED: ...]`.
+   • Once `[EXTRACTED: ...]` shows the data you wanted, immediately use `done` with `value=` set to the answer pulled from that excerpt — DO NOT take another step.
+   • If `extract` returns `extract_no_match`, the data really isn't on the page; use `done` with `value="not_found: <reason>"`.
+   • If a previous `scroll` step shows `scroll_no_change` in its FAILED message, the page is at its limit — switch immediately to `extract` or `done`. NEVER repeat scroll on the same URL more than 2 times in a row; the system will abort the task as `partial` after 3 identical actions.
+
+10. **For SPA / async sites (Yahoo Finance, MOPS, cnyes, Google Finance)**: Numbers may be inside `<span>` or rendered post-hydration. If you see numerical data in visible_text that matches the task, use it — don't insist on perfect formatting.
 11. **For iframe content**: If the content appears to be inside an iframe (PDF viewer, embedded widget), note this in your reasoning. You may need to `extract` from the iframe or report what's visible.
 
 # Anti-hallucination rules (CRITICAL)
@@ -77,3 +84,9 @@ Finish with answer from screenshot (chart reading):
 
 Honestly report when data is unavailable:
 {"action": "done", "target": "", "value": "not_found: example.com is a placeholder domain with no contact information for trademark disputes", "reasoning": "After examining the page, no email or contact info exists for this query", "success_criteria": "Honest not-found report rather than hallucinating an email"}
+
+Wikipedia infobox lookup — use `extract` instead of scrolling:
+{"action": "extract", "target": "population row in Tokyo infobox", "value": "", "reasoning": "Wikipedia infobox is a sidebar widget, not below the fold; the executor will find the .infobox element and pull its content", "success_criteria": "Next step's STEPS ALREADY TAKEN shows [EXTRACTED: ...] containing the population row"}
+
+Then the FOLLOWING step (after seeing the EXTRACTED data) finishes:
+{"action": "done", "target": "", "value": "Population of Tokyo: 13,929,286 (2023 estimate, from the infobox)", "reasoning": "Read directly from the [EXTRACTED: Population...] block in the previous step's log", "success_criteria": "Final grounded answer from the structured extract"}

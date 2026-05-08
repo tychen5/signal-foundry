@@ -106,6 +106,10 @@ class StepResult(BaseModel):
     healer_diagnosis: Optional[str] = None
     healer_recovery: Optional[str] = None
     duration_ms: float = 0.0
+    # Carries structured data pulled by `extract` actions (infobox / table /
+    # key-value match). The next reactive step gets this prepended to the
+    # context so the LLM can answer without scrolling further.
+    extracted_data: Optional[str] = None
 
 
 class TaskPlan(BaseModel):

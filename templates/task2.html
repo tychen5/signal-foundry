@@ -77,7 +77,7 @@
                     <label>Task Description (natural language)</label>
                     <textarea id="task-desc" placeholder="e.g. Go to Wikipedia and find the population of Tokyo"></textarea>
                     <div class="examples">
-                        <button class="example-btn" onclick="setTask('Search Wikipedia for &quot;Tokyo&quot; and report the population number from the infobox.', '')">📚 Wikipedia lookup</button>
+                        <button class="example-btn" onclick="setTask('Open https://en.wikipedia.org/wiki/Tokyo and use the extract action to read the population row from the infobox sidebar (the structured fact-box, NOT below the fold). Report the population number you find there.', 'https://en.wikipedia.org/wiki/Tokyo')">📚 Wikipedia lookup (infobox)</button>
                         <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story and the comment count', 'https://news.ycombinator.com')">🟧 HN top story</button>
                         <button class="example-btn" onclick="setTask('Go to https://arxiv.org/abs/2509.13753 and report the paper title plus the first two authors', 'https://arxiv.org/abs/2509.13753')">🔬 arXiv paper</button>
                         <button class="example-btn" onclick="setTask('前往鉅亨網並擷取台股加權指數最新點位', '')">💹 cnyes 加權指數 (TW)</button>
@@ -99,9 +99,10 @@
                 <div class="form-group">
                     <label>Max Steps</label>
                     <select id="max-steps">
-                        <option value="5">5 steps (fast)</option>
-                        <option value="10" selected>10 steps (default)</option>
-                        <option value="20">20 steps (complex tasks)</option>
+                        <option value="5">5 steps (very fast / single-action tasks)</option>
+                        <option value="10">10 steps (simple lookups)</option>
+                        <option value="20" selected>20 steps (default)</option>
+                        <option value="40">40 steps (complex multi-page flows)</option>
                     </select>
                 </div>
             </div>

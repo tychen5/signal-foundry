@@ -285,7 +285,7 @@ class BrowserAgent:
         self,
         task_description: str,
         target_url: Optional[str] = None,
-        max_steps: int = 15,
+        max_steps: int = 20,
         trace_id: Optional[str] = None,
     ) -> AgentResult:
         """
@@ -455,6 +455,11 @@ class BrowserAgent:
                     action_desc = f"{step_result.action.action_type.value}: {step_result.action.target_description}"
                     if step_result.error:
                         action_desc += f" [FAILED: {step_result.error[:50]}]"
+                    if step_result.extracted_data:
+                        # Prepend the extracted text snippet to the next
+                        # step's context so the LLM doesn't keep scrolling
+                        # blindly looking for the answer it now has.
+                        action_desc += f" [EXTRACTED: {step_result.extracted_data[:600]}]"
                     completed_step_descriptions.append(action_desc)
 
                 # Phase 3: Reactive loop — keep acting until task is done
@@ -541,6 +546,11 @@ class BrowserAgent:
                     action_desc = f"{step_result.action.action_type.value}: {step_result.action.target_description}"
                     if step_result.error:
                         action_desc += f" [FAILED: {step_result.error[:50]}]"
+                    if step_result.extracted_data:
+                        # Prepend the extracted text snippet to the next
+                        # step's context so the LLM doesn't keep scrolling
+                        # blindly looking for the answer it now has.
+                        action_desc += f" [EXTRACTED: {step_result.extracted_data[:600]}]"
                     completed_step_descriptions.append(action_desc)
 
                     # Stuck-loop guard: if the last 3 reactive-phase actions
@@ -715,6 +725,15 @@ class BrowserAgent:
         # Execute the action
         success, locator_strategy, error = await execute_action(page, action)
         step_result.locator_strategy_used = locator_strategy
+
+        # EXTRACT actions return success=True with extracted data in the
+        # `error` slot using a `extract_*:` prefix (executor.py). Pull that
+        # out into the structured field so reactive steps can use it.
+        if success and error and any(
+            error.startswith(p) for p in ("extract_infobox:", "extract_table:", "extract_kv:", "extract_no_match")
+        ):
+            step_result.extracted_data = error
+            error = None  # don't surface as an error
 
         if not success:
             step_result.error = error

@@ -11,6 +11,7 @@ Each action captures before/after state for verification.
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Optional
 
 from playwright.async_api import Page
@@ -62,7 +63,7 @@ async def execute_action(
         elif action.action_type == ActionType.HOVER:
             return await _execute_hover(page, action)
         elif action.action_type == ActionType.EXTRACT:
-            return True, None, None  # Extract is handled by observer
+            return await _execute_extract(page, action)
         elif action.action_type == ActionType.DONE:
             return True, None, None
         elif action.action_type == ActionType.SCREENSHOT:
@@ -362,11 +363,21 @@ async def _execute_select(page: Page, action: BrowserAction) -> tuple[bool, Opti
 
 
 async def _execute_scroll(page: Page, action: BrowserAction) -> tuple[bool, Optional[LocatorStrategy], Optional[str]]:
-    """Scroll the page."""
+    """Scroll the page.
+
+    Returns failure (with diagnostic) when the scroll didn't actually move
+    the page. Wikipedia infoboxes are a classic case: the LLM thinks scrolling
+    will reveal them, but they're laid out on the right side and the page is
+    already at the bottom — repeated scrolls become a no-op the stuck-loop
+    guard correctly catches, but the agent could heal earlier if it knows
+    the scroll didn't move.
+    """
     direction = action.value.lower() if action.value else "down"
     pixels = 500
 
     try:
+        before_y = await page.evaluate("window.scrollY")
+        before_h = await page.evaluate("document.body.scrollHeight")
         if direction == "up":
             await page.evaluate(f"window.scrollBy(0, -{pixels})")
         elif direction == "bottom":
@@ -376,9 +387,96 @@ async def _execute_scroll(page: Page, action: BrowserAction) -> tuple[bool, Opti
         else:
             await page.evaluate(f"window.scrollBy(0, {pixels})")
         await asyncio.sleep(0.3)
+        after_y = await page.evaluate("window.scrollY")
+        # If scroll position didn't change, the page is already pinned at
+        # that boundary. Return error so the healer can switch strategy
+        # (e.g. try a CSS-locator-based extract rather than scrolling more).
+        if before_y == after_y and direction in ("down", "bottom"):
+            at_bottom = after_y + 100 >= before_h - 1000  # rough
+            msg = (
+                "scroll_no_change: scrollY did not move "
+                f"({before_y}→{after_y}, page height {before_h}). "
+                + ("Page is at the bottom. " if at_bottom else "")
+                + "Switch strategy: use 'extract' with a specific target "
+                "(e.g. 'population row in infobox') or look at the CURRENTLY "
+                "visible text — the data may be in a sidebar/infobox not "
+                "below the fold."
+            )
+            return False, None, msg
         return True, None, None
     except Exception as e:
         return False, None, f"Scroll failed: {str(e)}"
+
+
+async def _execute_extract(page: Page, action: BrowserAction) -> tuple[bool, Optional[LocatorStrategy], Optional[str]]:
+    """Pull structured data from the page based on the target description.
+
+    Previously this was a no-op — observer just re-captured page state. Now
+    we ALSO query the DOM directly for common data-bearing structures
+    (infoboxes, tables, definition lists) and surface a focused excerpt
+    via the error/observation channel. This is the recommended escape from
+    repeated-scroll loops on data-heavy pages like Wikipedia.
+
+    The actual answer extraction still happens in the verifier — this just
+    enriches the page state so the verifier has the content in front of it.
+    """
+    description = (action.target_description or "").lower()
+    try:
+        # Heuristic 1: Wikipedia infobox. Most "lookup" tasks land here.
+        infobox_text = await page.evaluate(
+            """() => {
+              const box = document.querySelector('.infobox, table.infobox, .infobox-data, [role="region"][aria-label*="info" i]');
+              if (!box) return null;
+              return box.innerText.slice(0, 4000);
+            }"""
+        )
+        if infobox_text:
+            return True, None, f"extract_infobox:{infobox_text[:3500]}"
+
+        # Heuristic 2: a `<table>` whose caption / first cells match the
+        # description's keywords. Useful for data tables on news / finance.
+        keywords = [w for w in re.split(r"\W+", description) if len(w) >= 4][:4]
+        if keywords:
+            table_match = await page.evaluate(
+                """(kws) => {
+                  const tables = document.querySelectorAll('table');
+                  for (const t of tables) {
+                    const txt = (t.innerText || '').toLowerCase();
+                    if (kws.some(k => txt.includes(k))) {
+                      return t.innerText.slice(0, 4000);
+                    }
+                  }
+                  return null;
+                }""",
+                keywords,
+            )
+            if table_match:
+                return True, None, f"extract_table:{table_match[:3500]}"
+
+        # Heuristic 3: Element whose text matches keywords AND has a
+        # number-bearing sibling (typical "Label: 13,929,286" pattern).
+        if keywords:
+            kv_match = await page.evaluate(
+                """(kws) => {
+                  for (const el of document.querySelectorAll('th,td,dt,dd,li,span,div')) {
+                    const txt = (el.innerText || '').toLowerCase();
+                    if (txt.length > 4000) continue;
+                    if (kws.some(k => txt.includes(k)) && /\\d{2,}/.test(el.innerText)) {
+                      const parent = el.parentElement;
+                      const ctx = parent ? parent.innerText : el.innerText;
+                      return ctx.slice(0, 1500);
+                    }
+                  }
+                  return null;
+                }""",
+                keywords,
+            )
+            if kv_match:
+                return True, None, f"extract_kv:{kv_match[:1500]}"
+
+        return True, None, "extract_no_match: nothing structured matched the target description"
+    except Exception as e:
+        return False, None, f"Extract failed: {str(e)}"
 
 
 async def _execute_wait(page: Page, action: BrowserAction) -> tuple[bool, Optional[LocatorStrategy], Optional[str]]:

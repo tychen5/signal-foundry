@@ -18,8 +18,8 @@ from src.task2_browser.schemas import PageState, VerificationResult
 logger = get_logger("observer")
 
 # Max chars for accessibility tree snapshot to keep LLM context manageable
-_MAX_A11Y_CHARS = 4000
-_MAX_TEXT_CHARS = 2000
+_MAX_A11Y_CHARS = 8000  # was 4000 — Wikipedia infoboxes / Yahoo Finance quote panels often appear past 4 kB
+_MAX_TEXT_CHARS = 6000  # was 2000 — data-heavy pages (Wikipedia infoboxes, financial quote panels) need more context
 
 
 async def observe(page: Page, screenshot_dir: str = "") -> PageState:

@@ -196,8 +196,8 @@ async def decide_next_action(
         f"CURRENT PAGE:\n"
         f"  URL: {page_state.url}\n"
         f"  Title: {page_state.title}\n\n"
-        f"ACCESSIBILITY TREE:\n{page_state.accessibility_tree[:2500]}\n\n"
-        f"VISIBLE TEXT (excerpt):\n{page_state.visible_text_summary[:800]}\n\n"
+        f"ACCESSIBILITY TREE:\n{page_state.accessibility_tree[:5000]}\n\n"
+        f"VISIBLE TEXT (excerpt):\n{page_state.visible_text_summary[:3500]}\n\n"
         f"STEPS ALREADY TAKEN:\n{steps_summary}\n\n"
         f"ERROR INDICATORS: {page_state.error_indicators}\n"
     )
@@ -313,7 +313,7 @@ async def verify_with_llm(
         f"TASK: {task_description}\n\n"
         f"CURRENT PAGE URL: {page_state.url}\n"
         f"CURRENT PAGE TITLE: {page_state.title}\n\n"
-        f"VISIBLE TEXT:\n{page_state.visible_text_summary[:1500]}\n\n"
+        f"VISIBLE TEXT:\n{page_state.visible_text_summary[:5000]}\n\n"
         f"STEPS TAKEN:\n{steps_summary}\n"
     )
 

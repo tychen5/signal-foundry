@@ -187,12 +187,16 @@ class TestObserver:
         assert "Search" in result
 
     def test_summarize_text_truncation(self) -> None:
-        """Text summary truncates long text while preserving start and end."""
+        """Text summary truncates long text while preserving start and end.
+        _MAX_TEXT_CHARS was bumped from 2000 → 6000 to give the LLM more
+        context on data-heavy pages (Wikipedia infoboxes). Use a much longer
+        input to ensure truncation still fires.
+        """
         from src.task2_browser.observer import _summarize_text
 
-        long_text = "A" * 5000
+        long_text = "A" * 12000
         result = _summarize_text(long_text)
-        assert len(result) < 5000
+        assert len(result) < 12000
         assert "..." in result
 
     def test_summarize_text_short_passthrough(self) -> None:
