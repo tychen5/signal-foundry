@@ -134,10 +134,39 @@
         if (savedKey) apiKeyInput.value = savedKey;
         if (savedNvidia) nvidiaKeyInput.value = savedNvidia;
         if (savedLangsmith) langsmithKeyInput.value = savedLangsmith;
-        modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
-        apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
-        nvidiaKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_nvidia_key', nvidiaKeyInput.value));
+        modelSelect.addEventListener('change', () => { sessionStorage.setItem('sf_model_id', modelSelect.value); refreshKeyHint(); });
+        apiKeyInput.addEventListener('input', () => { sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value); refreshKeyHint(); });
+        nvidiaKeyInput.addEventListener('input', () => { sessionStorage.setItem('sf_nvidia_key', nvidiaKeyInput.value); refreshKeyHint(); });
         langsmithKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_langsmith_key', langsmithKeyInput.value));
+
+        // Live key-hint banner — shows whether the selected model has the
+        // required key entered. Avoids confusing 'invalid_key' errors after
+        // the user has already kicked off a long-running task.
+        function refreshKeyHint() {
+            const id = modelSelect.value || '';
+            const isOR = id.startsWith('openai/') || id.startsWith('anthropic/') || id.startsWith('google/');
+            const isNV = id.startsWith('moonshotai/') || id.startsWith('z-ai/') || id.startsWith('deepseek-ai/') || id.startsWith('minimaxai/');
+            const haveOR = (apiKeyInput.value || '').trim().length > 8;
+            const haveNV = (nvidiaKeyInput.value || '').trim().length > 8;
+            let hint = document.getElementById('sf-key-hint');
+            if (!hint) {
+                hint = document.createElement('div');
+                hint.id = 'sf-key-hint';
+                hint.style.cssText = 'margin-top:0.5rem;padding:0.5rem 0.75rem;border-radius:6px;font-size:0.85rem;line-height:1.4';
+                modelSelect.parentElement.appendChild(hint);
+            }
+            if (isOR && !haveOR) {
+                hint.style.background = '#3b1f1f'; hint.style.border = '1px solid #b91c1c'; hint.style.color = '#fecaca';
+                hint.innerHTML = '⚠ This OpenRouter model needs an API key. Paste your <code>sk-or-v1-...</code> key above, or pick an NVIDIA model (kimi/glm/deepseek/minimax) instead.';
+            } else if (isNV && !haveNV) {
+                hint.style.background = '#1f2a3b'; hint.style.border = '1px solid #1e40af'; hint.style.color = '#bfdbfe';
+                hint.innerHTML = 'ℹ The server-bundled NVIDIA key may be rate-limited or expired. If you hit errors, paste your own <code>nvapi-...</code> key (free at build.nvidia.com).';
+            } else {
+                hint.style.background = '#1a2e1f'; hint.style.border = '1px solid #16a34a'; hint.style.color = '#bbf7d0';
+                hint.innerHTML = '✓ Key configuration looks good for ' + (id || '(no model)') + '.';
+            }
+        }
+        refreshKeyHint();
 
         // Card hover animations
         document.querySelectorAll('.task-card').forEach(card => {
