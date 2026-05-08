@@ -175,7 +175,7 @@
   4. [x] "reviewer/面試官" language replaced throughout README and templates with user-centric "user/User/Users" wording. UI says "Quick launchpad" instead of "Reviewer launchpad". system.html says "Usage Guidance" instead of "Reviewer Guidance".
 
 
-9. [] Phase 9 LLM strengthening + UX iteration (2026-05-08, ongoing)
+9. [x] Phase 9 LLM strengthening + UX iteration ✅ (2026-05-08)
   1. [x] Robust JSON extractors `src/shared/llm_utils.extract_json_object` / `extract_json_array` — handle ```json fences, smart quotes, leading prose, balanced-brace nesting, truncated streams. Wired into T2 planner + T3 LLM refiner. 13 new tests pinning behaviour.
   2. [x] OpenAI-compat `response_format=json_object` support in `get_llm(json_mode=True)`. Safe-listed: only fires when `extra_body` is empty (skips thinking-mode glm-5.1 / deepseek-v4-pro to avoid silent empty content). T3 refiner uses it for strict JSON output.
   3. [x] T1 / T2 / T3 SSE streams all embed the final result event so frontends don't make a redundant POST after stream_end. Eliminates double-execution latency on slow NVIDIA paths.
@@ -187,6 +187,9 @@
   9. [x] Task 3 eval set 30 → 35 cases (Enron Corp FY2000, WorldCom FY2001, Lehman FY2007, Sears 2017, Rivian 2023). 100% pass rate, $0 rule-only cost.
   10. [x] Live key-config hint banner under model dropdown — colour-coded chip warns when the selected model needs an OpenRouter or NVIDIA key the user hasn't entered.
   11. [x] Vision benchmark on 5 hard edge-case filings completed: kimi-k2.6 + vision=True hits 5/5 success at $0 / 23.8s avg vs vision=False 3/5 / $0.022 / 131s. Asset-Backed Trust + Kingsoft Cloud cases recovered from 0 → 16-20 items with vision on.
+  12. [x] T2 Wikipedia infobox stuck-loop fixed: real `_execute_extract()` pulls `.infobox` / `<table>` / kv-pair content from the DOM; new `StepResult.extracted_data` field carries it to the next step's context as `[EXTRACTED: ...]`. `_execute_scroll` now detects `scroll_no_change` and surfaces it so the healer can switch strategy. v3_actor.txt rule 9b explicitly tells the LLM to use extract (not scroll) for sidebar widgets.
+  13. [x] Default `max_steps` 10 → 20 in UI; new "40 steps (complex multi-page flows)" option. Backend `BrowserAgent.run()` default 15 → 20 to match.
+  14. [x] Observer context windows widened: a11y 4000 → 8000 chars, visible_text 2000 → 6000 chars. Planner forwards 5000 a11y / 3500 visible_text to the actor (was 2500 / 800) — gives the LLM enough page state to spot infobox content directly.
 
 ---
 
