@@ -214,7 +214,12 @@ async def stream_extract_10k(request: SECExtractionRequest):
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
 
     async def progress_callback(event: dict) -> None:
-        await queue.put(event)
+        # Non-blocking — if the consumer disconnected mid-extraction, we
+        # don't want the pipeline to wedge waiting for queue drain.
+        try:
+            queue.put_nowait(event)
+        except asyncio.QueueFull:
+            logger.debug("sse_queue_full_dropping_event", event=event.get("event"))
 
     async def run_pipeline() -> None:
         try:

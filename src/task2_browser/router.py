@@ -168,7 +168,12 @@ async def stream_browser_task(request: BrowserTaskRequest):
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
 
     async def progress_callback(event: dict) -> None:
-        await queue.put(event)
+        # Non-blocking — if the consumer (browser tab) disconnected mid-run,
+        # we'd otherwise wedge the agent waiting for a never-arriving drain.
+        try:
+            queue.put_nowait(event)
+        except asyncio.QueueFull:
+            logger.debug("sse_queue_full_dropping_event", event=event.get("event"))
 
     async def run_agent() -> None:
         try:

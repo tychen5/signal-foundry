@@ -135,7 +135,15 @@ async def stream_run_skill(request: SkillRunRequest):
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
 
     async def progress_callback(event: dict) -> None:
-        await queue.put(event)
+        # Non-blocking put: if the consumer disconnected (e.g. user closed
+        # the tab), the queue could fill up and the engine would block here
+        # forever waiting for a never-arriving consumer drain. Silently
+        # drop events when full — losing progress events is strictly
+        # better than wedging the engine.
+        try:
+            queue.put_nowait(event)
+        except asyncio.QueueFull:
+            logger.debug("sse_queue_full_dropping_event", event=event.get("event"))
 
     async def run_engine() -> None:
         try:
