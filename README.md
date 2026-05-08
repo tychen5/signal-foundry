@@ -98,7 +98,13 @@ python -m evals.task2.run_eval --vision --timeout 120   # 38-case set, Playwrigh
 - `GET /metrics` — Live cost / latency / token ledger
 - `GET /api/v1/models` — Model registry (which IDs work, which provider routes)
 
-**User-friendly model selection.** Default model is `moonshotai/kimi-k2.6` (free, NVIDIA NIM) — works out of the box. For higher quality / higher rate limit, paste your own OpenRouter API key in the UI and pick `google/gemini-3.1-pro-preview` (cheap), `anthropic/claude-opus-4.7` (premium), or `openai/gpt-5.5`. Per-request user keys are NOT stored server-side.
+**Bring-your-own-key (BYOK) on the homepage.** The model selector accepts THREE optional keys:
+
+- **OpenRouter** (`sk-or-v1-...`) — required if you pick `gpt-5.5`, `claude-opus-4.7`, or `gemini-3.1-pro-preview`. Pay-per-call, faster, higher quality. Top up at [openrouter.ai/credits](https://openrouter.ai/credits).
+- **NVIDIA NIM** (`nvapi-...`) — free signup at [build.nvidia.com](https://build.nvidia.com). Required if you pick `kimi-k2.6`, `glm-5.1`, `deepseek-v4-pro`, or `minimax-m2.7`. Rate-limited to ~4 calls/min on the free tier; the server's bundled NVIDIA key may rotate / expire, in which case BYOK keeps you working.
+- **LangSmith** (`lsv2_...`, optional) — paste your own LangSmith API key from [smith.langchain.com/settings](https://smith.langchain.com/settings) to send your runs' traces to your own console instead of the server's project.
+
+You must paste at least ONE of the OpenRouter or NVIDIA keys — without it, the dropdown can't reach the corresponding provider and the request will fail with a clear `invalid_key` error message. All keys are kept in your browser session only (`sessionStorage`), never persisted server-side.
 
 **Live progress for slow Task 2 runs.** Browser-agent tasks can take 30-180 s per case (planning → executing → verifying). The Task 2 UI calls `/api/v1/browser/stream` (Server-Sent Events), so users see milestones in real time:
 ```
