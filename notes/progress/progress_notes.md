@@ -157,7 +157,7 @@
 
 8. [] README 強化
   1. [] 目前README有一些表格可能markdown格式排版有跑掉，導致沒辦法在github中好好顯示，例如: AI Collaboration Log — bugs caught only by exercising the live path區塊下面的大表格後面幾個rows沒有正確顯示出來。
-  2. [] 並且請更新README的所有說明與數據到最新的狀況，以能夠正確反映目前repo codebase的所有features與新增加的highlights。
+  2. [] 並且請更新README的所有說明與數據到最新的狀況，以能夠正確反映目前repo codebase的所有features與新增加的highlights。並且update最新的UI demo操作用法、API parameters 說明等等。
 
 ---
 

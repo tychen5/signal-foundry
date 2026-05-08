@@ -460,6 +460,54 @@
     "difficulty": "edge_case",
     "tags": ["vision_benefit", "captcha", "anti_bot", "negative_case"],
     "eval_dimensions": ["edge_case_visual", "failure_injection"]
+  },
+  {
+    "case_id": "t2_nytimes_paywall_guard",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.nytimes.com and report the headline AND first paragraph of the top story. If the article is blocked by a paywall, report that exactly — do NOT make up content.",
+      "target_url": "https://www.nytimes.com"
+    },
+    "expected_behavior": "NYTimes shows headlines on the homepage but article body is paywalled. The agent should report the headline (visible) and explicitly state the article body is paywalled, NOT invent paragraph text. Tests anti-hallucination on a different blocking mechanism than login walls — the paywall overlay is JS-rendered and partially transparent.",
+    "difficulty": "hard",
+    "tags": ["paywall", "news", "negative_case", "silent_failure", "real_world", "hallucination_guard"],
+    "eval_dimensions": ["failure_injection", "silent_failure_prevention"]
+  },
+  {
+    "case_id": "t2_yahoo_japan_news",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "前往 Yahoo! ニュース https://news.yahoo.co.jp/ とトップヘッドラインのタイトルを報告する (Go to Yahoo Japan News and report the top headline title — answer in original Japanese)",
+      "target_url": "https://news.yahoo.co.jp/"
+    },
+    "expected_behavior": "Yahoo Japan News with Japanese-locale CJK content. Tests Japanese character extraction (different from Chinese T+S). The agent must preserve the original Japanese title — translating into English would be a hallucination of meaning.",
+    "difficulty": "hard",
+    "tags": ["japanese", "cjk_locale", "news", "real_world", "language_diversity"],
+    "eval_dimensions": ["domain_diversity", "task_complexity_single"]
+  },
+  {
+    "case_id": "t2_reddit_top_post",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://old.reddit.com/r/programming/ and report the title of the current top post, its score (upvotes), and its comment count.",
+      "target_url": "https://old.reddit.com/r/programming/"
+    },
+    "expected_behavior": "Reddit's old UI is server-rendered (faster than the new SPA). Tests multi-field structured extraction (title + numeric score + numeric count). Numeric grounding required — score/count must appear in observed text.",
+    "difficulty": "normal",
+    "tags": ["forum", "structured_data", "numeric_grounding", "real_world", "extract"],
+    "eval_dimensions": ["task_complexity_multi", "domain_diversity"]
+  },
+  {
+    "case_id": "t2_chase_banking_login_wall",
+    "task": "task2_browser",
+    "input_data": {
+      "task_description": "Go to https://www.chase.com/personal/credit-cards and find any current promotional offer for a Chase Sapphire credit card. If a login is required for any details, report that explicitly.",
+      "target_url": "https://www.chase.com/personal/credit-cards"
+    },
+    "expected_behavior": "Chase banking site — public marketing pages with promotional offers visible (sign-up bonuses, point multipliers). The interesting bits often require login. Tests banking-domain extraction + honest reporting on login walls.",
+    "difficulty": "hard",
+    "tags": ["banking", "marketing", "real_world", "login_wall_partial"],
+    "eval_dimensions": ["domain_diversity", "failure_injection"]
   }
 ]
 
