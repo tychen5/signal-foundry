@@ -213,13 +213,13 @@ def _create_openai_compat(
         # NIM and OpenRouter occasionally rate-limit or hiccup; surface the
         # error to the caller fast rather than silently retrying inside the SDK.
         "max_retries": 1,
-        # Cap individual LLM calls. Gemini 3.1 Pro thinking-mode can take 60+s
-        # for hard reasoning tasks; we set a 90s ceiling so an upstream hang
-        # surfaces as a timeout error instead of stalling SSE streams. Browser
-        # agent runs benefit from a tighter timeout because they make many
-        # short calls; T3 stage-2 boundary refinement uses snippets so 90s
-        # is more than enough.
-        "timeout": float(os.environ.get("LLM_REQUEST_TIMEOUT_S", "90")),
+        # Cap individual LLM calls. NVIDIA NIM free tier can be slow (up to
+        # 120 s for first-token latency on a busy day); thinking-mode models
+        # (DeepSeek-V4-Pro) routinely run 60-200 s. Default ceiling 180 s is
+        # generous enough to not false-fire but tight enough that a true
+        # upstream hang surfaces as a timeout instead of stalling SSE streams.
+        # Override via env LLM_REQUEST_TIMEOUT_S for benchmarking longer paths.
+        "timeout": float(os.environ.get("LLM_REQUEST_TIMEOUT_S", "180")),
     }
     # `extra_body` is accepted by ChatOpenAI in all versions ≥0.2.10 (our
     # minimum). Earlier versions silently ate it; newer versions emit a

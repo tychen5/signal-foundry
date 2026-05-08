@@ -339,3 +339,52 @@ class TestJSONExtractor:
         from src.shared.llm_utils import extract_json_array
         result = extract_json_array('Found these items: [{"x": 1}]')
         assert result == [{"x": 1}]
+
+
+class TestLLMProviderJSONMode:
+    """Verifies that json_mode (response_format=json_object) is correctly
+    applied to plain models and SKIPPED for thinking-mode models that have
+    extra_body set (otherwise the chat-template kwargs and response_format
+    interact badly on NIM and the model returns silent empty content).
+    """
+
+    def test_json_mode_enabled_for_kimi(self):
+        from src.llm_provider import get_llm
+        llm = get_llm("moonshotai/kimi-k2.6", user_nvidia_key="nvapi-fake", json_mode=True)
+        assert (llm.model_kwargs or {}).get("response_format") == {"type": "json_object"}
+
+    def test_json_mode_skipped_for_glm_thinking(self):
+        from src.llm_provider import get_llm
+        # GLM 5.1 has extra_body for thinking-mode toggles; json_mode must skip
+        llm = get_llm("z-ai/glm-5.1", user_nvidia_key="nvapi-fake", json_mode=True)
+        assert "response_format" not in (llm.model_kwargs or {})
+
+    def test_json_mode_skipped_for_deepseek_thinking(self):
+        from src.llm_provider import get_llm
+        llm = get_llm(
+            "deepseek-ai/deepseek-v4-pro", user_nvidia_key="nvapi-fake", json_mode=True
+        )
+        assert "response_format" not in (llm.model_kwargs or {})
+
+    def test_json_mode_default_is_off(self):
+        from src.llm_provider import get_llm
+        llm = get_llm("moonshotai/kimi-k2.6", user_nvidia_key="nvapi-fake")
+        assert "response_format" not in (llm.model_kwargs or {})
+
+    def test_json_mode_enabled_for_openrouter_models(self):
+        from src.llm_provider import get_llm
+        for model_id in (
+            "google/gemini-3.1-pro-preview",
+            "anthropic/claude-opus-4.7",
+            "openai/gpt-5.5",
+        ):
+            llm = get_llm(model_id, user_openrouter_key="sk-or-fake", json_mode=True)
+            assert (llm.model_kwargs or {}).get("response_format") == {
+                "type": "json_object"
+            }, f"json_mode should fire for {model_id}"
+
+    def test_request_timeout_configured(self):
+        from src.llm_provider import get_llm
+        llm = get_llm("moonshotai/kimi-k2.6", user_nvidia_key="nvapi-fake")
+        # Default 180 s; surfaced as request_timeout on the underlying ChatOpenAI
+        assert llm.request_timeout == 180.0
