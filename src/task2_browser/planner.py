@@ -103,31 +103,46 @@ async def plan_task(
     if target_url:
         context += f"Starting URL: {target_url}\n"
 
-    try:
-        _t0 = time.time()
-        response = await llm.ainvoke(
-            [
-                SystemMessage(content=PLANNER_PROMPT),
-                HumanMessage(content=context),
-            ]
-        )
+    # Single retry on transient upstream issues (timeout, 5xx, 429).
+    # Gemini 3.1 Pro thinking-mode is the worst offender — first call can
+    # time out while the second succeeds because the cold-start tax is paid.
+    transient_markers = (
+        "timeout", "Connection", "ReadError", "ConnectError",
+        "503", "502", "504", "429", "Internal Server Error",
+    )
+    last_err: Optional[Exception] = None
+    for attempt in range(2):
+        try:
+            _t0 = time.time()
+            response = await llm.ainvoke(
+                [
+                    SystemMessage(content=PLANNER_PROMPT),
+                    HumanMessage(content=context),
+                ]
+            )
 
-        cost_tracker.record_call(
-            model=model_name or "default",
-            tokens_in=len(PLANNER_PROMPT + context) // 4,
-            tokens_out=len(_resp_text(response)) // 4,
-            latency_ms=round((time.time() - _t0) * 1000, 1),
-            task="task2_browser",
-            operation="plan",
-            trace_id=trace_id,
-        )
+            cost_tracker.record_call(
+                model=model_name or "default",
+                tokens_in=len(PLANNER_PROMPT + context) // 4,
+                tokens_out=len(_resp_text(response)) // 4,
+                latency_ms=round((time.time() - _t0) * 1000, 1),
+                task="task2_browser",
+                operation="plan",
+                trace_id=trace_id,
+            )
 
-        return _parse_plan(_resp_text(response), task_description, target_url)
+            return _parse_plan(_resp_text(response), task_description, target_url)
 
-    except Exception as e:
-        logger.warning("planning_failed", error=str(e))
-        # Fallback: generate a basic plan
-        return _create_fallback_plan(task_description, target_url)
+        except Exception as e:
+            last_err = e
+            err_str = str(e)
+            if attempt == 0 and any(m in err_str for m in transient_markers):
+                logger.info("planning_retrying_after_transient", error=err_str[:160])
+                await asyncio.sleep(2.0)
+                continue
+            logger.warning("planning_failed", error=err_str[:200])
+            return _create_fallback_plan(task_description, target_url)
+    return _create_fallback_plan(task_description, target_url)
 
 
 async def decide_next_action(
@@ -313,30 +328,41 @@ async def verify_with_llm(
     else:
         user_msg = HumanMessage(content=context)
 
-    try:
-        _t0 = time.time()
-        response = await llm.ainvoke(
-            [
-                SystemMessage(content=VERIFIER_PROMPT),
-                user_msg,
-            ]
-        )
+    transient_markers = (
+        "timeout", "Connection", "ReadError", "ConnectError",
+        "503", "502", "504", "429", "Internal Server Error",
+    )
+    for attempt in range(2):
+        try:
+            _t0 = time.time()
+            response = await llm.ainvoke(
+                [
+                    SystemMessage(content=VERIFIER_PROMPT),
+                    user_msg,
+                ]
+            )
 
-        cost_tracker.record_call(
-            model=model_name or "default",
-            tokens_in=len(VERIFIER_PROMPT + context) // 4,
-            tokens_out=len(_resp_text(response)) // 4,
-            latency_ms=round((time.time() - _t0) * 1000, 1),
-            task="task2_browser",
-            operation="verify",
-            trace_id=trace_id,
-        )
+            cost_tracker.record_call(
+                model=model_name or "default",
+                tokens_in=len(VERIFIER_PROMPT + context) // 4,
+                tokens_out=len(_resp_text(response)) // 4,
+                latency_ms=round((time.time() - _t0) * 1000, 1),
+                task="task2_browser",
+                operation="verify",
+                trace_id=trace_id,
+            )
 
-        return _parse_verification(_resp_text(response))
+            return _parse_verification(_resp_text(response))
 
-    except Exception as e:
-        logger.warning("verification_failed", error=str(e))
-        return False, "", 0.3
+        except Exception as e:
+            err_str = str(e)
+            if attempt == 0 and any(m in err_str for m in transient_markers):
+                logger.info("verification_retrying_after_transient", error=err_str[:160])
+                await asyncio.sleep(2.0)
+                continue
+            logger.warning("verification_failed", error=err_str[:200])
+            return False, "", 0.3
+    return False, "", 0.3
 
 
 def _parse_plan(llm_response: str, task: str, target_url: Optional[str]) -> TaskPlan:
