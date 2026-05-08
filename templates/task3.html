@@ -312,7 +312,7 @@
                 const decoder = new TextDecoder();
                 let buf = '';
                 let lastError = null;
-                let pipelineComplete = null;
+                let finalResult = null;
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
@@ -325,7 +325,7 @@
                             const ev = JSON.parse(ln.slice(6));
                             if (typeof appendT3LiveEvent === 'function') appendT3LiveEvent(ev);
                             if (ev.event === 'error') lastError = ev;
-                            if (ev.event === 'pipeline_complete') pipelineComplete = ev;
+                            if (ev.event === 'result' && ev.result) finalResult = ev.result;
                         } catch (_) {}
                     }
                 }
@@ -334,17 +334,25 @@
                     showError(lastError.user_message || lastError.raw_error || lastError.category);
                     return;
                 }
-                // Stream finished — fetch the full result with the same payload
-                const resp2 = await fetch('/api/v1/sec/extract', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await resp2.json();
-                if (resp2.status >= 400) {
-                    showError(data.detail || JSON.stringify(data));
+                if (finalResult) {
+                    // Stream embedded the full ExtractionResult — no second
+                    // /extract call needed (was doubling latency on slow
+                    // LLM-refine paths).
+                    renderExtraction(finalResult);
                 } else {
-                    renderExtraction(data);
+                    // Defensive fallback if stream produced no result event
+                    // (e.g. backend mid-deploy without the new event).
+                    const resp2 = await fetch('/api/v1/sec/extract', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await resp2.json();
+                    if (resp2.status >= 400) {
+                        showError(data.detail || JSON.stringify(data));
+                    } else {
+                        renderExtraction(data);
+                    }
                 }
             } catch (err) {
                 showError(String(err));

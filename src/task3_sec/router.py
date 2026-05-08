@@ -230,7 +230,7 @@ async def stream_extract_10k(request: SECExtractionRequest):
                 openrouter=request.model.user_openrouter_key,
                 nvidia=request.model.user_nvidia_key,
             )
-            await run(
+            result = await run(
                 cik=request.cik,
                 accession_number=request.accession_number,
                 filing_url=request.filing_url,
@@ -243,6 +243,16 @@ async def stream_extract_10k(request: SECExtractionRequest):
                 max_cost_usd=getattr(request, "max_cost_usd", None),
                 progress_callback=progress_callback,
                 trace_id=trace_id,
+            )
+            # Embed final ExtractionResult in the stream so the FE doesn't
+            # need a redundant /extract call (was doubling latency on slow
+            # LLM-refine paths). Mirrors Task 1's stream-result pattern.
+            await queue.put(
+                {
+                    "event": "result",
+                    "trace_id": trace_id,
+                    "result": result.model_dump(mode="json"),
+                }
             )
         except Exception as e:
             err = to_dict(classify_llm_error(e))
