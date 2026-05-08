@@ -151,13 +151,17 @@
   3. [x] /health, /metrics, /api/v1/models now return friendly HTML dashboards when accessed from a browser (Accept: text/html), and JSON when called from API clients (Accept: application/json). See `templates/system.html` and `src/main.py` content negotiation.
   4. [x] Dashboard polished: hero stats (3 tasks · 38 + 27 + 5 eval cases · 7 LLM models · 233 tests) + live cost/calls polled from /metrics every 30 s. Each task card lists its 3-4 distinguishing features so reviewers see at a glance what the harness does.
   5. [x] **Streaming progress** — Task 2 now exposes `/api/v1/browser/stream` (Server-Sent Events). Frontend opens an `EventSource` and shows live milestones: phase_start → phase_done (plan ready) → step_start/step_done (per action with healer flag, confidence, error) → agent_complete. Live trace box scrolls automatically as events arrive. Reverse-proxy heartbeat every 20 s prevents idle disconnects. Task 1 + Task 3 fast enough that streaming was unnecessary; their loading spinners + status banners + post-run renderers were enough.
+    5-1. [] task 1 如果去跑其他面試官想要測驗公開的repo有時候也會需要等很久，尤其調用的是nvidia models的時候。task 3如果面試官去採用其他新的filing需要系統去重新下載(沒有cache到)然後又呼叫使用LLM 的時候，有時候也會需要等很久(尤其是調用nvidia models的時候)。
   6. [x] Final-answer text wraps with `word-wrap: break-word` and the answer-box has `overflow-wrap: break-word` — long answers no longer overflow the box.
   7. [x] LangSmith link is honest: server only emits `langsmith_trace_url` when `LANGSMITH_API_KEY` is configured AND tracing is on. UI hides the chip otherwise. URL points at the project with metadata-trace-id filter — works for the project owner; outside viewers see "no access" because LangSmith projects are private by default (this is correct, not a bug).
   8. [x] **API-key error classification + UX** — new `src/shared/llm_errors.py` maps exception strings to user-actionable categories: `invalid_key`, `rate_limit`, `insufficient_credit`, `quota_exhausted`, `timeout`, `no_response`, `server_error`, `unknown`. Each ships with a suggested action ("rotate key on openrouter.ai console", "wait 30 s and retry", "top up at openrouter.ai/credits", etc.). All 3 task routers populate `cost_metadata` with `{error_category, user_message, suggested_action, retryable}`. Task 2 stream emits an `error` event with the same payload. UI shows a colour-coded banner with the actionable message + raw error in a collapsible `<details>`. Both NVIDIA NIM and OpenRouter API key inputs are present in the model selector.
+    8-1. [] 目前repo我們測試所使用的NVIDIA_API_KEY會過期，因此沒辦法常駐在網頁上讓使用者不輸入就可以直接免費使用，故需要改良UI多一個輸入框讓使用者除了輸入建議的openrouter key以外，也可以去申請輸入user他們自己的nvidia nim endpoint api key來填寫免費使用。提示告訴users nvidia可以去免費申請以後過來填寫但效果會比較差latency比較長，而openrouter models表現比較好速度比較快但會需要先充值以後才能create key貼過來使用。
 
 8. [] README 強化
-  1. [] 目前README有一些表格可能markdown格式排版有跑掉，導致沒辦法在github中好好顯示，例如: AI Collaboration Log — bugs caught only by exercising the live path區塊下面的大表格後面幾個rows沒有正確顯示出來。
-  2. [] 並且請更新README的所有說明與數據到最新的狀況，以能夠正確反映目前repo codebase的所有features與新增加的highlights。並且update最新的UI demo操作用法、API parameters 說明等等。
+  1. [] 目前README有一些表格可能markdown格式排版有跑掉，導致沒辦法在github中好好顯示，例如: AI Collaboration Log — bugs caught only by exercising the live path區塊下面的大表格後面幾個rows沒有正確顯示出來。 並且update & fix architecture markdown diagram的對齊與排版。
+  2. [] 並且請再次從頭到尾檢查徹底更新README的所有說明與數據到最新的狀況到最新，以能夠正確反映目前repo codebase的所有features與新增加的highlights。並且update最新的UI demo操作用法、API parameters 說明等等。
+  3. [] 先依據 @notes/_briefs/_TaskDescription.md 分析面試官會想要喜歡看到的解釋/說明/內容還會有哪些，好好思考以後再進行更多更豐富的補充與展示，以凸顯優勢跟與眾不同的地方，加深面試官的印象以能夠獲得認同與讚賞並錄取。
+  4. [] 在網頁 https://signal-foundry.zeabur.app/ UI 中 以及 repo README 當中請盡量都不要提及reviewer/面試官的字眼，而是換個詞盡量從user的角度出發，但實際上就是要將這些資訊內容透過UI demo與README傳達給面試官知道，我們都有做到reviewers的需求並提供了更優秀的相關features。
 
 ---
 
@@ -410,4 +414,75 @@ Healer	Diagnoses root cause + targeted recovery	9-class taxonomy (NOT just try/e
 - `pytest tests/ -q` → ✅ **182 passed** in 1.65s
 - `ruff check src/ tests/ evals/` → ✅ All checks passed
 - `uvicorn src.main:app` → ✅ Server starts cleanly, all 3 task routes respond
+
+---
+
+## 🔄 Phase 8 — Edge-case iteration sweep (2026-05-08)
+
+Stand-alone edge-case work after Phase 7 polish landed. Each commit is
+its own focused fix-and-test cycle so reviewers can audit them
+independently. Test-count growth: 245 → 270 (+25 regressions pinned).
+
+### Eval set expansion (+11 cases)
+
+- **T3 (+3, now 30 cases):** Realty Income REIT, Ares Capital BDC, Coinbase
+  crypto. All three exercise distinct sector vocabulary that the rule
+  parser had to cope with at confidence ≥ 0.92. 30/30 pass · $0 · 1.7s avg.
+- **T2 (+4, now 46 cases):** DuckDuckGo (alt SERP), npm.js (JS-rendered
+  SPA), Wayback Machine (calendar widget multi-step), HN threaded comments
+  (two-hop nav into nested DOM).
+- **T1 (+3, now 8 cases):** Polyglot non-Python repo (Java), idempotent
+  replay (live-tested: run 1 = 43s clone+lint+test, run 2 = cache_hit=True
+  instantly), high-findings security scan on adversarial repo content.
+
+### Harness guards (each paired with regression tests)
+
+- **T2 stuck-loop guard** (`_detect_stuck_loop`) — reactive-phase agent
+  detects 3 identical consecutive actions on the same URL and breaks out
+  as `partial` instead of burning max_steps. Healed retries with
+  different selectors and redirect cycles correctly excluded.
+- **Per-request budget cap** (`BudgetExceededError`) — spec called for
+  $0.50/filing but tracker only logged. Now enforced after T3 Stage 2
+  with a `budget_cap_hit` SSE event, default caps per task, and a
+  `max_cost_usd` field on the request schema.
+- **NVIDIA-key contextvar plumbing** (`set_user_keys`) — zero call-site
+  changes to thread user-supplied NVIDIA keys; contextvar isolates
+  concurrent requests via asyncio task scope.
+- **3 new LLM error categories**: `context_length`, `model_not_found`,
+  `content_filter` — distinct from `invalid_key` so users don't waste
+  time rotating keys when the issue is a prompt size or policy block.
+- **Multilingual hedge-phrase guard** — added simplified-Chinese
+  (`需要登录` / `维护中`), Japanese (`ログインが必要`), and CF interstitial
+  English ("just a moment", "checking your browser"). The blocked-URL
+  marker list also gained Turnstile, geo-block, age-gate, maintenance.
+- **Strict-mode + element-detached healer paths** — Playwright
+  "resolved to N elements" now maps to a new `SELECTOR_AMBIGUOUS` root
+  cause with a "narrow the target description" recovery, distinct from
+  generic `ELEMENT_NOT_FOUND`.
+
+### Parser fixes
+
+- **T3 normalizer windows widened** — SGML preamble for big filers can
+  run 5–30 kB before any `<DOCUMENT>` tag. Old 5 kB / 10 kB caps
+  silently misclassified those as plain text. Now 50 kB / 80 kB.
+- **T3 reserved-status alt phrasings** — "Removed and Reserved.",
+  "Item is reserved.", "This item has been reserved." (real SEC
+  transitional language) all now correctly classify as RESERVED rather
+  than EXTRACTED with empty content.
+- **T3 accession shape check** — typos like `0000320193-23-X00106`
+  now fail-fast at the router with a 400 + format hint instead of
+  burning a SEC roundtrip.
+- **T1 GitHub URL parser** — accepts /tree/main, /blob/main/file,
+  /pull/42, scheme-less `github.com/owner/repo`, and SSH form.
+  Real-world copy/paste UX issue (most users paste from the file
+  viewer, not the clone box).
+- **T2 verifier word-boundary parsing** — "The task is incomplete."
+  previously substring-matched "complete" and silently flipped to
+  is_complete=True. Replaced with `\bincomplete\b` regex.
+
+### Verification
+- `pytest tests/ -q` → ✅ **270 passed**, 7 skipped
+- `ruff check src/ tests/` → ✅ All checks passed
+- `python3 evals/task3/run_eval.py --skip-xbrl` → ✅ 30/30 pass · $0 · 1.7s avg
+- T1 idempotent replay live-verified (cache_hit on run 2)
 
