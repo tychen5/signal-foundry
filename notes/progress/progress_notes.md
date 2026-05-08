@@ -149,7 +149,7 @@
   1. [x] Index page rewritten: each task card is now a full `<a>` link wrapping a card div — entire card is clickable, hover state highlights the whole card with blue border + lift. Added `.card-bullets` block showing 3-4 highlight features per task. Added `.quick-actions` panel below cards with direct links to /api/v1/skills/list (View Skills), example SEC filings list, and example SEC company info — gives users fast jumping-off points without typing URLs.
   2. [x] Task 2 + Task 3 cards already clickable (entire card acts as a link). UI for Task 2 has rich form with vision toggle, model dropdown, OpenRouter key input, max-steps selector. Task 3 UI has cik/accession examples + use_vision toggle + LLM/XBRL skip flags. Users can run any case through the UI directly.
   3. [x] /health, /metrics, /api/v1/models now return friendly HTML dashboards when accessed from a browser (Accept: text/html), and JSON when called from API clients (Accept: application/json). See `templates/system.html` and `src/main.py` content negotiation.
-  4. [x] Dashboard polished: hero stats (3 tasks · 89 eval cases · 7 LLM models · 283 unit tests) + live cost/calls polled from /metrics every 30 s. Each task card lists its 3-4 distinguishing features.
+  4. [x] Dashboard polished: hero stats (3 tasks · 89 eval cases · 7 LLM models · 289 unit tests) + live cost/calls polled from /metrics every 30 s. Each task card lists its 3-4 distinguishing features.
   5. [x] **Streaming progress** — Task 2 + Task 3 + Task 1 all have SSE streaming. T1 and T3 streams now embed the final result so the FE doesn't make a redundant non-streaming call. T2 stream has a frontend watchdog (90s no-event abort) so a stalled upstream LLM doesn't leave the UI hanging.
     5-1. [x] T1/T3 long latency now show live progress; T2 added the 90 s watchdog + single-retry-on-transient (timeout/5xx/429) in the planner so flaky upstreams degrade gracefully instead of hanging.
   6. [x] Final-answer text wraps with `word-wrap: break-word` and the answer-box has `overflow-wrap: break-word` — long answers no longer overflow the box.
@@ -170,7 +170,7 @@
 
 8. [x] Phase 8 README展示與說明強化 ✅ (2026-05-08, partial — items 1, 2, 4 done; item 3 ongoing)
   1. [x] README markdown table fixed: AI Collaboration Log table had an orphan blank line splitting one logical table into two; merged so all rows render on GitHub. Architecture diagram already aligned in original ASCII art form.
-  2. [x] README updated comprehensively: 35-case T3 eval (was 27/30), 100% pass rate, $0 rule-only cost, v4 boundary-refine prompt, vision benchmark results on 5 hard edge-case filings, BYOK 3-key pattern (OpenRouter / NVIDIA / LangSmith), "What's new in latest sweep" section front-loaded, 283 unit tests (+13 from JSON extractor coverage).
+  2. [x] README updated comprehensively: 35-case T3 eval (was 27/30), 100% pass rate, $0 rule-only cost, v4 boundary-refine prompt, vision benchmark results on 5 hard edge-case filings, BYOK 3-key pattern (OpenRouter / NVIDIA / LangSmith), "What's new in latest sweep" section front-loaded, 289 unit tests (+13 from JSON extractor coverage).
   3. [] 先依據 @notes/_briefs/_TaskDescription.md 分析面試官會想要喜歡看到的解釋/說明/內容還會有哪些，好好思考以後再進行更多更豐富的補充與展示。 (Ongoing — README已新增"What's new"與vision benchmark slice，可繼續迭代)
   4. [x] "reviewer/面試官" language replaced throughout README and templates with user-centric "user/User/Users" wording. UI says "Quick launchpad" instead of "Reviewer launchpad". system.html says "Usage Guidance" instead of "Reviewer Guidance".
 
