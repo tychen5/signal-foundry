@@ -88,6 +88,20 @@ _NOT_FOUND_PHRASES = (
     "404 not found",
     "page does not exist",
     "404 error",
+    "checking your browser",  # Cloudflare interstitial
+    "just a moment",  # Cloudflare "checking" interstitial
+    "verify you are human",
+    "please complete the security check",
+    "rate limit exceeded",
+    "you have been rate limited",
+    "service unavailable",
+    "temporarily unavailable",
+    "maintenance mode",
+    "site is undergoing maintenance",
+    "not available in your region",
+    "geo-restricted",
+    "region not supported",
+    "access denied",  # generic 403
     # Chinese
     "未能找到",
     "找不到",
@@ -97,6 +111,19 @@ _NOT_FOUND_PHRASES = (
     "頁面不存在",
     "需要登入",
     "需要登錄",
+    "需要登录",
+    "請先登入",
+    "请先登录",
+    "您所在地區",
+    "暫不開放",
+    "暂不开放",
+    "维护中",
+    "維護中",
+    # Japanese
+    "ログインが必要",
+    "ページが見つかりません",
+    "メンテナンス中",
+    "現在ご利用いただけません",
 )
 
 _NUMBER_TOKEN = re.compile(r"\d{2,}(?:[.,]\d+)?")
@@ -142,19 +169,39 @@ def _clean_final_answer(answer: str) -> str:
 # content. These are deterministic — no LLM needed. If any appear in the
 # final URL, the silent-failure guard flips status to not_found.
 _BLOCKED_URL_MARKERS = (
+    # Auth walls
     "/authwall",  # LinkedIn auth redirect
-    "/login?",  # generic login redirect
+    "/login?",  # generic login redirect (with query string)
     "/login/",
+    "/signin?",
+    "/signin/",
     "accounts.google.com/signin",
     "accounts.google.com/v3/signin",
     "/checkpoint/challenge",  # Facebook
-    "/recaptcha",
-    "/cf-chl",  # Cloudflare challenge
-    "/captcha",
     "/sso/login",
     "/oauth/authorize",
+    "auth0.com/login",  # Auth0 hosted login
+    "/saml2/idp",  # SAML IdP redirect
+    # Anti-bot challenges
+    "/recaptcha",
+    "/cf-chl",  # Cloudflare challenge (legacy)
+    "__cf_chl",  # Cloudflare challenge (newer URL param)
+    "/captcha",
+    "/hcaptcha",
+    "/turnstile",  # Cloudflare Turnstile
+    "px-captcha",  # PerimeterX
+    # Access-denied / geo-block / region-block
     "/access-denied",
     "/blocked",
+    "/region-not-supported",
+    "/not-available-in-your-region",
+    "/age-verification",
+    "/age-gate",
+    # Error / maintenance pages
+    "/maintenance",
+    "/server-error",
+    "/error/500",
+    "/error/503",
     "edgar/error",  # SEC EDGAR error page
 )
 

@@ -784,6 +784,81 @@ class TestSilentFailureGuard:
         agent._guard_against_silent_success(result)
         assert result.status == "not_found"
 
+    def test_cloudflare_turnstile_url_marked_not_found(self) -> None:
+        """Cloudflare Turnstile / __cf_chl URL signals an anti-bot challenge,
+        not a real page — must downgrade to not_found."""
+        agent = self._make_agent()
+        result = AgentResult(
+            status="success",
+            final_answer="The price is $1.23",
+            total_steps=2,
+            self_corrections=0,
+            healer_activations=0,
+            failure_modes=[],
+        )
+        step = StepResult(
+            step_number=1,
+            action=BrowserAction(action_type=ActionType.NAVIGATE, target_description="x"),
+            after_state=PageState(
+                url="https://example.com/__cf_chl_jschl_tk__/?token=abc",
+                visible_text_summary="Just a moment...",
+            ),
+        )
+        result.steps.append(step)
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+        assert any("blocked_url" in fm for fm in result.failure_modes)
+
+    def test_region_block_url_marked_not_found(self) -> None:
+        """A geo-block redirect should also fire the URL guard."""
+        agent = self._make_agent()
+        result = AgentResult(
+            status="success",
+            final_answer="No content.",
+            total_steps=1,
+            self_corrections=0,
+            healer_activations=0,
+            failure_modes=[],
+        )
+        step = StepResult(
+            step_number=1,
+            action=BrowserAction(action_type=ActionType.NAVIGATE, target_description="x"),
+            after_state=PageState(
+                url="https://video.example.com/region-not-supported?country=TW",
+                visible_text_summary="Service unavailable in your region",
+            ),
+        )
+        result.steps.append(step)
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+
+    def test_japanese_login_required_marked_not_found(self) -> None:
+        """Japanese 'login required' phrase must trigger the hedge guard."""
+        agent = self._make_agent()
+        result = self._make_result(
+            "ログインが必要です。続行するにはログインしてください。"
+        )
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+
+    def test_simplified_chinese_login_required_marked_not_found(self) -> None:
+        """Simplified-Chinese hedge phrase 需要登录 (mainland) — earlier list
+        only had traditional 需要登入. Both must work."""
+        agent = self._make_agent()
+        result = self._make_result("此页面需要登录后才能查看完整内容。")
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+
+    def test_cloudflare_interstitial_text_marked_not_found(self) -> None:
+        """If the answer text reflects a CF 'Just a moment...' interstitial,
+        flip to not_found — the agent has been bot-walled, not succeeded."""
+        agent = self._make_agent()
+        result = self._make_result(
+            "Checking your browser before accessing example.com — just a moment..."
+        )
+        agent._guard_against_silent_success(result)
+        assert result.status == "not_found"
+
 
 # ==============================================================================
 # Planner Tests
