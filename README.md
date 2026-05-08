@@ -22,6 +22,16 @@ This is not a "make it work" demo — it's three systems engineered around the t
 
 Every section of this README is paired with the *deliberate engineering decision* that addresses one of those failure modes — and where I noticed the spec asks for things that even a strong off-the-shelf agent (OpenClaw / HermesAgent) doesn't ship.
 
+### What's new in the latest sweep (Phase 8 + Phase 9)
+
+- **Task 3 eval set 30 → 35 cases**, 100% pass rate on rule-only path. Added pre-bankruptcy filings (Enron FY2000 plain-text, WorldCom FY2001, Lehman FY2007) and going-concern cases (Sears 2017) to genuinely exercise the LLM-trigger conditions. See [Task 3 — latest eval sweep](#task-3--latest-eval-sweep-3535-pass-100-0-rule-only-cost).
+- **v4 boundary-refine prompt** — added handling for combined items ("ITEMS 1 AND 2"), SPAC/blank-check N/A classification, early-EDGAR ASCII format, going-concern false-positive prevention, and a confidence calibration guide. Loads via `v4 → v3 → v2 → v1` fallback chain.
+- **Robust JSON extractors** (`src/shared/llm_utils.extract_json_object` / `_array`) — handle ```json fences, smart quotes, leading prose, balanced-brace nesting, and truncated streams. Wired into the T2 planner and T3 LLM refiner.
+- **OpenAI-compat `response_format=json_object`** — `get_llm(json_mode=True)` requests strict JSON output on supported backends. Pure win on the T3 refiner: eliminates a whole class of "could not parse" errors that were previously masked by regex fallback.
+- **Stream-as-source-of-truth** — Tasks 1, 2, and 3 now embed the final result in their SSE stream. Frontends no longer issue a redundant POST after `stream_end` (was doubling latency on slow NVIDIA paths).
+- **3-key BYOK** — homepage accepts OpenRouter, NVIDIA NIM, and (optionally) LangSmith API keys; sessionStorage persistence; never sent to a third party.
+- **Fixed real bugs** surfaced by exercising the live demo: T1 `encode/httpx` 422 (`default_branch` not honoured), T3 Microsoft / Abbott 404 (hand-typed accessions), T1 LangSmith link 404 (replaced with copy-trace-id chip), T3 fetcher's `find_10k_filing` raising before falling back to older submission pages.
+
 ---
 
 ## Architecture
