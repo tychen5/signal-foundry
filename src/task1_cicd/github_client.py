@@ -19,9 +19,13 @@ from src.task1_cicd.sandbox import SandboxConfig, run_command
 
 logger = get_logger("github_client")
 
-# Matches https://github.com/owner/repo or https://github.com/owner/repo.git
+# Matches GitHub repo URLs. Real-world copy/paste often includes extra path
+# segments (`/tree/main`, `/blob/main/README.md`), missing schemes
+# (`github.com/foo/bar`), or SSH form (`git@github.com:foo/bar.git`). We
+# accept all common forms and extract just (owner, repo).
 _GITHUB_URL_RE = re.compile(
-    r"https?://(?:[^@/]+@)?github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$"
+    r"^(?:https?://)?(?:[^@/]+@)?github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?(?:/(?:tree|blob|commits|releases|pulls|pull|issues|wiki|actions|settings)\b.*)?/?$",
+    re.IGNORECASE,
 )
 
 

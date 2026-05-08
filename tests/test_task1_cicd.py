@@ -124,6 +124,45 @@ class TestGitHubClient:
         with pytest.raises(FastFailError):
             parse_repo_url("https://gitlab.com/owner/repo")
 
+    def test_parse_repo_url_user_friendly_forms(self):
+        """Real users copy/paste GitHub URLs in many forms — tree/blob URLs
+        from the file viewer, SSH form from the clone box, missing-scheme
+        from manual typing. The parser should extract owner/repo from all
+        of these rather than refuse with 'invalid URL'."""
+        from src.task1_cicd.github_client import parse_repo_url
+
+        forms = [
+            "https://github.com/foo/bar/tree/main",
+            "https://github.com/foo/bar/blob/main/README.md",
+            "https://github.com/foo/bar/pull/42",
+            "https://github.com/foo/bar/issues",
+            "https://github.com/foo/bar/releases",
+            "github.com/foo/bar",  # no scheme
+            "git@github.com:foo/bar.git",  # ssh
+            "https://github.com/foo/bar/",  # trailing slash
+            "http://github.com/foo/bar",  # http (rare but valid)
+        ]
+        for url in forms:
+            owner, repo = parse_repo_url(url)
+            assert (owner, repo) == ("foo", "bar"), f"Failed on {url}"
+
+    def test_parse_repo_url_still_rejects_bad_inputs(self):
+        """The expanded regex must still reject non-GitHub URLs and
+        owner-only paths."""
+        from src.task1_cicd.github_client import FastFailError, parse_repo_url
+
+        bad = [
+            "https://github.com/foo",  # owner-only
+            "https://gitlab.com/foo/bar",  # different host
+            "https://bitbucket.org/foo/bar",
+            "ftp://github.com/foo/bar",
+            "not-a-url",
+            "",
+        ]
+        for url in bad:
+            with pytest.raises(FastFailError):
+                parse_repo_url(url)
+
     def test_redact_token(self):
         from src.task1_cicd.github_client import _redact_token
 
