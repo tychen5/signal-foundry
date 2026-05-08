@@ -116,6 +116,8 @@
                 <div class="form-group">
                     <label>OpenRouter API Key (only required if you select an OpenRouter model)</label>
                     <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
+                    <small style="color:#888"><a href="https://openrouter.ai/credits" target="_blank">openrouter.ai/credits</a> · NVIDIA NIM key:</small>
+                    <input type="text" id="user-nvidia-key" placeholder="nvapi-... (optional override)" style="margin-top:0.35rem">
                 </div>
             </div>
             <div class="form-row">
@@ -204,6 +206,8 @@
                 model: { model_id: modelId }
             };
             if (apiKey) payload.model.user_openrouter_key = apiKey;
+            const nvidiaKey = (document.getElementById('user-nvidia-key') || {}).value || '';
+            if (nvidiaKey.trim()) payload.model.user_nvidia_key = nvidiaKey.trim();
 
             // Reset live trace
             const liveTrace = document.getElementById('live-trace');

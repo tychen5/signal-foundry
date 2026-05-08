@@ -117,9 +117,15 @@
                 <div class="form-group">
                     <label>OpenRouter API Key (only required if you select an OpenRouter model)</label>
                     <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
+                    <small style="color:#888"><a href="https://openrouter.ai/credits" target="_blank">openrouter.ai/credits</a> · pay-as-you-go</small>
                 </div>
             </div>
             <div class="form-row">
+                <div class="form-group">
+                    <label>NVIDIA NIM API Key (optional override — if the demo's free key is rate-limited)</label>
+                    <input type="text" id="user-nvidia-key" placeholder="nvapi-...">
+                    <small style="color:#888"><a href="https://build.nvidia.com" target="_blank">build.nvidia.com</a> · free tier, ~4 calls/min</small>
+                </div>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="use-vision">
@@ -183,12 +189,18 @@
         function hydrateSharedControls() {
             const modelSelect = document.getElementById('model-select');
             const apiKeyInput = document.getElementById('user-api-key');
+            const nvidiaKeyInput = document.getElementById('user-nvidia-key');
             const savedModel = sessionStorage.getItem('sf_model_id');
             const savedKey = sessionStorage.getItem('sf_openrouter_key');
+            const savedNvidiaKey = sessionStorage.getItem('sf_nvidia_key');
             if (savedModel) modelSelect.value = savedModel;
             if (savedKey) apiKeyInput.value = savedKey;
+            if (savedNvidiaKey && nvidiaKeyInput) nvidiaKeyInput.value = savedNvidiaKey;
             modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
             apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
+            if (nvidiaKeyInput) {
+                nvidiaKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_nvidia_key', nvidiaKeyInput.value));
+            }
         }
         hydrateSharedControls();
 
@@ -276,6 +288,8 @@
             };
             if (targetUrl) payload.target_url = targetUrl;
             if (apiKey) payload.model.user_openrouter_key = apiKey;
+            const nvidiaKey = (document.getElementById('user-nvidia-key') || {}).value || '';
+            if (nvidiaKey.trim()) payload.model.user_nvidia_key = nvidiaKey.trim();
 
             // Use SSE streaming endpoint for live progress, then call /execute for full result
             try {
