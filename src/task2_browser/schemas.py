@@ -42,6 +42,7 @@ class FailureRootCause(str, Enum):
     """Root cause classification for failures (used by Healer)."""
 
     SELECTOR_CHANGED = "selector_changed"
+    SELECTOR_AMBIGUOUS = "selector_ambiguous"
     PAGE_NOT_LOADED = "page_not_loaded"
     WRONG_PAGE = "wrong_page"
     ELEMENT_HIDDEN = "element_hidden"

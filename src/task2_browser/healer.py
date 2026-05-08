@@ -147,6 +147,30 @@ def diagnose_deterministic(
             confidence=0.9,
         )
 
+    # Playwright "strict mode" — locator resolved to N elements. Common
+    # diagnostic when a target_description like "Submit button" matches
+    # multiple elements on the page. The healer should narrow rather than
+    # retry blindly.
+    if "strict mode violation" in error_lower or "resolved to" in error_lower and "elements" in error_lower:
+        return Diagnosis(
+            root_cause=FailureRootCause.SELECTOR_AMBIGUOUS,
+            explanation="Locator matches multiple elements — agent's target description is too broad.",
+            recovery_strategy="Add a more specific qualifier (nearest sibling text, accessible role, position adjective like 'first' or 'last').",
+            should_retry=True,
+            confidence=0.85,
+        )
+
+    # Element handle is detached (mid-DOM-mutation race) — distinct from
+    # whole-frame detach which has different recovery (re-observe + retry).
+    if "element is not attached" in error_lower or "element handle is detached" in error_lower:
+        return Diagnosis(
+            root_cause=FailureRootCause.PAGE_NOT_LOADED,
+            explanation="Element handle was detached (DOM mutated between locate and act).",
+            recovery_strategy="Re-locate the element from the current DOM and retry. Common on heavy SPAs that re-render on navigation.",
+            should_retry=True,
+            confidence=0.85,
+        )
+
     # Element interaction failures
     if "not visible" in error_lower or "not interactable" in error_lower or "hidden" in error_lower:
         # Check if there might be a popup

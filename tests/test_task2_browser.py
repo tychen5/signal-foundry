@@ -55,6 +55,7 @@ class TestSchemas:
         """Root cause taxonomy covers all documented categories."""
         expected = {
             "selector_changed",
+            "selector_ambiguous",
             "page_not_loaded",
             "wrong_page",
             "element_hidden",
@@ -445,6 +446,42 @@ class TestHealer:
         action = BrowserAction(action_type=ActionType.CLICK, target_description="button")
 
         diag = diagnose_deterministic("frame was detached", state, action)
+        assert diag.root_cause == FailureRootCause.PAGE_NOT_LOADED
+        assert diag.should_retry is True
+
+    def test_diagnose_strict_mode_violation(self) -> None:
+        """Playwright 'strict mode violation' = locator matches multiple
+        elements. Distinct from 'element not found' — needs narrowing,
+        not retry."""
+        from src.task2_browser.healer import diagnose_deterministic
+
+        state = PageState(url="https://example.com")
+        action = BrowserAction(
+            action_type=ActionType.CLICK, target_description="Submit button"
+        )
+        diag = diagnose_deterministic(
+            "Error: strict mode violation: locator resolved to 3 elements",
+            state,
+            action,
+        )
+        assert diag.root_cause == FailureRootCause.SELECTOR_AMBIGUOUS
+        assert "narrow" in diag.recovery_strategy.lower() or "specific" in diag.recovery_strategy.lower()
+
+    def test_diagnose_element_handle_detached(self) -> None:
+        """Element-handle detach (DOM mutated mid-action) is distinct from
+        whole-frame detach: same recovery strategy (re-locate + retry) but
+        different root-cause label for telemetry."""
+        from src.task2_browser.healer import diagnose_deterministic
+
+        state = PageState(url="https://spa.example.com")
+        action = BrowserAction(
+            action_type=ActionType.CLICK, target_description="Add to cart"
+        )
+        diag = diagnose_deterministic(
+            "Element is not attached to the DOM",
+            state,
+            action,
+        )
         assert diag.root_cause == FailureRootCause.PAGE_NOT_LOADED
         assert diag.should_retry is True
 
