@@ -489,6 +489,33 @@ The following risk factors should be considered.
         assert detect_item_status("[Reserved]") == ItemStatus.RESERVED
         assert detect_item_status("Reserved") == ItemStatus.RESERVED
 
+    def test_detect_item_status_reserved_alt_phrasings(self):
+        """Real SEC filings use several phrasings besides the canonical
+        '[Reserved]'. The status detector must recognise:
+          - 'Removed and Reserved.' (transitional language Item 9C 2002-2008,
+             Item 6 2021)
+          - 'Item is reserved.' / 'This item has been reserved.' (older
+             full-sentence form)
+        Otherwise items get misclassified as 'extracted' with empty content,
+        which silently passes the coverage check.
+        """
+        assert (
+            detect_item_status("Removed and Reserved.") == ItemStatus.RESERVED
+        )
+        assert detect_item_status("Item is reserved.") == ItemStatus.RESERVED
+        assert (
+            detect_item_status("This item has been reserved.")
+            == ItemStatus.RESERVED
+        )
+        # Negative case: don't false-fire on real prose containing the word
+        assert (
+            detect_item_status(
+                "The company maintains a reserve for credit losses of "
+                "approximately $1.2B as required by ASC 326..." * 5
+            )
+            == ItemStatus.EXTRACTED
+        )
+
     def test_detect_item_status_refer_to_proxy_pattern(self):
         """IBM-style filings have content like 'Refer to ... 10+ caption titles ...
         in IBMs definitive Proxy Statement'. The proxy mention is far past

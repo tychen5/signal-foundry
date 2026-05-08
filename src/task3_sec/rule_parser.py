@@ -296,8 +296,19 @@ def detect_item_status(content: str) -> ItemStatus:
     """
     content_stripped = content.strip()
 
-    # Check for reserved FIRST (before not_applicable, since [Reserved] is short)
-    if re.match(r"(?i)^\s*\[?\s*reserved\s*\]?\s*\.?\s*$", content_stripped):
+    # Check for reserved FIRST (before not_applicable, since [Reserved] is short).
+    # Cover three real SEC patterns:
+    #   - "[Reserved]" / "Reserved." (the canonical post-2021 form for Item 6)
+    #   - "Removed and Reserved." (the SEC's transitional language for items
+    #     like Item 9C 2002–2008, Item 6 2021)
+    #   - Short blurbs like "This Item has been reserved." used in older
+    #     filings as a polite full-sentence form.
+    if re.match(r"(?i)^\s*\[?\s*reserved\s*[\]\.]?\s*$", content_stripped):
+        return ItemStatus.RESERVED
+    if len(content_stripped) < 200 and re.search(
+        r"(?i)\b(?:removed\s+and\s+reserved|(?:has\s+been|is)\s+reserved|item\s+is\s+reserved)\b",
+        content_stripped,
+    ):
         return ItemStatus.RESERVED
 
     # Check for incorporated by reference.
