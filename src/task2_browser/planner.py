@@ -9,6 +9,7 @@ Uses versioned prompts from prompts/browser_agent/.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -197,33 +198,59 @@ async def decide_next_action(
     else:
         user_msg = HumanMessage(content=context)
 
-    try:
-        _t0 = time.time()
-        response = await llm.ainvoke(
-            [
-                SystemMessage(content=ACTOR_PROMPT),
-                user_msg,
-            ]
-        )
+    # Single-retry on transient timeout / 5xx / connection error. This is the
+    # most common failure mode for Gemini 3.1 Pro thinking-mode (slow first
+    # token) and OpenRouter under load. We DON'T retry on auth/permission
+    # errors since they're not transient.
+    transient_markers = (
+        "timeout", "Connection", "ReadError", "ConnectError",
+        "503", "502", "504", "429", "Internal Server Error",
+    )
+    last_err: Optional[Exception] = None
+    for attempt in range(2):
+        try:
+            _t0 = time.time()
+            response = await llm.ainvoke(
+                [
+                    SystemMessage(content=ACTOR_PROMPT),
+                    user_msg,
+                ]
+            )
 
-        cost_tracker.record_call(
-            model=model_name or "default",
-            tokens_in=len(ACTOR_PROMPT + context) // 4,
-            tokens_out=len(_resp_text(response)) // 4,
-            latency_ms=round((time.time() - _t0) * 1000, 1),
-            task="task2_browser",
-            operation="decide_action",
-            trace_id=trace_id,
-        )
+            cost_tracker.record_call(
+                model=model_name or "default",
+                tokens_in=len(ACTOR_PROMPT + context) // 4,
+                tokens_out=len(_resp_text(response)) // 4,
+                latency_ms=round((time.time() - _t0) * 1000, 1),
+                task="task2_browser",
+                operation="decide_action",
+                trace_id=trace_id,
+            )
 
-        return _parse_action(_resp_text(response))
+            return _parse_action(_resp_text(response))
 
-    except Exception as e:
-        logger.warning("action_decision_failed", error=str(e))
-        return BrowserAction(
-            action_type=ActionType.DONE,
-            reasoning=f"Decision failed: {str(e)}",
-        )
+        except Exception as e:
+            last_err = e
+            err_str = str(e)
+            is_transient = any(m in err_str for m in transient_markers)
+            if attempt == 0 and is_transient:
+                logger.info(
+                    "action_decision_retrying_after_transient",
+                    attempt=attempt + 1,
+                    error=err_str[:160],
+                )
+                await asyncio.sleep(2.0)
+                continue
+            logger.warning("action_decision_failed", error=err_str[:200])
+            return BrowserAction(
+                action_type=ActionType.DONE,
+                reasoning=f"Decision failed: {err_str[:120]}",
+            )
+    # Unreachable in practice, defensive return
+    return BrowserAction(
+        action_type=ActionType.DONE,
+        reasoning=f"Decision failed (unexpected): {last_err}",
+    )
 
 
 async def verify_with_llm(

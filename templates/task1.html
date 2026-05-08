@@ -30,6 +30,8 @@
         .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
         .status-badge.success { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
         .status-badge.failed { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+        .status-badge.running { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); animation: pulse 1.5s ease-in-out infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
         .meta-row { display: flex; gap: 2rem; font-size: 0.85rem; color: #64748b; margin-bottom: 1.25rem; flex-wrap: wrap; }
         .meta-item strong { color: #94a3b8; }
         .summary-box { background: #0f172a; border-left: 3px solid #3b82f6; border-radius: 0 6px 6px 0; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; line-height: 1.6; color: #cbd5e1; }
@@ -196,7 +198,6 @@
 
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span>Running skill...';
-            panel.classList.remove('visible');
 
             const payload = {
                 repo_url: repoUrl,
@@ -209,13 +210,34 @@
             const nvidiaKey = (document.getElementById('user-nvidia-key') || {}).value || '';
             if (nvidiaKey.trim()) payload.model.user_nvidia_key = nvidiaKey.trim();
 
-            // Reset live trace
+            // Reset prior result chrome but KEEP the panel visible so the
+            // live-trace box is on-screen as soon as Run Skill is clicked.
+            // (Previously panel.classList.remove('visible') hid the entire
+            // result panel until the run finished, masking SSE events.)
             const liveTrace = document.getElementById('live-trace');
             const liveEvents = document.getElementById('live-events');
+            const badge = document.getElementById('status-badge');
+            const title = document.getElementById('result-title');
+            const metaRow = document.getElementById('meta-row');
+            const summarySection = document.getElementById('summary-section');
+            const detailSection = document.getElementById('skill-detail-section');
+            const costRow = document.getElementById('cost-row');
+            const rawJson = document.getElementById('raw-json');
+            panel.classList.add('visible');           // <-- show the panel up front
+            badge.className = 'status-badge running';
+            badge.textContent = 'RUNNING';
+            title.textContent = 'Skill engine is processing…';
+            if (metaRow) metaRow.innerHTML = '';
+            if (summarySection) summarySection.innerHTML = '';
+            if (detailSection) detailSection.innerHTML = '';
+            if (costRow) costRow.innerHTML = '';
+            if (rawJson) rawJson.classList.remove('visible');
             if (liveTrace) {
                 liveEvents.innerHTML = '';
                 liveTrace.style.display = 'block';
             }
+            // Auto-scroll to the live trace so users see events as they arrive
+            panel.scrollIntoView({behavior: 'smooth', block: 'start'});
 
             try {
                 // SSE-only: live progress AND final result come from one stream.

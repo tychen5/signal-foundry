@@ -86,7 +86,7 @@
                         <button class="example-btn" onclick="setTask('Go to https://example.com and find the email address for European trademark disputes. If not present, say so.', 'https://example.com')">🎯 example.com hallucination guard</button>
                         <button class="example-btn" onclick="setTask('Go to https://en.wikipedia.org/wiki/Mona_Lisa and describe what is shown in the infobox image.', 'https://en.wikipedia.org/wiki/Mona_Lisa'); document.getElementById('use-vision').checked = true;">🖼️ vision image</button>
                         <button class="example-btn" onclick="setTask('Go to https://www.openstreetmap.org/#map=15/48.8584/2.2945 and describe what landmark or area is centered on the map.', 'https://www.openstreetmap.org/#map=15/48.8584/2.2945'); document.getElementById('use-vision').checked = true;">🗺️ vision map</button>
-                        <button class="example-btn" onclick="setTask('Visit https://finance.yahoo.com/quote/AAPL/ and read the current Apple stock price from the visible quote panel.', 'https://finance.yahoo.com/quote/AAPL/'); document.getElementById('use-vision').checked = true;">📈 vision stock quote</button>
+                        <button class="example-btn" onclick="setTask('Open https://www.google.com/finance/quote/AAPL:NASDAQ and read the current Apple stock price visible on the page.', 'https://www.google.com/finance/quote/AAPL:NASDAQ'); document.getElementById('use-vision').checked = true;">📈 vision stock quote (Google Finance)</button>
                         <button class="example-btn" onclick="setTask('Open https://www.bbc.com/weather/4163971 and describe the weather conditions shown in the icon for today.', 'https://www.bbc.com/weather/4163971'); document.getElementById('use-vision').checked = true;">🌦️ vision weather icon</button>
                     </div>
                 </div>
@@ -292,14 +292,27 @@
             const nvidiaKey = (document.getElementById('user-nvidia-key') || {}).value || '';
             if (nvidiaKey.trim()) payload.model.user_nvidia_key = nvidiaKey.trim();
 
-            // Use SSE streaming endpoint for live progress, then call /execute for full result
+            // Use SSE streaming endpoint for live progress.
+            // Watchdog: if no event arrives for IDLE_TIMEOUT_MS (incl. SSE
+            // keep-alives), abort. Prevents the UI from staying stuck on
+            // "RUNNING" forever when an upstream LLM call hangs (Gemini 3.1
+            // Pro thinking-mode + slow rate-limited responses can make
+            // a single decide_next_action call exceed 90s).
+            const IDLE_TIMEOUT_MS = 90000;
+            const abortController = new AbortController();
+            let idleTimer = null;
+            const resetIdleTimer = () => {
+                if (idleTimer) clearTimeout(idleTimer);
+                idleTimer = setTimeout(() => {
+                    abortController.abort();
+                }, IDLE_TIMEOUT_MS);
+            };
             try {
-                // 1) Open the SSE stream — we emit live events as the agent runs.
-                //    The stream is the source of truth; we don't double-call /execute.
                 const resp = await fetch('/api/v1/browser/stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
                     body: JSON.stringify(payload),
+                    signal: abortController.signal,
                 });
                 if (!resp.ok || !resp.body) throw new Error('Stream failed: ' + resp.status);
                 const reader = resp.body.getReader();
@@ -307,21 +320,31 @@
                 let buf = '';
                 let lastError = null;
                 let agentComplete = null;
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    buf += decoder.decode(value, { stream: true });
-                    const lines = buf.split('\n');
-                    buf = lines.pop() || '';
-                    for (const ln of lines) {
-                        if (!ln.startsWith('data: ')) continue;
-                        try {
-                            const ev = JSON.parse(ln.slice(6));
-                            appendLiveEvent(ev);
-                            if (ev.event === 'error') lastError = ev;
-                            if (ev.event === 'agent_complete') agentComplete = ev;
-                        } catch (_) {}
+                let streamEnded = false;
+                let eventsReceived = 0;
+                resetIdleTimer();
+                try {
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        resetIdleTimer();
+                        buf += decoder.decode(value, { stream: true });
+                        const lines = buf.split('\n');
+                        buf = lines.pop() || '';
+                        for (const ln of lines) {
+                            if (!ln.startsWith('data: ')) continue;
+                            try {
+                                const ev = JSON.parse(ln.slice(6));
+                                appendLiveEvent(ev);
+                                eventsReceived += 1;
+                                if (ev.event === 'error') lastError = ev;
+                                if (ev.event === 'agent_complete') agentComplete = ev;
+                                if (ev.event === 'stream_end') streamEnded = true;
+                            } catch (_) {}
+                        }
                     }
+                } finally {
+                    if (idleTimer) clearTimeout(idleTimer);
                 }
                 // After stream ends, surface result or error
                 if (lastError) {
@@ -345,14 +368,40 @@
                         },
                         cost_metadata: { total_cost_usd: agentComplete.cost_usd },
                     });
+                } else {
+                    // Stream ended without agent_complete OR error event —
+                    // most often: backend Python task crashed mid-loop, or
+                    // reverse proxy reset the connection. Surface honestly
+                    // instead of leaving the UI hanging on "RUNNING".
+                    setStatus('failed', 'STREAM ENDED',
+                        streamEnded
+                            ? 'Stream closed without a final agent result.'
+                            : 'Stream closed unexpectedly (proxy reset / network).'
+                    );
+                    showLLMError({
+                        category: 'no_response',
+                        user_message: eventsReceived === 0
+                            ? 'No events received from the agent. Check the model key and try again.'
+                            : 'Connection ended before the agent finished. Try a faster model (kimi-k2.6) or click Execute again.',
+                        suggested_action: 'Try kimi-k2.6 (fast NVIDIA) or rerun. Some LLMs (Gemini 3.1 Pro thinking-mode) can take 60-120s per step — increase IDLE_TIMEOUT_MS if you want a longer wait.',
+                        raw_error: 'stream_ended_without_terminal_event',
+                        retryable: true,
+                    });
                 }
             } catch (err) {
-                setStatus('failed', 'ERROR', String(err));
+                if (idleTimer) clearTimeout(idleTimer);
+                const aborted = err && err.name === 'AbortError';
+                setStatus('failed', aborted ? 'TIMED OUT' : 'ERROR', String(err));
                 showLLMError({
-                    category: 'unknown',
-                    user_message: 'Stream error: ' + String(err),
-                    suggested_action: 'Check the browser console and the Zeabur deploy logs.',
+                    category: aborted ? 'timeout' : 'unknown',
+                    user_message: aborted
+                        ? 'No SSE events received for 90 s — likely an upstream LLM hang. Try a faster model (kimi-k2.6) or rerun.'
+                        : 'Stream error: ' + String(err),
+                    suggested_action: aborted
+                        ? 'Switch the model dropdown to moonshotai/kimi-k2.6 (fast NVIDIA) and rerun.'
+                        : 'Check the browser console and the Zeabur deploy logs.',
                     raw_error: String(err),
+                    retryable: true,
                 });
             } finally {
                 btn.disabled = false;

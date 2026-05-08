@@ -213,6 +213,13 @@ def _create_openai_compat(
         # NIM and OpenRouter occasionally rate-limit or hiccup; surface the
         # error to the caller fast rather than silently retrying inside the SDK.
         "max_retries": 1,
+        # Cap individual LLM calls. Gemini 3.1 Pro thinking-mode can take 60+s
+        # for hard reasoning tasks; we set a 90s ceiling so an upstream hang
+        # surfaces as a timeout error instead of stalling SSE streams. Browser
+        # agent runs benefit from a tighter timeout because they make many
+        # short calls; T3 stage-2 boundary refinement uses snippets so 90s
+        # is more than enough.
+        "timeout": float(os.environ.get("LLM_REQUEST_TIMEOUT_S", "90")),
     }
     # `extra_body` is accepted by ChatOpenAI in all versions ≥0.2.10 (our
     # minimum). Earlier versions silently ate it; newer versions emit a
@@ -223,11 +230,15 @@ def _create_openai_compat(
         chat_kwargs["extra_body"] = extra_body
 
     # JSON mode (response_format) eliminates a whole class of "could not
-    # parse" errors when the prompt expects strict JSON output. Vision-capable
-    # OpenRouter models, kimi-k2.6, glm-5.1, and gpt-5.5 all support it.
-    # Skipped on thinking-mode wrappers (DeepSeek-V4-Pro NIM) since the
-    # provider's own response template handles structure already.
-    if json_mode:
+    # parse" errors when the prompt expects strict JSON output. Compatibility:
+    #   ✓ kimi-k2.6, minimax-m2.7 (NVIDIA, plain models)
+    #   ✓ gpt-5.5, claude-opus-4.7, gemini-3.1-pro-preview (OpenRouter)
+    #   ✗ glm-5.1, deepseek-v4-pro (thinking-mode — extra_body conflicts with
+    #     response_format=json_object on NIM; the model returns
+    #     reasoning_content+content as separate blocks and json_object
+    #     forces a single string. Disabled to avoid silent empty responses.)
+    # The robust extract_json_object helper is the fallback for both cases.
+    if json_mode and not extra_body:
         chat_kwargs["model_kwargs"] = chat_kwargs.get("model_kwargs", {}) or {}
         chat_kwargs["model_kwargs"]["response_format"] = {"type": "json_object"}
 
