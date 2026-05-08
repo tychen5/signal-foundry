@@ -860,6 +860,84 @@ class TestSilentFailureGuard:
         assert result.status == "not_found"
 
 
+class TestStuckLoopGuard:
+    """The reactive-phase stuck-loop detector prevents the agent from
+    burning through max_steps when the LLM keeps picking the same action
+    that doesn't change the page (broken button, form reset, captcha)."""
+
+    def _make_step(self, url: str, action_target: str = "submit"):
+        from src.task2_browser.schemas import (
+            ActionType,
+            BrowserAction,
+            PageState,
+            StepResult,
+        )
+        return StepResult(
+            step_number=1,
+            action=BrowserAction(
+                action_type=ActionType.CLICK,
+                target_description=action_target,
+            ),
+            after_state=PageState(url=url, visible_text_summary=""),
+        )
+
+    def test_three_identical_actions_same_url_fires(self) -> None:
+        from src.task2_browser.agent import _detect_stuck_loop
+
+        history = [
+            "click: Submit button",
+            "click: Submit button",
+            "click: Submit button",
+        ]
+        steps = [
+            self._make_step("https://example.com/form"),
+            self._make_step("https://example.com/form"),
+            self._make_step("https://example.com/form"),
+        ]
+        assert _detect_stuck_loop(history, steps) is True
+
+    def test_three_identical_actions_different_url_does_not_fire(self) -> None:
+        """Same action but URL changes (e.g. redirect cycle) — that's not a
+        stuck loop in the sense we want to detect; the page IS responding."""
+        from src.task2_browser.agent import _detect_stuck_loop
+
+        history = ["click: Next", "click: Next", "click: Next"]
+        steps = [
+            self._make_step("https://example.com/page1"),
+            self._make_step("https://example.com/page2"),
+            self._make_step("https://example.com/page3"),
+        ]
+        assert _detect_stuck_loop(history, steps) is False
+
+    def test_two_identical_does_not_fire(self) -> None:
+        """Need 3 in a row — twice could just be retry."""
+        from src.task2_browser.agent import _detect_stuck_loop
+
+        history = ["click: Submit", "click: Submit"]
+        steps = [
+            self._make_step("https://example.com/x"),
+            self._make_step("https://example.com/x"),
+        ]
+        assert _detect_stuck_loop(history, steps) is False
+
+    def test_healed_retry_different_target_does_not_fire(self) -> None:
+        """If the healer changed the target description (e.g. switched
+        selector strategy), it's a real recovery — don't trip the guard."""
+        from src.task2_browser.agent import _detect_stuck_loop
+
+        history = [
+            "click: Submit button (data-testid=submit)",
+            "click: Submit button (text=Submit)",
+            "click: Submit button (role=button)",
+        ]
+        steps = [
+            self._make_step("https://example.com/x"),
+            self._make_step("https://example.com/x"),
+            self._make_step("https://example.com/x"),
+        ]
+        assert _detect_stuck_loop(history, steps) is False
+
+
 # ==============================================================================
 # Planner Tests
 # ==============================================================================

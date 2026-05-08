@@ -43,6 +43,13 @@ _SIGNATURES: list[tuple[str, str]] = [
     # credit / quota
     ("insufficient_credit", r"insufficient[_\s-]*credit|insufficient[_\s-]*balance|out of credit|requires credit|exceeded.*credit"),
     ("quota_exhausted", r"quota[_\s-]*exhausted|quota.*exceeded|usage[_\s-]*limit|monthly limit|daily limit"),
+    # context length — hard-fail; user must switch to a bigger-context model
+    ("context_length", r"context[_\s-]*length|context[_\s-]*window|maximum context|context.*exceed|tokens.*exceed|input.*too.*long|prompt.*too.*long|message.*too.*long"),
+    # model not found (typo'd model id, deprecated model, region mismatch)
+    ("model_not_found", r"model[_\s-]*not[_\s-]*found|invalid[_\s-]*model|model.*deprecated|unknown[_\s-]*model|no such model|model[_\s-]*does[_\s-]*not[_\s-]*exist"),
+    # content / safety filter (some providers block prompts as policy
+    # violations — we want users to know it's a content issue, not a key issue)
+    ("content_filter", r"content[_\s-]*polic|content[_\s-]*filter|safety[_\s-]*polic|harmful[_\s-]*content|moderation|content.*flagged|prompt.*blocked|prompt_blocked|response.*blocked"),
     # timeout / network
     ("timeout", r"\btimeout\b|timed out|deadline exceeded"),
     ("no_response", r"connection.*reset|connection.*aborted|connection.*refused|name.*not.*resolved|ssl.*error"),
@@ -80,6 +87,21 @@ _USER_MESSAGES: dict[str, tuple[str, str, bool]] = {
         "Could not reach the provider's API.",
         "Network issue between Zeabur and the provider. Retry; if it persists, switch model or check provider status page.",
         True,
+    ),
+    "context_length": (
+        "Prompt exceeds the model's context window.",
+        "Switch to a longer-context model — Gemini 3.1 Pro Preview (1 M tokens) or Claude Opus 4.7 (200 K) handle the largest 10-K filings. Or shrink the input (skip use_vision for filings, or split the task).",
+        False,
+    ),
+    "model_not_found": (
+        "The selected model isn't available on this provider.",
+        "Pick a different model from the dropdown. The defaults (Kimi K2.6 / GLM 5.1 / Gemini 3.1 Pro) are the most reliable.",
+        False,
+    ),
+    "content_filter": (
+        "Provider's content/safety filter blocked the request.",
+        "Rephrase the task to avoid triggering policy filters, or switch to a less-filtered model. NVIDIA NIM models are typically more permissive than Anthropic on factual tasks.",
+        False,
     ),
     "server_error": (
         "Provider returned a 5xx error.",

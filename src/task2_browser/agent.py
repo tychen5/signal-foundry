@@ -129,6 +129,37 @@ _NOT_FOUND_PHRASES = (
 _NUMBER_TOKEN = re.compile(r"\d{2,}(?:[.,]\d+)?")
 
 
+def _detect_stuck_loop(action_history: list, step_results: list) -> bool:
+    """Return True iff the agent has repeated the *same* action 3 times in a
+    row without the URL changing.
+
+    The agent's reactive loop calls the LLM each turn to pick the next
+    action. When the LLM gets confused (broken button, captcha that won't
+    accept input, form field that resets on submit), it can latch onto the
+    same action for many consecutive steps, burning through max_steps
+    without progress.
+
+    We compare the last 3 entries of ``action_history`` (free-form
+    `action_type: target` strings the agent already maintains for context)
+    AND the URLs of the last 3 step results — both must be identical for
+    the loop to fire. Distinct heuristics: a healed retry with a different
+    selector won't have an identical action_history entry; a redirect
+    cycle (same action, different URLs) won't have identical URLs.
+
+    Returns False unless we have at least 3 prior reactive steps.
+    """
+    if len(action_history) < 3 or len(step_results) < 3:
+        return False
+    recent_actions = action_history[-3:]
+    if not (recent_actions[0] == recent_actions[1] == recent_actions[2]):
+        return False
+    recent_urls = [
+        (s.after_state.url if s.after_state else "")
+        for s in step_results[-3:]
+    ]
+    return len(set(recent_urls)) == 1
+
+
 def _clean_final_answer(answer: str) -> str:
     """Strip LLM markdown / JSON wrapping from a final-answer string.
 
@@ -511,6 +542,31 @@ class BrowserAgent:
                     if step_result.error:
                         action_desc += f" [FAILED: {step_result.error[:50]}]"
                     completed_step_descriptions.append(action_desc)
+
+                    # Stuck-loop guard: if the last 3 reactive-phase actions
+                    # are identical AND none of them changed the URL, the
+                    # planner is in a tight loop (typical pattern: clicking a
+                    # broken button repeatedly, or filling a field that
+                    # resets). Break out as `partial` rather than burn
+                    # through max_steps repeating the same mistake.
+                    if _detect_stuck_loop(completed_step_descriptions, result.steps):
+                        logger.warning(
+                            "stuck_loop_detected",
+                            repeated_action=completed_step_descriptions[-1][:120],
+                            trace_id=trace_id,
+                        )
+                        result.failure_modes.append("stuck_loop")
+                        result.status = "partial"
+                        last_url = (
+                            result.steps[-1].after_state.url
+                            if result.steps[-1].after_state else ""
+                        )
+                        result.final_answer = (
+                            f"Stuck repeating the same action 3x without "
+                            f"page change: {completed_step_descriptions[-1][:200]}. "
+                            f"Last URL: {last_url}"
+                        )
+                        break
 
                 else:
                     # Reached max steps without completion

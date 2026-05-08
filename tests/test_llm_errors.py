@@ -70,3 +70,39 @@ class TestErrorClassification:
         long = "x" * 2000
         info = classify_llm_error(long)
         assert len(info.raw_error) <= 600
+
+    def test_context_length_exceeded_openai_form(self):
+        info = classify_llm_error(
+            "This model's maximum context length is 128000 tokens. "
+            "However, your messages resulted in 145000 tokens."
+        )
+        assert info.category == "context_length"
+        assert info.retryable is False
+        assert "context window" in info.user_message.lower()
+
+    def test_context_length_exceeded_alt_phrasing(self):
+        info = classify_llm_error("Input prompt is too long for this model")
+        assert info.category == "context_length"
+
+    def test_model_not_found_typo(self):
+        info = classify_llm_error("Model not found: openai/gpt-5.5-typo")
+        assert info.category == "model_not_found"
+        assert info.retryable is False
+
+    def test_model_deprecated(self):
+        info = classify_llm_error(
+            "The model 'gpt-3.5-turbo-0301' has been deprecated."
+        )
+        assert info.category == "model_not_found"
+
+    def test_content_filter_blocked(self):
+        info = classify_llm_error(
+            "Your request was flagged by our content policy and has been blocked."
+        )
+        assert info.category == "content_filter"
+        assert info.retryable is False
+        assert "filter" in info.user_message.lower() or "polic" in info.user_message.lower()
+
+    def test_content_filter_safety(self):
+        info = classify_llm_error("Response blocked due to safety policy violation.")
+        assert info.category == "content_filter"
