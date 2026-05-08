@@ -962,5 +962,125 @@
         "16"
       ]
     }
+  },
+  {
+    "case_id": "t3_realty_income_2024_reit",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000726728",
+      "accession_number": "0000726728-25-000055"
+    },
+    "expected_behavior": "Realty Income (REIT) 2024 10-K. REIT-specific Item 1 (properties as core business), Item 2 with extensive property tables, distinct XBRL fact namespace (us-gaap:reit), and Part III heavy proxy incorporation. Tests sector-language flexibility on real-estate disclosures.",
+    "difficulty": "edge_case",
+    "tags": [
+      "reit",
+      "real_estate",
+      "modern_html",
+      "incorporated",
+      "sector_specific",
+      "vision_benefit_candidate"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000726728.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/726728/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 18,
+      "required_items": [
+        "1",
+        "1A",
+        "2",
+        "7",
+        "8",
+        "15"
+      ],
+      "expected_status_items": {
+        "10": "incorporated_by_reference",
+        "11": "incorporated_by_reference",
+        "12": "incorporated_by_reference"
+      }
+    }
+  },
+  {
+    "case_id": "t3_ares_capital_2024_bdc",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001287750",
+      "accession_number": "0001287750-25-000007"
+    },
+    "expected_behavior": "Ares Capital (Business Development Company) 2024 10-K. BDCs file under 1940 Act + Exchange Act, so Item 1A risk factors are dominated by investment-portfolio language; Items 2, 4 commonly N/A (BDC has no real estate, no mining); Item 7A market-risk dominated by interest-rate exposure. Filing is unusually large (~22 MB raw) — exercises normalization throughput. Tests N/A status detection on a non-operating-company structure.",
+    "difficulty": "edge_case",
+    "tags": [
+      "bdc",
+      "investment_company",
+      "1940_act",
+      "modern_html",
+      "incorporated",
+      "not_applicable",
+      "large_filing",
+      "sector_specific"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001287750.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1287750/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 20,
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8",
+        "15"
+      ],
+      "expected_status_items": {
+        "10": "incorporated_by_reference",
+        "11": "incorporated_by_reference",
+        "12": "incorporated_by_reference"
+      }
+    }
+  },
+  {
+    "case_id": "t3_coinbase_2024_crypto",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001679788",
+      "accession_number": "0001679788-25-000022"
+    },
+    "expected_behavior": "Coinbase 2024 10-K. Crypto-exchange filing with novel Item 1A risk factors (digital-asset volatility, custody, regulatory uncertainty), prominent Item 1C cybersecurity disclosure, and many Part III items incorporated by reference. Tests vocabulary flexibility on a sector with non-standard terminology (`assets in custody`, `staking`, `Layer-2`).",
+    "difficulty": "edge_case",
+    "tags": [
+      "crypto",
+      "fintech",
+      "novel_risk_factors",
+      "cybersecurity_1c",
+      "modern_html",
+      "incorporated",
+      "vision_benefit_candidate"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001679788.json",
+      "archive_url_pattern": "https://www.sec.gov/Archives/edgar/data/1679788/{accession_no_dashes}/{primary_document}"
+    },
+    "assertions": {
+      "min_items_extracted": 18,
+      "required_items": [
+        "1",
+        "1A",
+        "1C",
+        "7",
+        "8",
+        "15"
+      ],
+      "expected_status_items": {
+        "10": "incorporated_by_reference",
+        "11": "incorporated_by_reference",
+        "12": "incorporated_by_reference"
+      }
+    }
   }
 ]

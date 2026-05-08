@@ -59,5 +59,41 @@
     "expected_behavior": "Should show release plan without executing. Must not create tags.",
     "difficulty": "normal",
     "tags": ["release", "dry_run", "safety"]
+  },
+  {
+    "case_id": "t1_polyglot_root_no_python",
+    "task": "task1_cicd",
+    "input_data": {
+      "repo_url": "https://github.com/jagrosh/MusicBot",
+      "branch": "master",
+      "skill_name": "dependency-audit"
+    },
+    "expected_behavior": "Repo root has no Python — primary language is Java. Skill should detect Java/Maven, not crash on missing requirements.txt, and either run a Java-aware audit (pom.xml dependency check) or fail-soft with a clear language-not-supported message. Tests language-detection robustness on a non-Python public repo.",
+    "difficulty": "edge_case",
+    "tags": ["polyglot", "java", "language_detection", "graceful_degradation"]
+  },
+  {
+    "case_id": "t1_idempotent_replay_same_sha",
+    "task": "task1_cicd",
+    "input_data": {
+      "repo_url": "https://github.com/tychen5/signal-foundry",
+      "branch": "main",
+      "skill_name": "lint-and-test"
+    },
+    "expected_behavior": "Re-running the same skill on the same SHA should hit the idempotency cache and return the same result without re-executing the lint/test subprocess. Tests cicd:v1:{owner}/{repo}:{branch}:{skill}:{sha[:12]}:{dry_run} cache-key correctness.",
+    "difficulty": "edge_case",
+    "tags": ["idempotency", "cache_hit", "harness", "regression"]
+  },
+  {
+    "case_id": "t1_security_scan_research_repo",
+    "task": "task1_cicd",
+    "input_data": {
+      "repo_url": "https://github.com/danielmiessler/SecLists",
+      "branch": "master",
+      "skill_name": "security-scan"
+    },
+    "expected_behavior": "Public security-research repo containing many credential samples + wordlists. Engine should complete the scan without crashing on the high count of findings, respect the safety blocklist (no auto-fix), and produce a structured summary. Tests robustness on adversarial repo content.",
+    "difficulty": "edge_case",
+    "tags": ["security", "high_findings_count", "research_repo", "blocklist"]
   }
 ]
