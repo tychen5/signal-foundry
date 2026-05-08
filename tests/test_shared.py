@@ -262,3 +262,80 @@ class TestUserKeyContextvars:
             assert "from-explicit-arg" in str(llm.openai_api_key.get_secret_value())
         finally:
             clear_user_keys()
+
+
+class TestJSONExtractor:
+    """Tests for src.shared.llm_utils.extract_json_object / extract_json_array.
+
+    These pin the LLM-output-shape robustness work — if a model misbehaves
+    (smart quotes, prose preamble, ```json fences, truncation), the
+    extractor should still recover the JSON object instead of forcing
+    fragile regex fallbacks downstream.
+    """
+
+    def test_plain_json_object(self):
+        from src.shared.llm_utils import extract_json_object
+        result = extract_json_object('{"action": "click", "target": "button"}')
+        assert result == {"action": "click", "target": "button"}
+
+    def test_markdown_fenced_json(self):
+        from src.shared.llm_utils import extract_json_object
+        result = extract_json_object('```json\n{"a": 1, "b": 2}\n```')
+        assert result == {"a": 1, "b": 2}
+
+    def test_markdown_fenced_no_lang(self):
+        from src.shared.llm_utils import extract_json_object
+        result = extract_json_object('```\n{"a": 1}\n```')
+        assert result == {"a": 1}
+
+    def test_leading_prose(self):
+        from src.shared.llm_utils import extract_json_object
+        # The original "first { ... last }" regex would fail on this if there
+        # were stray braces in the prose. The balanced extractor handles it.
+        result = extract_json_object('Here is the JSON: {"action": "done", "value": "result"}')
+        assert result == {"action": "done", "value": "result"}
+
+    def test_trailing_prose(self):
+        from src.shared.llm_utils import extract_json_object
+        result = extract_json_object('{"a": 1}\n\nThis represents the next action.')
+        assert result == {"a": 1}
+
+    def test_smart_quotes(self):
+        from src.shared.llm_utils import extract_json_object
+        # Some models leak smart quotes — extract_json_object normalises them
+        result = extract_json_object('{“action”: “navigate”}')
+        assert result == {"action": "navigate"}
+
+    def test_nested_braces(self):
+        from src.shared.llm_utils import extract_json_object
+        result = extract_json_object('{"meta": {"nested": true}, "x": 1}')
+        assert result == {"meta": {"nested": True}, "x": 1}
+
+    def test_braces_in_string(self):
+        from src.shared.llm_utils import extract_json_object
+        result = extract_json_object('{"reasoning": "use { and } as quotes", "ok": true}')
+        assert result == {"reasoning": "use { and } as quotes", "ok": True}
+
+    def test_returns_none_on_garbage(self):
+        from src.shared.llm_utils import extract_json_object
+        assert extract_json_object("just some prose, no json here") is None
+
+    def test_returns_none_on_empty(self):
+        from src.shared.llm_utils import extract_json_object
+        assert extract_json_object("") is None
+        assert extract_json_object("   \n  ") is None
+
+    def test_returns_none_on_array_when_object_expected(self):
+        from src.shared.llm_utils import extract_json_object
+        # extract_json_object only returns objects, not arrays
+        assert extract_json_object("[1, 2, 3]") is None
+
+    def test_array_extractor(self):
+        from src.shared.llm_utils import extract_json_array
+        result = extract_json_array('```json\n[{"a": 1}, {"b": 2}]\n```')
+        assert result == [{"a": 1}, {"b": 2}]
+
+    def test_array_with_leading_prose(self):
+        from src.shared.llm_utils import extract_json_array
+        result = extract_json_array('Found these items: [{"x": 1}]')
+        assert result == [{"x": 1}]
