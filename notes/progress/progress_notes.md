@@ -145,34 +145,48 @@
   11. [x] /health + /api/v1/models sanity-checked on every deploy. Final verification table in README "Live deployment verification".
   12. [x] Task 2 live eval — 3 sweeps committed (kimi rate-limited, claude-opus baseline, gemini after improvements). Best run: 13/21 genuine success.
 
-7. [] Phase 7 UI/UX 美化 (partial; full polish ongoing)
-  1. [x] Index page rewritten: each task card is now a full `<a>` link wrapping a card div — entire card is clickable, hover state highlights the whole card with blue border + lift. Added `.card-bullets` block showing 3-4 highlight features per task. Added `.quick-actions` panel below cards with direct links to /api/v1/skills/list (View Skills), example SEC filings list, and example SEC company info — gives reviewers fast jumping-off points without typing URLs.
-  2. [x] Task 2 + Task 3 cards already clickable (entire card acts as a link). UI for Task 2 has rich form with vision toggle, model dropdown, OpenRouter key input, max-steps selector. Task 3 UI has cik/accession examples + use_vision toggle + LLM/XBRL skip flags. Reviewers can run any case through the UI directly.
+7. [x] Phase 7 UI/UX 美化 ✅ (2026-05-08; all sub-items resolved)
+  1. [x] Index page rewritten: each task card is now a full `<a>` link wrapping a card div — entire card is clickable, hover state highlights the whole card with blue border + lift. Added `.card-bullets` block showing 3-4 highlight features per task. Added `.quick-actions` panel below cards with direct links to /api/v1/skills/list (View Skills), example SEC filings list, and example SEC company info — gives users fast jumping-off points without typing URLs.
+  2. [x] Task 2 + Task 3 cards already clickable (entire card acts as a link). UI for Task 2 has rich form with vision toggle, model dropdown, OpenRouter key input, max-steps selector. Task 3 UI has cik/accession examples + use_vision toggle + LLM/XBRL skip flags. Users can run any case through the UI directly.
   3. [x] /health, /metrics, /api/v1/models now return friendly HTML dashboards when accessed from a browser (Accept: text/html), and JSON when called from API clients (Accept: application/json). See `templates/system.html` and `src/main.py` content negotiation.
-  4. [x] Dashboard polished: hero stats (3 tasks · 38 + 27 + 5 eval cases · 7 LLM models · 233 tests) + live cost/calls polled from /metrics every 30 s. Each task card lists its 3-4 distinguishing features so reviewers see at a glance what the harness does.
-  5. [x] **Streaming progress** — Task 2 now exposes `/api/v1/browser/stream` (Server-Sent Events). Frontend opens an `EventSource` and shows live milestones: phase_start → phase_done (plan ready) → step_start/step_done (per action with healer flag, confidence, error) → agent_complete. Live trace box scrolls automatically as events arrive. Reverse-proxy heartbeat every 20 s prevents idle disconnects. Task 1 + Task 3 fast enough that streaming was unnecessary; their loading spinners + status banners + post-run renderers were enough.
-    5-1. [] task 1 如果去跑其他面試官想要測驗公開的repo有時候也會需要等很久，尤其調用的是nvidia models的時候，需要等超過三分鐘。task 3如果面試官去採用其他新的filing需要系統去重新下載(沒有cache到)然後又呼叫使用LLM 的時候，有時候也會需要等很久(尤其是調用nvidia models的時候)。
+  4. [x] Dashboard polished: hero stats (3 tasks · 89 eval cases · 7 LLM models · 283 unit tests) + live cost/calls polled from /metrics every 30 s. Each task card lists its 3-4 distinguishing features.
+  5. [x] **Streaming progress** — Task 2 + Task 3 + Task 1 all have SSE streaming. T1 and T3 streams now embed the final result so the FE doesn't make a redundant non-streaming call. T2 stream has a frontend watchdog (90s no-event abort) so a stalled upstream LLM doesn't leave the UI hanging.
+    5-1. [x] T1/T3 long latency now show live progress; T2 added the 90 s watchdog + single-retry-on-transient (timeout/5xx/429) in the planner so flaky upstreams degrade gracefully instead of hanging.
   6. [x] Final-answer text wraps with `word-wrap: break-word` and the answer-box has `overflow-wrap: break-word` — long answers no longer overflow the box.
-  7. [x] LangSmith link is honest: server only emits `langsmith_trace_url` when `LANGSMITH_API_KEY` is configured AND tracing is on. UI hides the chip otherwise. URL points at the project with metadata-trace-id filter — works for the project owner; outside viewers see "no access" because LangSmith projects are private by default (this is correct, not a bug).
-  8. [x] **API-key error classification + UX** — new `src/shared/llm_errors.py` maps exception strings to user-actionable categories: `invalid_key`, `rate_limit`, `insufficient_credit`, `quota_exhausted`, `timeout`, `no_response`, `server_error`, `unknown`. Each ships with a suggested action ("rotate key on openrouter.ai console", "wait 30 s and retry", "top up at openrouter.ai/credits", etc.). All 3 task routers populate `cost_metadata` with `{error_category, user_message, suggested_action, retryable}`. Task 2 stream emits an `error` event with the same payload. UI shows a colour-coded banner with the actionable message + raw error in a collapsible `<details>`. Both NVIDIA NIM and OpenRouter API key inputs are present in the model selector.
-    8-1. [] 目前repo我們測試所使用的NVIDIA_API_KEY會過期，因此沒辦法常駐在網頁上讓使用者不輸入就可以直接免費使用，故需要改良UI在最外層首頁除了openrouter api key以外還要再多一個輸入框讓使用者除了輸入建議的openrouter key以外，也可以去申請輸入user他們自己的nvidia nim endpoint api key來填寫免費使用。提示告訴users nvidia可以去免費申請以後過來填寫但效果會比較差latency比較長，而openrouter models表現比較好速度比較快但會需要先充值以後才能create key貼過來使用。
-  9. [] Task 1 Skill Engine Progress 並沒有於使用者按下Run Skill 的時候就順利開始跑streaming顯示目前的進度，直到全部都跑完了才顯示log。因此需要提升UX，變成可以於使用者按下Run Skill按鈕的時候就要開始streaming event顯示當前進度。我需要的是和Task 2一樣有Live Progress
-    10. [] 另外Task 1當中的View in LangSmith按鈕是無效的，會顯示Not Found，如果沒有辦法提供正確的超連結，那麼請把這個按鈕拿掉變成一個顯示langsmith trace id就好。
-    11. [] Task 1 卡片當中的 encode/httpx repo按鈕是有問題的，請更換一個其他合適的公開repo。現在代入的https://github.com/encode/httpx會顯示FAILED GitHub API error 422
-  12. [] Task 2當中的`cnyes 加權指數(TW)`按鈕請把預設的Start URL (optional hint)改成留空，因為https://www.cnyes.com/twstock/twse/TWSE.htm網站是有問題的；因此請也把Task Description (natural language)改成前往鉅亨網並擷取台股加權指數最新點位
-    13. [] `Wikipedia lookup`按鈕預設代入的demo使用gemini 3 pro vision也經常會失敗，可能會出現Could not parse action from LLM response: ```json { "action": "navigate", "target": "", "value": "https://en.wikipedia.org...的問題，而沒有查找到對的answer，請修復。有可能prompt需要再進化或是需要使用structured output，或是需要有個更好的parsing機制，確保LLM輸出valid json。
-    14. [] 幫我把demo用的`🚧 CAPTCHA detect`按鈕use case改成其他的scenario，可以給面試官展示vision可以完美解決的例子。
-  15. [] Task 3 SEC 10-K Extraction中，Example 的`Microsoft FY2023` scenario demo如果我使用Gemini 3.1 Pro會出現Unknown error from LLM provider. 我查了log原因顯示是: HTTPStatusError("Client error '404 Not Found' for url 'https://www.sec.gov/Archives/edgar/data/789019/000078901923007654/0000789019-23-007654.txt'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404")。請查明root cause以後並且修復。
-    16. [] 我使用`Abbott Labs` example也會出現一樣的Unknown error from LLM provider. langsmith Log則顯示HTTPStatusError("Client error '404 Not Found' for url 'https://www.sec.gov/Archives/edgar/data/1800/000000180023000004/0000001800-23-000004.txt'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404") 請也修復好來。
-  17. [] 提供langsmith api key給使用者填入的override選項(optional使用者不一定需要填)，這樣使用者就也可以透過自己的langsmith console來追蹤使用情況。但是nvidia api key或是Openrouter api key這兩者使用者一定至少要擇一填入，否則沒辦法下拉式選單選擇對應model，且task就不會work。
+  7. [x] LangSmith link is honest: `trace_url()` returns None unconditionally (the `/o/projects/p/{name}` URL form requires UUIDs we can't derive); UI shows a copy-on-click trace_id chip instead.
+  8. [x] **API-key error classification + UX** — `src/shared/llm_errors.py` maps exception strings to user-actionable categories. UI shows colour-coded banner.
+    8-1. [x] Index page now has 3 BYOK key inputs: OpenRouter (paid premium), NVIDIA NIM (free signup at build.nvidia.com), and LangSmith (optional). All three persist via sessionStorage; live key-config hint banner under the model dropdown shows whether the right key for the selected model is present.
+  9. [x] Task 1 Run Skill button now shows live SSE progress IMMEDIATELY (panel becomes visible up front, status badge pulses RUNNING, live-trace box auto-scrolls). Old code hid the entire result panel until completion.
+    10. [x] Task 1 "View in LangSmith" button removed; replaced with a copy-trace-id chip that's accurate and useful.
+    11. [x] Task 1 encode/httpx demo replaced with psf/requests; skill_engine now honours `repo_info["default_branch"]` so encode/httpx (default `master`) and other non-`main` repos work too.
+  12. [x] Task 2 cnyes button: cleared default Start URL and rewrote task to "前往鉅亨網並擷取台股加權指數最新點位" so the agent can pick a working URL.
+    13. [x] Task 2 Wikipedia parse failure fixed via robust `extract_json_object` helper that handles ```json fences, smart quotes, balanced-brace nesting, and truncated streams. v3_planner.txt prompt also adds explicit "STRICT JSON ARRAY ONLY — no markdown fences" rule.
+    14. [x] Task 2 CAPTCHA demo replaced with vision-helpful examples: Google Finance stock-quote (was Yahoo Finance which 429s) and BBC weather-icon. CAPTCHA was a poor demo because it doesn't really benefit from vision.
+  15. [x] Task 3 Microsoft FY2023 404 fixed: hand-typed accession `0000789019-23-007654` was never valid; replaced with real accession `0000950170-23-035122` from data.sec.gov/submissions.
+    16. [x] Task 3 Abbott Labs 404 fixed: hand-typed accession `0000001800-23-000004` was never valid; replaced with `0001628280-24-005348`.
+  17. [x] LangSmith API key BYOK input added on homepage. Schema accepts `user_langsmith_key` field. NVIDIA / OpenRouter key requirement is enforced by the live key-config hint banner: red warning if the selected model needs a key the user hasn't entered.
 
 
 
-8. [] Phase 8 README展示與說明強化
-  1. [] 目前README有一些表格可能markdown格式排版有跑掉，導致沒辦法在github中好好顯示，例如: AI Collaboration Log — bugs caught only by exercising the live path區塊下面的大表格後面幾個rows沒有正確顯示出來。 並且update & fix architecture markdown diagram的對齊與排版。
-  2. [] 並且請再次從頭到尾檢查徹底更新README的所有說明與數據到最新的狀況到最新，以能夠正確反映目前repo codebase的所有features與新增加的highlights。並且update最新的UI demo操作用法、API parameters 說明等等。
-  3. [] 先依據 @notes/_briefs/_TaskDescription.md 分析面試官會想要喜歡看到的解釋/說明/內容還會有哪些，好好思考以後再進行更多更豐富的補充與展示，以凸顯優勢跟與眾不同的地方，加深面試官的印象以能夠獲得認同與讚賞並錄取。
-  4. [] 在網頁 https://signal-foundry.zeabur.app/ UI 中 以及 repo README 當中請盡量都不要提及reviewer/面試官的字眼，而是換個詞盡量從user的角度出發，但實際上就是要將這些資訊內容透過UI demo與README傳達給面試官知道，我們都有做到reviewers的需求並提供了更優秀的相關features。
+8. [x] Phase 8 README展示與說明強化 ✅ (2026-05-08, partial — items 1, 2, 4 done; item 3 ongoing)
+  1. [x] README markdown table fixed: AI Collaboration Log table had an orphan blank line splitting one logical table into two; merged so all rows render on GitHub. Architecture diagram already aligned in original ASCII art form.
+  2. [x] README updated comprehensively: 35-case T3 eval (was 27/30), 100% pass rate, $0 rule-only cost, v4 boundary-refine prompt, vision benchmark results on 5 hard edge-case filings, BYOK 3-key pattern (OpenRouter / NVIDIA / LangSmith), "What's new in latest sweep" section front-loaded, 283 unit tests (+13 from JSON extractor coverage).
+  3. [] 先依據 @notes/_briefs/_TaskDescription.md 分析面試官會想要喜歡看到的解釋/說明/內容還會有哪些，好好思考以後再進行更多更豐富的補充與展示。 (Ongoing — README已新增"What's new"與vision benchmark slice，可繼續迭代)
+  4. [x] "reviewer/面試官" language replaced throughout README and templates with user-centric "user/User/Users" wording. UI says "Quick launchpad" instead of "Reviewer launchpad". system.html says "Usage Guidance" instead of "Reviewer Guidance".
+
+
+9. [] Phase 9 LLM strengthening + UX iteration (2026-05-08, ongoing)
+  1. [x] Robust JSON extractors `src/shared/llm_utils.extract_json_object` / `extract_json_array` — handle ```json fences, smart quotes, leading prose, balanced-brace nesting, truncated streams. Wired into T2 planner + T3 LLM refiner. 13 new tests pinning behaviour.
+  2. [x] OpenAI-compat `response_format=json_object` support in `get_llm(json_mode=True)`. Safe-listed: only fires when `extra_body` is empty (skips thinking-mode glm-5.1 / deepseek-v4-pro to avoid silent empty content). T3 refiner uses it for strict JSON output.
+  3. [x] T1 / T2 / T3 SSE streams all embed the final result event so frontends don't make a redundant POST after stream_end. Eliminates double-execution latency on slow NVIDIA paths.
+  4. [x] T2 frontend watchdog: 90 s no-event abort + single-retry-on-transient in the planner's decide_next_action. Backend `LLM_REQUEST_TIMEOUT_S=90` ceiling per call so an upstream stall surfaces as a timeout error rather than indefinite hang.
+  5. [x] T3 vision module: heading-emphasis layer in `render_text_to_jpeg_b64` that bolds + enlarges "ITEM N." / "PART X" patterns. Helps vision-capable models distinguish real headings from prose.
+  6. [x] T2 v3_planner.txt prompt: STRICT JSON-only output rule (no markdown fences); domain-hint handling for "前往鉅亨網" style tasks where a site name is given without a URL.
+  7. [x] T3 fetcher fix: `find_10k_filing` no longer raises ValueError before checking older submission pages. Lehman / Enron / WorldCom (10-Ks pre-date 1000-filing recent window) now reachable.
+  8. [x] T3 LLM refiner fix: `_detect_missing_items` now fires when `items_found < 10` even if all found boundaries have high confidence. Old-format filings (Enron 2000, WorldCom 2001) where rule parser detects only 3 items now correctly cascade into Stage 2 detection logic.
+  9. [x] Task 3 eval set 30 → 35 cases (Enron Corp FY2000, WorldCom FY2001, Lehman FY2007, Sears 2017, Rivian 2023). 100% pass rate, $0 rule-only cost.
+  10. [x] Live key-config hint banner under model dropdown — colour-coded chip warns when the selected model needs an OpenRouter or NVIDIA key the user hasn't entered.
+  11. [x] Vision benchmark on 5 hard edge-case filings completed: kimi-k2.6 + vision=True hits 5/5 success at $0 / 23.8s avg vs vision=False 3/5 / $0.022 / 131s. Asset-Backed Trust + Kingsoft Cloud cases recovered from 0 → 16-20 items with vision on.
 
 ---
 

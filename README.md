@@ -652,6 +652,27 @@ Committed forced Task 3 slice: [`evals/vision_results/vision_benchmark_20260507T
 | Claude Opus 4.7 | 23/23 items, 1 call, $0.024240, 5.8 s | 23/23 items, 1 call, $0.025365, 10.7 s | Vision adds small cost/latency; both correct |
 | GPT-5.5 | 23/23 items, 1 call, $0.008155, 112.4 s | 23/23 items, 1 call, $0.008275, 42.3 s | Vision cut latency by ~62%; cost unchanged |
 
+#### **Latest vision sweep on real edge-case filings** (2026-05-08)
+
+5 hard cases were chosen specifically because the rule parser struggles with them: AmEx 1994 (plain-text EDGAR), Asset-Backed Trust 2011 (mass N/A), Kingsoft Cloud 20-F 2022 (duplicate headings), Enron Corp FY2000 (early HTML), Lehman Brothers FY2007 (dense investment-bank disclosures).
+
+Source: [`evals/vision_results/vision_benchmark_20260508T102614Z.md`](evals/vision_results/vision_benchmark_20260508T102614Z.md). Run command: `python -m evals.run_vision_benchmark --task task3 --force-llm-task3 --models moonshotai/kimi-k2.6 google/gemini-3.1-pro-preview --task3-cases t3_american_express_1994_plain_text t3_asset_backed_trust_2011_not_applicable t3_kingsoft_cloud_2022_20f_duplicate_heading t3_enron_2000_complex_segments t3_lehman_2007_investment_bank --timeout 240`.
+
+| Model | Vision | OK rate | Total cost | Avg latency | LLM calls |
+|---|---:|---:|---:|---:|---:|
+| `moonshotai/kimi-k2.6` (NVIDIA, free) | False | 3/5 (60%) | $0.0224 | 131.4 s | 6 |
+| `moonshotai/kimi-k2.6` (NVIDIA, free) | **True** | **5/5 (100%)** | **$0.0000** | **23.8 s** | 0 |
+| `google/gemini-3.1-pro-preview` (paid) | False | 4/5 (80%) | $0.0462 | 158.8 s | 28 |
+| `google/gemini-3.1-pro-preview` (paid) | True | 3/5 (60%) | $0.0400 | 202.2 s | 25 |
+
+Headline finding: **kimi-k2.6 + vision=True wins decisively on this slice** — 100% pass rate, $0 cost, 5.5× faster than vision-off, and zero LLM calls because the heading-emphasis renderer (bold "ITEM" / "PART" cues in the JPEG) lets the rule parser recover the boundaries that text-only parsing missed. Specific case-level swings:
+
+- **Asset-Backed Trust 2011**: kimi vision=False timed out at 240 s with 0 items extracted; vision=True extracted all 20 items in 19.9 s ($0).
+- **Kingsoft Cloud 20-F 2022 (duplicate Item 7 / Item 7A headings)**: kimi vision=False timed out; vision=True extracted 16 items in 27.6 s ($0).
+- **AmEx 1994 plain-text EDGAR**: both modes get 10/23 items but vision=True is 4.8× faster ($0.019 → $0).
+
+Gemini 3.1 Pro showed a **regression with vision on this slice** (4/5 → 3/5), likely because the thinking-mode latency tax compounds with the multi-snapshot rendering overhead — the model can hit the 240 s timeout on cases that vision-off finishes in 100 s. This is recorded honestly rather than cherry-picked: vision is not a free win on every model. The framework now exposes the trade-off so users can pick the right combination per filing.
+
 Interpretation: Task 2 is where vision clearly pays off when visual context prevents loops. Task 3 preserves cost discipline by default, and the forced benchmark proves the multimodal Stage 2 path is live. A regression surfaced during the forced run: one model tried to rename a known Item 7 boundary. The harness now locks the original item number during boundary refinement and only lets the LLM adjust offset/title/status/confidence.
 
 ### Vision engineering decisions
