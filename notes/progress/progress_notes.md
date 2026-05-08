@@ -145,19 +145,30 @@
   11. [x] /health + /api/v1/models sanity-checked on every deploy. Final verification table in README "Live deployment verification".
   12. [x] Task 2 live eval — 3 sweeps committed (kimi rate-limited, claude-opus baseline, gemini after improvements). Best run: 13/21 genuine success.
 
-7. [x] Phase 7 UI/UX 美化 (partial; full polish ongoing)
+7. [] Phase 7 UI/UX 美化 (partial; full polish ongoing)
   1. [x] Index page rewritten: each task card is now a full `<a>` link wrapping a card div — entire card is clickable, hover state highlights the whole card with blue border + lift. Added `.card-bullets` block showing 3-4 highlight features per task. Added `.quick-actions` panel below cards with direct links to /api/v1/skills/list (View Skills), example SEC filings list, and example SEC company info — gives reviewers fast jumping-off points without typing URLs.
   2. [x] Task 2 + Task 3 cards already clickable (entire card acts as a link). UI for Task 2 has rich form with vision toggle, model dropdown, OpenRouter key input, max-steps selector. Task 3 UI has cik/accession examples + use_vision toggle + LLM/XBRL skip flags. Reviewers can run any case through the UI directly.
   3. [x] /health, /metrics, /api/v1/models now return friendly HTML dashboards when accessed from a browser (Accept: text/html), and JSON when called from API clients (Accept: application/json). See `templates/system.html` and `src/main.py` content negotiation.
   4. [x] Dashboard polished: hero stats (3 tasks · 38 + 27 + 5 eval cases · 7 LLM models · 233 tests) + live cost/calls polled from /metrics every 30 s. Each task card lists its 3-4 distinguishing features so reviewers see at a glance what the harness does.
   5. [x] **Streaming progress** — Task 2 now exposes `/api/v1/browser/stream` (Server-Sent Events). Frontend opens an `EventSource` and shows live milestones: phase_start → phase_done (plan ready) → step_start/step_done (per action with healer flag, confidence, error) → agent_complete. Live trace box scrolls automatically as events arrive. Reverse-proxy heartbeat every 20 s prevents idle disconnects. Task 1 + Task 3 fast enough that streaming was unnecessary; their loading spinners + status banners + post-run renderers were enough.
-    5-1. [] task 1 如果去跑其他面試官想要測驗公開的repo有時候也會需要等很久，尤其調用的是nvidia models的時候。task 3如果面試官去採用其他新的filing需要系統去重新下載(沒有cache到)然後又呼叫使用LLM 的時候，有時候也會需要等很久(尤其是調用nvidia models的時候)。
+    5-1. [] task 1 如果去跑其他面試官想要測驗公開的repo有時候也會需要等很久，尤其調用的是nvidia models的時候，需要等超過三分鐘。task 3如果面試官去採用其他新的filing需要系統去重新下載(沒有cache到)然後又呼叫使用LLM 的時候，有時候也會需要等很久(尤其是調用nvidia models的時候)。
   6. [x] Final-answer text wraps with `word-wrap: break-word` and the answer-box has `overflow-wrap: break-word` — long answers no longer overflow the box.
   7. [x] LangSmith link is honest: server only emits `langsmith_trace_url` when `LANGSMITH_API_KEY` is configured AND tracing is on. UI hides the chip otherwise. URL points at the project with metadata-trace-id filter — works for the project owner; outside viewers see "no access" because LangSmith projects are private by default (this is correct, not a bug).
   8. [x] **API-key error classification + UX** — new `src/shared/llm_errors.py` maps exception strings to user-actionable categories: `invalid_key`, `rate_limit`, `insufficient_credit`, `quota_exhausted`, `timeout`, `no_response`, `server_error`, `unknown`. Each ships with a suggested action ("rotate key on openrouter.ai console", "wait 30 s and retry", "top up at openrouter.ai/credits", etc.). All 3 task routers populate `cost_metadata` with `{error_category, user_message, suggested_action, retryable}`. Task 2 stream emits an `error` event with the same payload. UI shows a colour-coded banner with the actionable message + raw error in a collapsible `<details>`. Both NVIDIA NIM and OpenRouter API key inputs are present in the model selector.
-    8-1. [] 目前repo我們測試所使用的NVIDIA_API_KEY會過期，因此沒辦法常駐在網頁上讓使用者不輸入就可以直接免費使用，故需要改良UI多一個輸入框讓使用者除了輸入建議的openrouter key以外，也可以去申請輸入user他們自己的nvidia nim endpoint api key來填寫免費使用。提示告訴users nvidia可以去免費申請以後過來填寫但效果會比較差latency比較長，而openrouter models表現比較好速度比較快但會需要先充值以後才能create key貼過來使用。
+    8-1. [] 目前repo我們測試所使用的NVIDIA_API_KEY會過期，因此沒辦法常駐在網頁上讓使用者不輸入就可以直接免費使用，故需要改良UI在最外層首頁除了openrouter api key以外還要再多一個輸入框讓使用者除了輸入建議的openrouter key以外，也可以去申請輸入user他們自己的nvidia nim endpoint api key來填寫免費使用。提示告訴users nvidia可以去免費申請以後過來填寫但效果會比較差latency比較長，而openrouter models表現比較好速度比較快但會需要先充值以後才能create key貼過來使用。
+  9. [] Task 1 Skill Engine Progress 並沒有於使用者按下Run Skill 的時候就順利開始跑streaming顯示目前的進度，直到全部都跑完了才顯示log。因此需要提升UX，變成可以於使用者按下Run Skill按鈕的時候就要開始streaming event顯示當前進度。我需要的是和Task 2一樣有Live Progress
+    10. [] 另外Task 1當中的View in LangSmith按鈕是無效的，會顯示Not Found，如果沒有辦法提供正確的超連結，那麼請把這個按鈕拿掉變成一個顯示langsmith trace id就好。
+    11. [] Task 1 卡片當中的 encode/httpx repo按鈕是有問題的，請更換一個其他合適的公開repo。現在代入的https://github.com/encode/httpx會顯示FAILED GitHub API error 422
+  12. [] Task 2當中的`cnyes 加權指數(TW)`按鈕請把預設的Start URL (optional hint)改成留空，因為https://www.cnyes.com/twstock/twse/TWSE.htm網站是有問題的；因此請也把Task Description (natural language)改成前往鉅亨網並擷取台股加權指數最新點位
+    13. [] `Wikipedia lookup`按鈕預設代入的demo使用gemini 3 pro vision也經常會失敗，可能會出現Could not parse action from LLM response: ```json { "action": "navigate", "target": "", "value": "https://en.wikipedia.org...的問題，而沒有查找到對的answer，請修復。有可能prompt需要再進化或是需要使用structured output，或是需要有個更好的parsing機制，確保LLM輸出valid json。
+    14. [] 幫我把demo用的`🚧 CAPTCHA detect`按鈕use case改成其他的scenario，可以給面試官展示vision可以完美解決的例子。
+  15. [] Task 3 SEC 10-K Extraction中，Example 的`Microsoft FY2023` scenario demo如果我使用Gemini 3.1 Pro會出現Unknown error from LLM provider. 我查了log原因顯示是: HTTPStatusError("Client error '404 Not Found' for url 'https://www.sec.gov/Archives/edgar/data/789019/000078901923007654/0000789019-23-007654.txt'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404")。請查明root cause以後並且修復。
+    16. [] 我使用`Abbott Labs` example也會出現一樣的Unknown error from LLM provider. langsmith Log則顯示HTTPStatusError("Client error '404 Not Found' for url 'https://www.sec.gov/Archives/edgar/data/1800/000000180023000004/0000001800-23-000004.txt'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404") 請也修復好來。
+  17. [] 提供langsmith api key給使用者填入的override選項(optional使用者不一定需要填)，這樣使用者就也可以透過自己的langsmith console來追蹤使用情況。但是nvidia api key或是Openrouter api key這兩者使用者一定至少要擇一填入，否則沒辦法下拉式選單選擇對應model，且task就不會work。
 
-8. [] README 強化
+
+
+8. [] Phase 8 README展示與說明強化
   1. [] 目前README有一些表格可能markdown格式排版有跑掉，導致沒辦法在github中好好顯示，例如: AI Collaboration Log — bugs caught only by exercising the live path區塊下面的大表格後面幾個rows沒有正確顯示出來。 並且update & fix architecture markdown diagram的對齊與排版。
   2. [] 並且請再次從頭到尾檢查徹底更新README的所有說明與數據到最新的狀況到最新，以能夠正確反映目前repo codebase的所有features與新增加的highlights。並且update最新的UI demo操作用法、API parameters 說明等等。
   3. [] 先依據 @notes/_briefs/_TaskDescription.md 分析面試官會想要喜歡看到的解釋/說明/內容還會有哪些，好好思考以後再進行更多更豐富的補充與展示，以凸顯優勢跟與眾不同的地方，加深面試官的印象以能夠獲得認同與讚賞並錄取。
