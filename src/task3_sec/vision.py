@@ -158,6 +158,27 @@ async def render_text_to_jpeg_b64(
     q=75. Returns None if playwright isn't available or render fails —
     callers must handle the no-vision case.
     """
+    import re as _re
+
+    # Heuristic: boost the visual prominence of `Item N.` / `ITEM N.` / `Part X`
+    # patterns so the LLM can see at a glance which lines are *intended* as
+    # headings vs prose mentions. This mirrors how the original 10-K
+    # typography distinguishes section heads — bold + larger.
+    def _emphasise_headings(s: str) -> str:
+        s = _re.sub(
+            r"^(\s*)(ITEM|Item)\s+(\d+[A-Z]?)([.\-—\s]+)([A-Z][^\n]{0,120})",
+            r"\1<span class='item-h'>\2 \3.\4\5</span>",
+            s,
+            flags=_re.MULTILINE,
+        )
+        s = _re.sub(
+            r"^(\s*)(PART|Part)\s+(I{1,3}V?|IV)([.\-\s][^\n]{0,120})?",
+            r"\1<span class='part-h'>\2 \3\4</span>",
+            s,
+            flags=_re.MULTILINE,
+        )
+        return s
+
     # Optionally insert a yellow highlight at the boundary position so
     # the LLM's eye is drawn to the candidate heading.
     if mark_position is not None and 0 <= mark_position < len(text):
@@ -167,10 +188,15 @@ async def render_text_to_jpeg_b64(
         before_safe = before.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         after_safe = after.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         rest_safe = rest.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        body_html = f"<pre>{before_safe}<mark>{after_safe}</mark>{rest_safe}</pre>"
+        # Apply heading emphasis only to non-marked content; the mark itself
+        # already draws the eye, so keeping it as plain inside <mark> is fine.
+        body_html = (
+            f"<pre>{_emphasise_headings(before_safe)}"
+            f"<mark>{after_safe}</mark>{_emphasise_headings(rest_safe)}</pre>"
+        )
     else:
         safe_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        body_html = f"<pre>{safe_text}</pre>"
+        body_html = f"<pre>{_emphasise_headings(safe_text)}</pre>"
 
     html = f"""<!doctype html>
 <html><head><meta charset="utf-8"><style>
@@ -178,6 +204,8 @@ async def render_text_to_jpeg_b64(
   /* Mimic 10-K item-heading typography so bold pre/post-context is preserved */
   pre {{ white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 14px; }}
   mark {{ background: #fff3a0; padding: 0 2px; }}
+  .item-h {{ font-weight: 700; font-size: 16px; color: #001a4d; }}
+  .part-h {{ font-weight: 700; font-size: 18px; color: #4d0000; text-transform: uppercase; letter-spacing: 0.04em; }}
 </style></head><body>{body_html}</body></html>"""
 
     try:
