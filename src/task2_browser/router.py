@@ -68,7 +68,7 @@ async def execute_browser_task(request: BrowserTaskRequest):
     )
 
     try:
-        from src.llm_provider import clear_user_keys, set_user_keys
+        from src.llm_provider import set_user_keys
         from src.task2_browser.agent import BrowserAgent
 
         # Per-request user keys (NVIDIA + OpenRouter) — get_llm reads them from

@@ -17,6 +17,7 @@ the server owner's token budget.
 
 from __future__ import annotations
 
+import contextvars
 import os
 from typing import Optional
 
@@ -31,8 +32,6 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # `set_user_keys()` before invoking the agent/pipeline. get_llm consults
 # this when the explicit `user_*_key` arguments are absent. Uses
 # contextvars so concurrent requests don't trample each other.
-import contextvars
-
 _user_openrouter_key_ctx: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
     "user_openrouter_key_ctx", default=None
 )

@@ -107,3 +107,75 @@ class TestEvaluator:
         )
         assert not passed
         assert "value" in msg
+
+
+class TestUserKeyContextvars:
+    """Per-request user-key contextvars in src/llm_provider.py.
+
+    Routers call set_user_keys() at the start of every request so that
+    get_llm() — invoked deep inside agents/healers/refiners — picks up the
+    user-supplied key without each call site needing to thread it through.
+    """
+
+    def test_set_and_clear_openrouter(self):
+        from src.llm_provider import (
+            _user_openrouter_key_ctx,
+            clear_user_keys,
+            set_user_keys,
+        )
+
+        clear_user_keys()
+        assert _user_openrouter_key_ctx.get() is None
+        set_user_keys(openrouter="sk-or-v1-test")
+        assert _user_openrouter_key_ctx.get() == "sk-or-v1-test"
+        clear_user_keys()
+        assert _user_openrouter_key_ctx.get() is None
+
+    def test_set_nvidia_only(self):
+        from src.llm_provider import (
+            _user_nvidia_key_ctx,
+            _user_openrouter_key_ctx,
+            clear_user_keys,
+            set_user_keys,
+        )
+
+        clear_user_keys()
+        set_user_keys(nvidia="nvapi-test-1234")
+        assert _user_nvidia_key_ctx.get() == "nvapi-test-1234"
+        # OpenRouter key should remain unset
+        assert _user_openrouter_key_ctx.get() is None
+        clear_user_keys()
+
+    def test_get_llm_reads_contextvar_when_arg_absent(self):
+        """get_llm() should consult the contextvar if no explicit key is passed."""
+        from src.llm_provider import clear_user_keys, get_llm, set_user_keys
+
+        clear_user_keys()
+        # Use NVIDIA-hosted model; supply a dummy NVIDIA key via contextvar.
+        # We don't actually call the network — just confirm get_llm doesn't
+        # raise the "API key required" ValueError.
+        set_user_keys(nvidia="nvapi-fake-but-non-empty")
+        try:
+            llm = get_llm("moonshotai/kimi-k2.6")
+            # If we got here, the contextvar key was accepted.
+            assert llm is not None
+        finally:
+            clear_user_keys()
+
+    def test_explicit_arg_wins_over_contextvar(self):
+        """Explicit user_*_key argument should take precedence over the contextvar."""
+        from langchain_openai import ChatOpenAI
+
+        from src.llm_provider import clear_user_keys, get_llm, set_user_keys
+
+        clear_user_keys()
+        set_user_keys(nvidia="nvapi-from-ctx")
+        try:
+            llm = get_llm(
+                "moonshotai/kimi-k2.6", user_nvidia_key="nvapi-from-explicit-arg"
+            )
+            assert isinstance(llm, ChatOpenAI)
+            # The api_key on the wrapper is a SecretStr — coerce to string and check
+            assert "from-explicit-arg" in str(llm.openai_api_key.get_secret_value())
+        finally:
+            clear_user_keys()
