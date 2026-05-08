@@ -68,6 +68,7 @@ def get_llm(
     temperature: float = 0.0,
     max_tokens: Optional[int] = None,
     settings: Optional[Settings] = None,
+    json_mode: bool = False,
 ) -> BaseChatModel:
     """
     Create a LangChain chat model instance for the given model name.
@@ -80,6 +81,10 @@ def get_llm(
         temperature: Sampling temperature. Default 0.0 for deterministic output.
         max_tokens: Max tokens for response. Uses model default if None.
         settings: Settings instance. Uses singleton if None.
+        json_mode: When True, request response_format={"type":"json_object"}.
+            All major OpenAI-compat backends (OpenRouter, NVIDIA NIM ≥2024-12)
+            support this and it removes a whole class of "could not parse JSON"
+            errors. Silently ignored by older backends.
 
     Returns:
         BaseChatModel instance ready for .invoke() / .ainvoke() / .stream()
@@ -128,6 +133,7 @@ def get_llm(
             max_tokens=max_tokens,
             extra_body=extra_body,
             provider_label="openrouter",
+            json_mode=json_mode,
         )
 
     if provider == LLMProvider.NVIDIA:
@@ -152,6 +158,7 @@ def get_llm(
             max_tokens=max_tokens,
             extra_body=extra_body,
             provider_label="nvidia",
+            json_mode=json_mode,
         )
 
     raise ValueError(f"Unsupported provider: {provider}")
@@ -165,6 +172,7 @@ def _create_openai_compat(
     max_tokens: int,
     extra_body: Optional[dict] = None,
     provider_label: str = "openai",
+    json_mode: bool = False,
 ) -> BaseChatModel:
     """Universal OpenAI-compatible chat model.
 
@@ -213,6 +221,15 @@ def _create_openai_compat(
     # **kwargs and forwards to the openai SDK which accepts extra_body.
     if extra_body:
         chat_kwargs["extra_body"] = extra_body
+
+    # JSON mode (response_format) eliminates a whole class of "could not
+    # parse" errors when the prompt expects strict JSON output. Vision-capable
+    # OpenRouter models, kimi-k2.6, glm-5.1, and gpt-5.5 all support it.
+    # Skipped on thinking-mode wrappers (DeepSeek-V4-Pro NIM) since the
+    # provider's own response template handles structure already.
+    if json_mode:
+        chat_kwargs["model_kwargs"] = chat_kwargs.get("model_kwargs", {}) or {}
+        chat_kwargs["model_kwargs"]["response_format"] = {"type": "json_object"}
 
     return ChatOpenAI(**chat_kwargs)
 

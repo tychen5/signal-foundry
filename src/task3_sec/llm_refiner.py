@@ -12,7 +12,6 @@ See prompts/sec_extraction/README.md for iteration history.
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import time
 from typing import Optional
@@ -129,7 +128,21 @@ async def refine_boundaries(
     # there are 15 boundaries to refine. kimi-k2.6 is fast (~3 s) and accurate
     # enough for the ±500-char heading-detection task.
     refine_model = model_name or "moonshotai/kimi-k2.6"
-    llm = get_llm(model_name=refine_model, user_openrouter_key=user_api_key, temperature=0.0)
+    # json_mode forces response_format={"type":"json_object"} on backends that
+    # support it (OpenRouter VLMs, kimi-k2.6, glm-5.1, gpt-5.5). Eliminates
+    # ```json fence parsing failures and prose preambles. The boundary-refine
+    # prompt expects strict JSON output, so this is a pure win on supported
+    # backends and silently falls back to text mode on older ones.
+    try:
+        llm = get_llm(
+            model_name=refine_model,
+            user_openrouter_key=user_api_key,
+            temperature=0.0,
+            json_mode=True,
+        )
+    except TypeError:
+        # Older get_llm signature without json_mode — graceful fallback
+        llm = get_llm(model_name=refine_model, user_openrouter_key=user_api_key, temperature=0.0)
 
     refined_boundaries = list(parse_result.boundaries)  # Copy
 
