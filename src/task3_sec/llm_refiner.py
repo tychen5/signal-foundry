@@ -57,9 +57,10 @@ def _load_versioned_prompt(stem: str) -> str:
     return ""
 
 
-# v3 boundary-refine prompt adds multi-snapshot vision instructions +
-# explicit status detection guidance (extracted / incorporated / N/A / reserved).
-# Falls back to v2 if v3 missing.
+# v4 boundary-refine prompt adds edge-case hardening: combined items ("ITEMS 1 AND 2"),
+# SPAC/blank-check N/A detection, early EDGAR ASCII format, going-concern false-positive
+# prevention, and confidence calibration guide.
+# Falls back v3 → v2 → v1 if a version is missing.
 BOUNDARY_REFINE_PROMPT = _load_versioned_prompt("boundary_refine")
 MISSING_ITEM_PROMPT = _load_prompt("v2_missing_item_detect.txt")
 
@@ -103,7 +104,14 @@ async def refine_boundaries(
             key=lambda b: (b.confidence, b.start_pos),
         )[:forced_limit]
 
-    if not low_confidence:
+    # If no low-confidence boundaries AND we already have a full item set,
+    # skip the LLM entirely — nothing to improve.
+    # But if items_found is suspiciously low (< 10), keep going so
+    # _detect_missing_items can scan gaps even when the few found boundaries
+    # happen to have high confidence (e.g. old-format filings where only the
+    # first 3 items were detected by the rule parser).
+    few_items = parse_result.items_found < 10
+    if not low_confidence and not few_items:
         logger.info("no_refinement_needed", all_above_threshold=confidence_threshold)
         return parse_result
 

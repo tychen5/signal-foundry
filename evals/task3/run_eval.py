@@ -93,6 +93,10 @@ def _score_case(case: dict[str, Any], result: ExtractionResult) -> dict[str, Any
         if item.status == ItemStatus.NOT_FOUND and item.item_number not in allow_missing
     ]
 
+    # Compute average confidence for extracted items (shows LLM/vision benefit even on pass cases)
+    conf_items = [item for item in result.items if item.confidence > 0.0]
+    avg_confidence = round(sum(i.confidence for i in conf_items) / len(conf_items), 3) if conf_items else 0.0
+
     return {
         "case_id": case["case_id"],
         "passed": passed,
@@ -101,6 +105,7 @@ def _score_case(case: dict[str, Any], result: ExtractionResult) -> dict[str, Any
         "items_extracted": len(extracted_items),
         "missing_items": missing_items,
         "status_counts": _status_counts(result),
+        "avg_confidence": avg_confidence,
         "latency_ms": result.processing_metadata.total_latency_ms,
         "cost_usd": result.processing_metadata.total_cost_usd,
         "llm_calls": result.processing_metadata.llm_calls,
@@ -181,6 +186,9 @@ def _summarize(scores: list[dict[str, Any]]) -> dict[str, Any]:
         if failure_type:
             failure_types[failure_type] = failure_types.get(failure_type, 0) + 1
 
+    confidences = [score["avg_confidence"] for score in scores if score.get("avg_confidence", 0) > 0]
+    llm_triggered = sum(1 for score in scores if score.get("llm_calls", 0) > 0)
+
     return {
         "cases": len(scores),
         "passed": len(passed),
@@ -188,6 +196,8 @@ def _summarize(scores: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_latency_ms": round(mean(latencies), 1) if latencies else 0.0,
         "avg_cost_usd": round(mean(costs), 6) if costs else 0.0,
         "total_cost_usd": round(sum(costs), 6),
+        "avg_confidence": round(mean(confidences), 3) if confidences else 0.0,
+        "llm_triggered_cases": llm_triggered,
         "failure_types": failure_types,
     }
 
@@ -204,6 +214,8 @@ def _write_markdown_report(report_path: Path, payload: dict[str, Any]) -> None:
         f"- Success rate: {summary['success_rate']}",
         f"- Average latency ms: {summary['avg_latency_ms']}",
         f"- Total cost USD: {summary['total_cost_usd']}",
+        f"- Average confidence: {summary.get('avg_confidence', 'n/a')}",
+        f"- LLM triggered cases: {summary.get('llm_triggered_cases', 0)}",
         f"- Failure types: {summary['failure_types']}",
         "",
         "## Cases",
@@ -211,10 +223,12 @@ def _write_markdown_report(report_path: Path, payload: dict[str, Any]) -> None:
     ]
     for score in payload["scores"]:
         status = "PASS" if score["passed"] else "FAIL"
+        llm_flag = f", llm_calls={score.get('llm_calls', 0)}" if score.get('llm_calls', 0) > 0 else ""
         lines.append(
             f"- {status} `{score['case_id']}`: items_extracted={score['items_extracted']}, "
-            f"missing={score['missing_items']}, latency_ms={score['latency_ms']}, "
-            f"failure={score.get('failure_type')}"
+            f"conf={score.get('avg_confidence', 'n/a')}, "
+            f"missing={score['missing_items']}, latency_ms={score['latency_ms']}"
+            f"{llm_flag}, failure={score.get('failure_type')}"
         )
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

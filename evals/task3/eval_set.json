@@ -1082,5 +1082,201 @@
         "12": "incorporated_by_reference"
       }
     }
+  },
+  {
+    "case_id": "t3_enron_2000_complex_segments",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001024401",
+      "accession_number": "0001024401-01-500010"
+    },
+    "expected_behavior": "Enron Corp/OR/ FY 2000 10-K (filed 2001-04-02, accession 0001024401-01-500010). Complex multi-segment conglomerate with natural gas, electricity, broadband, and financial trading segments — each with its own sub-headings. Early 2001 filing predates inline XBRL; uses plain-text ASCII format with non-standard section boundaries. The diverse segment vocabulary and dense cross-referencing between items is likely to trigger LLM boundary refinement. This filing pre-dates the accounting fraud exposure, so it appears 'clean' structurally while having very complex segment disclosures.",
+    "difficulty": "edge_case",
+    "tags": [
+      "pre_bankruptcy",
+      "complex_segments",
+      "energy_trading",
+      "conglomerate",
+      "early_2000s_text",
+      "llm_trigger_candidate",
+      "vision_benefit_candidate"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001024401.json",
+      "note": "ENRON CORP/OR/ CIK=0001024401. Accession 0001024401-01-500010 = FY2000 10-K filed 2001-04-02."
+    },
+    "assertions": {
+      "min_items_extracted": 15,
+      "required_items": [
+        "1",
+        "7",
+        "7A",
+        "8"
+      ],
+      "allow_missing_recent_items": [
+        "1A",
+        "1B",
+        "1C",
+        "9A",
+        "9B",
+        "9C",
+        "15",
+        "16"
+      ]
+    }
+  },
+  {
+    "case_id": "t3_worldcom_2001_telco_pre_fraud",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000723527",
+      "accession_number": "0001005477-02-001226"
+    },
+    "expected_behavior": "WorldCom Inc (CIK 0000723527, now MCI Inc) FY 2001 10-K (filed 2002-04-01, accession 0000928385-02-001285) — the last annual report before the $11B accounting fraud was exposed in June 2002 and July 2002 bankruptcy. Complex multi-segment telecom structure integrating MCI and WorldCom operations. Plain-text filing format (d10k.txt) with non-standard section boundaries. Heavy regulatory disclosures in Item 3. High probability of triggering LLM boundary refinement due to plain-text format and segment complexity.",
+    "difficulty": "edge_case",
+    "tags": [
+      "pre_bankruptcy",
+      "telecom",
+      "complex_segments",
+      "accounting_fraud_era",
+      "plain_text_format",
+      "llm_trigger_candidate",
+      "vision_benefit_candidate"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000723527.json",
+      "note": "WorldCom Inc CIK=0000723527 (company later became MCI Inc). Accession 0000928385-02-001285 = FY2001 10-K filed 2002-04-01."
+    },
+    "assertions": {
+      "min_items_extracted": 15,
+      "required_items": [
+        "1",
+        "7",
+        "7A",
+        "8"
+      ],
+      "allow_missing_recent_items": [
+        "1A",
+        "1B",
+        "1C",
+        "9A",
+        "9B",
+        "9C",
+        "15",
+        "16"
+      ]
+    }
+  },
+  {
+    "case_id": "t3_lehman_2007_investment_bank",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000806085",
+      "accession_number": "0001104659-08-005476"
+    },
+    "expected_behavior": "Lehman Brothers Holdings Inc FY 2007 10-K (filed 2008-01-29) — the last full-year annual report before the September 2008 bankruptcy. Dense investment banking structure with extensive CDO/structured finance disclosures in Item 7/7A. Very long Item 1A (risk factors) covering mortgage exposure, counterparty risk, leverage. Filing is large (~5-8 MB normalized). The dense quantitative risk tables and numerous off-balance-sheet entities make boundary detection between financial statement sub-sections difficult for rule-only parsing. Likely to trigger LLM refinement and benefit from visual layout context.",
+    "difficulty": "edge_case",
+    "tags": [
+      "pre_bankruptcy",
+      "investment_banking",
+      "financial_crisis",
+      "large_filing",
+      "dense_risk_tables",
+      "llm_trigger_candidate",
+      "vision_benefit_candidate"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000806085.json",
+      "note": "CIK 0000806085 = Lehman Brothers Holdings Inc (post-bankruptcy the entity became PLAN TRUST but CIK is preserved). Accession 0001104659-08-005476 = FY2007 10-K filed 2008-01-29."
+    },
+    "assertions": {
+      "min_items_extracted": 16,
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8"
+      ],
+      "allow_missing_recent_items": [
+        "1C",
+        "9C",
+        "16"
+      ]
+    }
+  },
+  {
+    "case_id": "t3_sears_2017_going_concern",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001310067"
+    },
+    "expected_behavior": "Sears Holdings Corporation FY 2017 10-K — the final full annual report before the October 2018 Chapter 11 bankruptcy. Contains explicit going concern language in Item 7 MD&A and Item 9A. Complex retail structure with Sears and Kmart store networks, Lands' End, and multiple real-estate spinoffs. Tests going-concern status classification (should remain 'extracted', not misclassified). Includes extensive Item 3 (Legal Proceedings) and dense Item 1A (risk factors) around liquidity risk. The going-concern language should NOT cause false-positive 'not_applicable' status on these items.",
+    "difficulty": "edge_case",
+    "tags": [
+      "pre_bankruptcy",
+      "retail",
+      "going_concern",
+      "complex_structure",
+      "reit_spinoff",
+      "llm_trigger_candidate"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001310067.json",
+      "note": "No accession specified — fetcher finds the most recent 10-K (FY2017, the last full-year before Oct 2018 bankruptcy)"
+    },
+    "assertions": {
+      "min_items_extracted": 16,
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8"
+      ],
+      "expected_status_items": {
+        "7": "extracted",
+        "9A": "extracted"
+      },
+      "allow_missing_recent_items": [
+        "1C",
+        "9C",
+        "16"
+      ]
+    }
+  },
+  {
+    "case_id": "t3_rivian_2023_ev_first_year",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0001874178"
+    },
+    "expected_behavior": "Rivian Automotive FY 2022 or 2023 10-K — first or second full annual report as a public company. Novel Item 1 vocabulary around EV manufacturing (Enduro drive units, Rivian Adventure Network, commercial van fleet for Amazon). Complex financial engineering in Items 7/8 (negative gross margin, pre-revenue scaling, stock-based compensation disclosures). Tests parser flexibility on first-year public company filings where Item 1 business description uses unusual technical vocabulary that could confuse section-boundary detection.",
+    "difficulty": "normal",
+    "tags": [
+      "ev_startup",
+      "first_year_public",
+      "novel_vocabulary",
+      "pre_profitability",
+      "modern_html"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0001874178.json",
+      "note": "No accession — fetcher finds most recent 10-K"
+    },
+    "assertions": {
+      "min_items_extracted": 18,
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "8",
+        "15"
+      ]
+    }
   }
 ]

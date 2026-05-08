@@ -366,10 +366,10 @@ async def find_10k_filing(
         if f["form"] in ("10-K", "10-K/A", "20-F", "20-F/A", "10-KSB", "10-KSB/A")
     ]
 
-    if not filings_10k:
-        raise ValueError(f"No 10-K / 20-F filings found for CIK {cik}")
-
-    # Find specific filing
+    # Find specific filing — search recent list first, then older submission pages.
+    # Do NOT raise on empty filings_10k yet: the target accession may live in an
+    # older submissions page (e.g. Lehman Brothers whose 10-K predates the 1000-
+    # filing recent window).
     target = None
     if accession_number:
         acc_clean = accession_number.strip()
@@ -405,6 +405,10 @@ async def find_10k_filing(
             archive_target["company_name"] = metadata["company_name"]
             return archive_target
         raise ValueError(f"10-K filing accession {accession_number} not found for CIK {cik}")
+
+    # Only raise "no filings at all" after exhausting all lookup paths.
+    if not target and not filings_10k:
+        raise ValueError(f"No 10-K / 20-F filings found for CIK {cik}")
 
     if not target:
         if year:

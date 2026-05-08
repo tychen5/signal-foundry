@@ -83,7 +83,7 @@ RUN_LIVE_EVALS=1 pytest tests/test_live_evals.py -v
 
 # Run evals (each writes JSON + Markdown report to evals/<task>/results/)
 python -m evals.task1.run_eval                # 5 cases, ~30s, ~$0.007
-python -m evals.task3.run_eval --skip-xbrl    # 27 SEC filings, ~$0 rule path
+python -m evals.task3.run_eval --skip-xbrl    # 35 SEC filings, ~$0 rule path
 python -m evals.task3.run_eval --allow-llm --vision --force-llm --timeout 300
 python -m evals.task2.run_eval --vision --timeout 120   # 38-case set, Playwright + LLM
 ```
@@ -506,28 +506,36 @@ Source: [`evals/task1/results/task1_eval_20260506T105938Z.md`](evals/task1/resul
 
 All five deterministic checks (`no_crash`, `has_result`, `correct_skill`, `dry_run_no_tag`, `has_summary`) pass at 100%. Cache-hit rate on a repeat run jumps to 100% (commit SHA didn't change), driving cost to **$0**.
 
-### Task 3 — latest committed sweep: 18/18 pass; current eval set: 27 filings
+### Task 3 — latest eval sweep: 35/35 pass (100%); $0 rule-only cost
 
-Source: [`evals/task3/results/task3_eval_20260507T024548Z.md`](evals/task3/results/task3_eval_20260507T024548Z.md)
+Source: [`evals/task3/results/task3_eval_20260508T092259Z.md`](evals/task3/results/task3_eval_20260508T092259Z.md)
 
 | Metric | Value |
 |--------|-------|
-| Cases in committed run | 18 |
-| Cases now in eval set | 27 |
+| Cases in eval set | **35** |
 | Success rate | **100.0%** |
-| Avg latency | 2 434 ms |
-| Total cost | **$0.00** (rule-only path) |
+| Avg latency | 1 568 ms |
+| Total cost | **$0.00** (rule-only path across all 35 cases) |
+| Avg confidence | 0.890 |
+| LLM triggered | 0 cases (selective LLM fires only when confidence < 0.55 or items_found < 10) |
+| Prompt version | v4 boundary-refine (edge-case hardening: combined items, SPAC N/A, early ASCII, going-concern guard) |
 
-| Coverage slice | Representative filings | What it proves |
+| Coverage slice | Representative filings | What it tests |
 |---|---|---|
-| Modern mega-cap 10-K | Apple, Microsoft, JPMorgan, Exxon, Tesla | Standard HTML + optional-item policy |
-| Older / legacy formats | Apple 2005, Costco 2016 10-K/A | Pre-cybersecurity-rule and amendment behavior |
-| Industry spread | Pfizer, Boeing, Berkshire, GameStop, Hertz | Healthcare, aerospace, insurance, retail, post-bankruptcy accounting |
-| Cross-form edge cases | TSMC 20-F, Toyota 20-F | Foreign private issuer forms with a different item schema |
-| Proxy-heavy incorporation | IBM 2025 | Part III proxy references detected without body-word false positives |
-| New LLM/vision-trigger candidates | American Express 1994 plain text, asset-backed trust N/A filing, Kingsoft Cloud 20-F duplicate heading, Red Metal 20-F reserved item | Old EDGAR text, status classification, ToC-vs-heading ambiguity, small-cap foreign issuer formatting |
+| Modern mega-cap 10-K | Apple 2023, Microsoft 2023, JPMorgan 2025, Exxon 2023, Tesla 2023, Nvidia 2024 | Standard inline-XBRL HTML, optional-item policy |
+| Small / mid-cap | Small company 2024, Rivian 2023 first-year EV, Coinbase 2024 crypto, GameStop meme-era | Size variation, new-industry formats |
+| Industry spread | Pfizer 2023, Boeing 2024, AT&T 2023, Wells Fargo 2023, Realty Income REIT, Ares Capital BDC | Healthcare, aerospace, banking, telecom, REIT, BDC |
+| Conglomerate / unusual structure | Berkshire 2024, GE 2023, Ford 2023 large filing | Multi-segment complexity, unusual heading formats |
+| Older / legacy formats | Apple 2005 (pre-cybersecurity rule), AmEx 1994 (plain-text EDGAR), Costco 2016 10-K/A | Pre-HTML normalization, legacy ASCII format, amendment behavior |
+| Pre-bankruptcy / financial crisis | Enron Corp FY2000, WorldCom FY2001, Lehman Brothers FY2007 | Early-2000s HTML structure, dense financial disclosures |
+| Post-bankruptcy / going concern | Hertz 2025, Sears 2017 (going-concern language) | v4 prompt guards against going-concern → not_applicable false positive |
+| Amendments (10-K/A) | Tesla 2025 amendment, Costco 2016 amendment | Partial filings: only amended items present |
+| Foreign private issuers (20-F) | TSMC 2026, Toyota 2025, Kingsoft Cloud 2022, Red Metal 2025 | Different item schema, duplicate/reserved headings |
+| Special entity types | Asset-Backed Trust 2011 (mass N/A), IBM 2025 proxy-heavy | SPV N/A classification, Part III incorporation by reference |
 
-These are real downloads from `sec.gov/Archives/edgar/data/...`, parsed end-to-end (raw → normalized → rule-segmented → validated → optional XBRL cross-check). The latest run intentionally includes 20-F and 10-K/A cases; these are not perfect 10-K analogues, and the pipeline marks absent 10-K items as `not_found` rather than hallucinating content.
+The fetcher fix in this iteration: `find_10k_filing` no longer raises `ValueError` before checking older submissions pages — enabling older companies (e.g. Lehman, Enron, WorldCom) whose 10-K filings pre-date the 1 000-filing recent window. The LLM refiner now also runs `_detect_missing_items` when `items_found < 10` even if all found boundaries are high-confidence (prevents silent gap-skip on old plain-text filings).
+
+**LLM + vision is always available as a fallback** (`--allow-llm --vision --force-llm` flags or API `force_llm=true`). The vision benchmark (`evals/run_vision_benchmark.py`) uses `--force-llm-task3` to render ±500-char text snippets as 3-tier JPEG snapshots (header zone / local context / neighbour context) and compare LLM accuracy with and without visual layout context.
 
 ### Task 2 — Live eval (3 runs across 3 different models)
 

@@ -25,9 +25,11 @@ DEFAULT_TASK2_CASES = [
     "t2_vision_table_layout",
 ]
 DEFAULT_TASK3_CASES = [
-    "t3_apple_2005_old_format",
-    "t3_tsmc_20f_2026_foreign_issuer",
-    "t3_ibm_2025_proxy_heavy",
+    "t3_american_express_1994_plain_text",
+    "t3_asset_backed_trust_2011_not_applicable",
+    "t3_kingsoft_cloud_2022_20f_duplicate_heading",
+    "t3_enron_2000_complex_segments",
+    "t3_lehman_2007_investment_bank",
 ]
 ROOT = Path(__file__).resolve().parent
 
@@ -133,6 +135,8 @@ async def _run_task3_case(
         }
     meta = result.processing_metadata
     extracted = sum(1 for item in result.items if item.status.value != "not_found")
+    conf_items = [item for item in result.items if item.confidence > 0.0]
+    avg_conf = round(sum(i.confidence for i in conf_items) / len(conf_items), 3) if conf_items else 0.0
     return {
         "task": "task3",
         "case_id": case["case_id"],
@@ -142,6 +146,7 @@ async def _run_task3_case(
         "ok": True,
         "items_extracted": extracted,
         "items_total": len(result.items),
+        "avg_confidence": avg_conf,
         "cost_usd": meta.total_cost_usd,
         "latency_ms": meta.total_latency_ms,
         "llm_calls": meta.llm_calls,
@@ -199,11 +204,13 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
 
     lines.extend(["", "## Rows", ""])
     for row in payload["rows"]:
-        metric = (
-            f"items={row.get('items_extracted')}/{row.get('items_total')}"
-            if row["task"] == "task3"
-            else f"status={row.get('status')}, steps={row.get('steps')}"
-        )
+        if row["task"] == "task3":
+            metric = (
+                f"items={row.get('items_extracted')}/{row.get('items_total')}, "
+                f"conf={row.get('avg_confidence', 'n/a')}"
+            )
+        else:
+            metric = f"status={row.get('status')}, steps={row.get('steps')}"
         lines.append(
             f"- `{row['task']}` `{row['case_id']}` `{row['model']}` "
             f"vision={row['use_vision']}: {metric}, "
