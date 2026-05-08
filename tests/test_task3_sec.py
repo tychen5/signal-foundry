@@ -249,6 +249,43 @@ class TestNormalizer:
         """Plain text should be detected."""
         assert detect_format("FORM 10-K\nItem 1. Business\n") == "text"
 
+    def test_detect_format_html_after_long_sgml_preamble(self):
+        """Real EDGAR SGML headers for big filers can run 5–30 kB before any
+        `<html>` appears. The detector must look beyond 5 kB or it
+        misclassifies HTML filings as plain text and routes them to the wrong
+        normalizer.
+        """
+        # 12 kB of SGML preamble (mimics EDGAR's verbose machine-generated
+        # header for a financial-holding-company filing) followed by HTML
+        preamble = "ACCESSION NUMBER: 0000320193-93-000001\n" * 300
+        sgml_doc = (
+            preamble
+            + "<DOCUMENT><TYPE>10-K<TEXT>"
+            + "<html><body><h1>Item 1. Business</h1></body></html>"
+            + "</TEXT></DOCUMENT>"
+        )
+        # Strip the SGML wrapper first (this is what normalize_filing does
+        # internally), then format-detect the inner document.
+        from src.task3_sec.normalizer import (
+            extract_primary_10k_document,
+        )
+        inner = extract_primary_10k_document(sgml_doc)
+        assert "<html" in inner.lower()
+        assert detect_format(inner) == "html"
+
+    def test_extract_primary_10k_document_long_sgml_preamble(self):
+        """If SGML preamble is > 10 kB, extraction must still find the
+        primary 10-K block and not silently return the unstripped content."""
+        from src.task3_sec.normalizer import extract_primary_10k_document
+        preamble = "HEADER: foo\n" * 5000  # ~60 kB
+        full = (
+            preamble
+            + "<DOCUMENT><TYPE>10-K<TEXT>INNER_BODY_MARKER</TEXT></DOCUMENT>"
+        )
+        result = extract_primary_10k_document(full)
+        assert "INNER_BODY_MARKER" in result
+        assert "HEADER: foo" not in result, "SGML preamble must be stripped"
+
     def test_normalize_html_removes_scripts(self):
         """Scripts and styles should be removed."""
         html = "<html><body><script>var x=1;</script><p>Content</p></body></html>"

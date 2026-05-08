@@ -26,10 +26,16 @@ def detect_format(content: str) -> str:
     """
     Detect the filing format.
 
+    Scans a generous head window because SEC SGML preambles (header metadata)
+    can be 5–15 kB before any `<html>` tag, and old filings sometimes have
+    even longer EDGAR-machine-generated headers. Looking at only the first
+    5 kB silently misclassifies these as plain text and routes them through
+    the wrong normalizer.
+
     Returns:
         "xbrl_html" | "html" | "text"
     """
-    content_lower = content[:5000].lower()
+    content_lower = content[:50_000].lower()
     if "ix:nonnumeric" in content_lower or "ix:nonfraction" in content_lower:
         return "xbrl_html"
     elif "<html" in content_lower or "<body" in content_lower:
@@ -69,8 +75,13 @@ def extract_primary_10k_document(content: str) -> str:
     exhibits and XBRL files. For item-level parsing we only want the document
     whose `<TYPE>` is `10-K` or `10-K/A`; if no SGML wrapper is present, return
     the original content unchanged.
+
+    Search window is wide because SGML preambles for large filers (Berkshire,
+    GE, financial holding companies) can be 30+ kB before the first
+    `<DOCUMENT>` block. Earlier 10 kB threshold silently passed those through
+    unstripped.
     """
-    if "<DOCUMENT>" not in content[:10000].upper():
+    if "<DOCUMENT>" not in content[:80_000].upper():
         return content
 
     document_pattern = re.compile(r"<DOCUMENT>(?P<document>.*?)</DOCUMENT>", re.IGNORECASE | re.DOTALL)
