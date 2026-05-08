@@ -185,8 +185,34 @@ def normalize_cik(cik: str) -> str:
 
 
 def normalize_accession(accession: str) -> str:
-    """Normalize accession number — keep dashes for display, strip for URLs."""
-    return accession.strip()
+    """Normalize accession number — keep dashes for display, strip for URLs.
+
+    Real SEC accessions follow the form ``\\d{10}-\\d{2}-\\d{6}`` (with
+    dashes) or 18 contiguous digits (no dashes). We normalise both into
+    the canonical dashed form so downstream URL construction and the
+    Submissions API filtering work the same way regardless of input
+    style. Invalid shapes are returned unchanged — the validator
+    elsewhere is responsible for surfacing a clear error.
+    """
+    s = accession.strip()
+    # Already in canonical dashed form
+    if re.fullmatch(r"\d{10}-\d{2}-\d{6}", s):
+        return s
+    # 18-digit no-dash form — restore dashes
+    if re.fullmatch(r"\d{18}", s):
+        return f"{s[:10]}-{s[10:12]}-{s[12:]}"
+    return s
+
+
+def is_valid_accession_shape(accession: str) -> bool:
+    """Cheap shape check for SEC accession numbers.
+
+    Returns True only for the two valid forms: 18 digits with two
+    dashes (``0000320193-23-000106``) or 18 contiguous digits. Anything
+    else (typos, partial copy, X-or-letter in the middle) is rejected.
+    """
+    s = accession.strip()
+    return bool(re.fullmatch(r"\d{10}-\d{2}-\d{6}", s) or re.fullmatch(r"\d{18}", s))
 
 
 def accession_no_dashes(accession: str) -> str:

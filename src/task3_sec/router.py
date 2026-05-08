@@ -74,6 +74,20 @@ async def extract_10k(request: SECExtractionRequest):
             detail="Provide either 'cik' (with optional 'accession_number') or 'filing_url'",
         )
 
+    # Cheap shape check on accession — catches typos before we burn an SEC
+    # request and a clone roundtrip on a clearly invalid string.
+    if request.accession_number:
+        from src.task3_sec.fetcher import is_valid_accession_shape
+        if not is_valid_accession_shape(request.accession_number):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid accession number shape: {request.accession_number!r}. "
+                    "Expected 18 digits or `\\d{10}-\\d{2}-\\d{6}` (e.g. "
+                    "`0000320193-23-000106`)."
+                ),
+            )
+
     logger.info(
         "sec_extraction_requested",
         cik=request.cik,
@@ -186,6 +200,16 @@ async def stream_extract_10k(request: SECExtractionRequest):
             status_code=400,
             detail="Provide either 'cik' (with optional 'accession_number') or 'filing_url'",
         )
+    if request.accession_number:
+        from src.task3_sec.fetcher import is_valid_accession_shape
+        if not is_valid_accession_shape(request.accession_number):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid accession number shape: {request.accession_number!r}. "
+                    "Expected `\\d{10}-\\d{2}-\\d{6}` or 18 digits."
+                ),
+            )
 
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
 

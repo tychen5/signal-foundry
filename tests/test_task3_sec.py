@@ -589,6 +589,35 @@ class TestFetcher:
         """Accession normalization should strip whitespace."""
         assert normalize_accession("  0000320193-23-000106  ") == "0000320193-23-000106"
 
+    def test_normalize_accession_18_digit_form(self):
+        """18-digit no-dash accession (as found in URL paths) should be
+        re-dashed into the canonical form."""
+        assert (
+            normalize_accession("000032019323000106") == "0000320193-23-000106"
+        )
+
+    def test_is_valid_accession_shape(self):
+        """Cheap shape check rejects clear typos before we burn an SEC
+        round-trip."""
+        from src.task3_sec.fetcher import is_valid_accession_shape
+
+        # Valid forms
+        assert is_valid_accession_shape("0000320193-23-000106") is True
+        assert is_valid_accession_shape("000032019323000106") is True
+        assert is_valid_accession_shape("  0000320193-23-000106 ") is True
+
+        # Invalid: typo with letter
+        assert is_valid_accession_shape("0000320193-23-X00106") is False
+        # Invalid: missing dashes but wrong length
+        assert is_valid_accession_shape("00003201932300010") is False
+        # Invalid: extra dashes
+        assert is_valid_accession_shape("0000-320193-23-000106") is False
+        # Invalid: clearly bogus
+        assert is_valid_accession_shape("hello") is False
+        assert is_valid_accession_shape("") is False
+        # Invalid: 19 digits (off by one)
+        assert is_valid_accession_shape("0000320193230001067") is False
+
     def test_parse_filing_url_metadata(self):
         """SEC Archives filing URLs should expose CIK/accession/document metadata."""
         metadata = parse_filing_url_metadata(
