@@ -482,6 +482,24 @@ async def dismiss_popups(page: Page) -> bool:
         # Japanese
         'button:has-text("同意する")',
         'button:has-text("承諾")',
+        'button:has-text("すべて同意")',
+        # German (DE/AT/CH — extremely common on EU news sites)
+        'button:has-text("Alle akzeptieren")',
+        'button:has-text("Akzeptieren")',
+        'button:has-text("Zustimmen")',
+        'button:has-text("Einverstanden")',
+        # Spanish
+        'button:has-text("Aceptar todo")',
+        'button:has-text("Aceptar")',
+        'button:has-text("De acuerdo")',
+        # French
+        'button:has-text("Tout accepter")',
+        'button:has-text("Accepter")',
+        "button:has-text(\"J'accepte\")",
+        # Korean
+        'button:has-text("수락")',
+        'button:has-text("동의")',
+        'button:has-text("모두 동의")',
         # GDPR-style links/divs
         '[id*="accept" i]',
         '[id*="consent" i]',
@@ -496,10 +514,22 @@ async def dismiss_popups(page: Page) -> bool:
         'button[aria-label*="close" i]',
         'button[aria-label*="dismiss" i]',
         'button.close',
-        # OneTrust (very common on US news sites)
-        '#onetrust-accept-btn-handler',
+        # Major CMP (Consent Management Platform) selectors
+        '#onetrust-accept-btn-handler',  # OneTrust — very common on US news
         '#truste-consent-button',
         '.osano-cm-accept-all',
+        # Quantcast Choice (NYT, Forbes, Reuters)
+        'button.qc-cmp2-summary-buttons[mode="primary"]',
+        'button[aria-label="AGREE"]',
+        # CookieYes / Cookiebot
+        '#cky-btn-accept',
+        '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+        # Didomi (used by Le Monde, France TV, Microsoft)
+        '#didomi-notice-agree-button',
+        # Sourcepoint (EU news / publisher CMP)
+        'button[title="Accept All"]',
+        # Usercentrics
+        'button[data-testid="uc-accept-all-button"]',
     ]
 
     for pattern in consent_patterns:
