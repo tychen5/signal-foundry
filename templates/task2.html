@@ -77,16 +77,17 @@
                     <label>Task Description (natural language)</label>
                     <textarea id="task-desc" placeholder="e.g. Go to Wikipedia and find the population of Tokyo"></textarea>
                     <div class="examples">
-                        <button class="example-btn" onclick="setTask('Go to en.wikipedia.org and find the current population of Tokyo, Japan', 'https://en.wikipedia.org')">📚 Wikipedia lookup</button>
+                        <button class="example-btn" onclick="setTask('Search Wikipedia for &quot;Tokyo&quot; and report the population number from the infobox.', '')">📚 Wikipedia lookup</button>
                         <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story and the comment count', 'https://news.ycombinator.com')">🟧 HN top story</button>
                         <button class="example-btn" onclick="setTask('Go to https://arxiv.org/abs/2509.13753 and report the paper title plus the first two authors', 'https://arxiv.org/abs/2509.13753')">🔬 arXiv paper</button>
-                        <button class="example-btn" onclick="setTask('前往鉅亨網 https://www.cnyes.com/twstock/twse/TWSE.htm 並擷取台股加權指數最新點位', 'https://www.cnyes.com/twstock/twse/TWSE.htm')">💹 cnyes 加權指數 (TW)</button>
+                        <button class="example-btn" onclick="setTask('前往鉅亨網並擷取台股加權指數最新點位', '')">💹 cnyes 加權指數 (TW)</button>
                         <button class="example-btn" onclick="setTask('Go to https://tw.stock.yahoo.com/quote/2330 and return TSMC current price', 'https://tw.stock.yahoo.com/quote/2330')">💰 TSMC quote (TW)</button>
                         <button class="example-btn" onclick="setTask('Go to https://www.linkedin.com/in/satyanadella/ and report Satya Nadella job title', 'https://www.linkedin.com/in/satyanadella/')">🛡️ LinkedIn login wall (anti-hallucination)</button>
                         <button class="example-btn" onclick="setTask('Go to https://example.com and find the email address for European trademark disputes. If not present, say so.', 'https://example.com')">🎯 example.com hallucination guard</button>
                         <button class="example-btn" onclick="setTask('Go to https://en.wikipedia.org/wiki/Mona_Lisa and describe what is shown in the infobox image.', 'https://en.wikipedia.org/wiki/Mona_Lisa'); document.getElementById('use-vision').checked = true;">🖼️ vision image</button>
                         <button class="example-btn" onclick="setTask('Go to https://www.openstreetmap.org/#map=15/48.8584/2.2945 and describe what landmark or area is centered on the map.', 'https://www.openstreetmap.org/#map=15/48.8584/2.2945'); document.getElementById('use-vision').checked = true;">🗺️ vision map</button>
-                        <button class="example-btn" onclick="setTask('Go to https://www.google.com/recaptcha/api2/demo and describe what type of verification challenge is displayed on the page.', 'https://www.google.com/recaptcha/api2/demo'); document.getElementById('use-vision').checked = true;">🚧 CAPTCHA detect</button>
+                        <button class="example-btn" onclick="setTask('Visit https://finance.yahoo.com/quote/AAPL/ and read the current Apple stock price from the visible quote panel.', 'https://finance.yahoo.com/quote/AAPL/'); document.getElementById('use-vision').checked = true;">📈 vision stock quote</button>
+                        <button class="example-btn" onclick="setTask('Open https://www.bbc.com/weather/4163971 and describe the weather conditions shown in the icon for today.', 'https://www.bbc.com/weather/4163971'); document.getElementById('use-vision').checked = true;">🌦️ vision weather icon</button>
                     </div>
                 </div>
             </div>

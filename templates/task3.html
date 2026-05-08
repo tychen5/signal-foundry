@@ -107,12 +107,19 @@
                 </div>
             </div>
             <div class="examples-row">
-                <span style="font-size:0.8rem;color:#475569;">Examples: </span>
+                <span style="font-size:0.8rem;color:#475569;">Modern (rule-only): </span>
                 <button class="example-btn" onclick="setExample('0000320193','0000320193-23-000106')">Apple FY2023</button>
-                <button class="example-btn" onclick="setExample('0000789019','0000789019-23-007654')">Microsoft FY2023</button>
-                <button class="example-btn" onclick="setExample('0000001800','0000001800-23-000004')">Abbott Labs</button>
+                <button class="example-btn" onclick="setExample('0000789019','0000950170-23-035122')">Microsoft FY2023</button>
+                <button class="example-btn" onclick="setExample('0000001800','0001628280-24-005348')">Abbott FY2023</button>
                 <button class="example-btn" onclick="setExample('0000051143','0000051143-25-000015')">IBM proxy-heavy</button>
                 <button class="example-btn" onclick="setExample('0001046179','0001628280-26-025362')">TSMC 20-F</button>
+            </div>
+            <div class="examples-row" style="margin-top:0.4rem;">
+                <span style="font-size:0.8rem;color:#475569;">Edge cases (try with vision + force_llm): </span>
+                <button class="example-btn" onclick="setExample('0001024401','0001024401-01-500010'); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true;" title="Plain-text early EDGAR format, FY2000 — vision helps boundary detection">📜 Enron 2000 (plain text)</button>
+                <button class="example-btn" onclick="setExample('0000723527','0001005477-02-001226'); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true;" title="Pre-fraud telecom, plain text format">📜 WorldCom 2001</button>
+                <button class="example-btn" onclick="setExample('0000806085','0001104659-08-005476'); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true;" title="Last 10-K before 2008 bankruptcy — dense investment-bank disclosures">🏦 Lehman 2007</button>
+                <button class="example-btn" onclick="setExample('0000004962','0000004962-95-000001'); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true;" title="1994 plain-text EDGAR — pre-HTML format">📜 AmEx 1994</button>
             </div>
             <div class="form-row" style="margin-top:1rem;">
                 <div class="form-group">

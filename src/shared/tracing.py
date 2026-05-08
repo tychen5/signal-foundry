@@ -83,17 +83,13 @@ def attach_metadata(metadata: dict[str, Any]) -> None:
 
 
 def trace_url(trace_id: str) -> Optional[str]:
-    """Construct a LangSmith trace URL for the given app trace_id.
+    """Return None — LangSmith doesn't expose stable URLs by project name.
 
-    Note: LangSmith's *run_id* is different from our internal trace_id —
-    the project-level filter (`?filter=trace_id:{X}`) lets reviewers find
-    the run by our id when metadata is attached. Returns None when
-    LangSmith isn't configured.
+    LangSmith requires both an org-id and a project-id (UUIDs) to build a
+    valid project URL, neither of which we can derive from the project
+    NAME alone. Earlier versions returned a guessed URL that always 404'd
+    on the live site. The UI now shows the internal trace_id as a
+    copy-able chip instead — accurate, and the user can paste it into
+    LangSmith's search bar themselves if they have access to the project.
     """
-    if not _langsmith_enabled():
-        return None
-    project = os.environ.get("LANGSMITH_PROJECT", "signal-foundry")
-    base = "https://smith.langchain.com"
-    return (
-        f"{base}/o/projects/p/{project}?filter=eq(trace_id,%22{trace_id}%22)"
-    )
+    return None

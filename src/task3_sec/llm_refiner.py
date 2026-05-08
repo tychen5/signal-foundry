@@ -21,7 +21,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.llm_provider import get_llm
 from src.shared.cost_tracker import get_cost_tracker
-from src.shared.llm_utils import coerce_message_text
+from src.shared.llm_utils import coerce_message_text, extract_json_array, extract_json_object
 from src.shared.logger import get_logger
 from src.task3_sec.rule_parser import ItemBoundary, ParseResult
 from src.task3_sec.schemas import STANDARD_10K_ITEMS
@@ -295,15 +295,14 @@ async def _refine_single_boundary(
         trace_id=trace_id,
     )
 
-    # Parse LLM response
+    # Parse LLM response — robust extractor handles ```json fences, leading
+    # prose, smart quotes, and braces nested inside string literals.
+    result = extract_json_object(response_text)
+    if not result:
+        logger.warning("llm_parse_failed", raw=response_text[:200])
+        return None
+
     try:
-        # Clean JSON from potential markdown wrapping
-        content = response_text.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[-1].rsplit("```", 1)[0]
-
-        result = json.loads(content)
-
         if result.get("is_item_heading", False):
             item_number = str(result.get("item_number", boundary.item_number)).upper()
             if item_number != boundary.item_number:
@@ -321,8 +320,8 @@ async def _refine_single_boundary(
                 source="llm_refined",
                 status_hint=str(result.get("status", "")).strip(),
             )
-    except (json.JSONDecodeError, KeyError) as e:
-        logger.warning("llm_parse_failed", error=str(e), raw=response_text[:200])
+    except (KeyError, TypeError) as e:
+        logger.warning("llm_field_extract_failed", error=str(e), raw=response_text[:200])
 
     return None
 
@@ -388,11 +387,7 @@ async def _detect_missing_items(
                     trace_id=trace_id,
                 )
 
-                content = response_text.strip()
-                if content.startswith("```"):
-                    content = content.split("\n", 1)[-1].rsplit("```", 1)[0]
-
-                items_found = json.loads(content)
+                items_found = extract_json_array(response_text)
                 if isinstance(items_found, list):
                     for item in items_found:
                         new_boundary = ItemBoundary(

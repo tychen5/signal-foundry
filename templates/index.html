@@ -32,8 +32,17 @@
                 <option value="{{ model.id }}">{{ model.display_name }}</option>
                 {% endfor %}
             </select>
-            <input type="password" id="user-api-key" placeholder="Your OpenRouter API Key (only required for OpenRouter models)">
-            <small style="color:#888;display:block;margin-top:0.5rem;">Default Kimi K2.6 is free via NVIDIA NIM (rate-limited). Reviewers wanting Gemini / Claude / GPT must paste their own OpenRouter key above.</small>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.5rem;">
+                <input type="password" id="user-api-key" placeholder="Your OpenRouter API Key (paid; better quality / lower latency)">
+                <input type="password" id="user-nvidia-key" placeholder="Your NVIDIA NIM API Key (free signup at build.nvidia.com)">
+            </div>
+            <input type="password" id="user-langsmith-key" placeholder="Your LangSmith API Key (optional — enables you to trace your runs in your own LangSmith console)" style="margin-top:0.5rem">
+            <small style="color:#888;display:block;margin-top:0.5rem;line-height:1.5;">
+                <strong>BYOK (Bring Your Own Key):</strong>
+                You must paste at least <strong>one</strong> of the OpenRouter or NVIDIA keys for the model dropdown to work — server-bundled keys may rotate or be exhausted. Free NVIDIA signup at <a href="https://build.nvidia.com" target="_blank" style="color:#3b82f6">build.nvidia.com</a> (slower, ~4 req/min rate limit). For Gemini / Claude / GPT, top up an <a href="https://openrouter.ai/credits" target="_blank" style="color:#3b82f6">OpenRouter</a> account — better quality, much faster, pay-per-call.
+                LangSmith is purely <em>optional</em> — paste a key from <a href="https://smith.langchain.com/settings" target="_blank" style="color:#3b82f6">smith.langchain.com/settings</a> to send traces to your own console.
+                Keys are stored in your browser session only (never persisted server-side).
+            </small>
         </div>
 
         <!-- Task Cards (entire card clickable) -->
@@ -83,7 +92,7 @@
 
         <!-- View Skills (Task 1 only) -->
         <div class="quick-actions" style="margin-top:1.5rem">
-            <h3 style="margin-bottom:0.75rem;color:#aaa;font-size:0.95rem">Reviewer launchpad</h3>
+            <h3 style="margin-bottom:0.75rem;color:#aaa;font-size:0.95rem">Quick launchpad</h3>
             <a href="/task2" class="action-link">🌐 Run Browser Agent</a>
             <a href="/task3" class="action-link">📊 Extract SEC Filing</a>
             <a href="/api/v1/skills/list" class="action-link">📋 List CI/CD Skills</a>
@@ -106,19 +115,29 @@
         // Store model selection for API calls
         const modelSelect = document.getElementById('model-select');
         const apiKeyInput = document.getElementById('user-api-key');
+        const nvidiaKeyInput = document.getElementById('user-nvidia-key');
+        const langsmithKeyInput = document.getElementById('user-langsmith-key');
 
         function getModelConfig() {
             return {
                 model_id: modelSelect.value,
-                user_openrouter_key: apiKeyInput.value || null
+                user_openrouter_key: apiKeyInput.value || null,
+                user_nvidia_key: nvidiaKeyInput.value || null,
+                user_langsmith_key: langsmithKeyInput.value || null
             };
         }
         const savedModel = sessionStorage.getItem('sf_model_id');
         const savedKey = sessionStorage.getItem('sf_openrouter_key');
+        const savedNvidia = sessionStorage.getItem('sf_nvidia_key');
+        const savedLangsmith = sessionStorage.getItem('sf_langsmith_key');
         if (savedModel) modelSelect.value = savedModel;
         if (savedKey) apiKeyInput.value = savedKey;
+        if (savedNvidia) nvidiaKeyInput.value = savedNvidia;
+        if (savedLangsmith) langsmithKeyInput.value = savedLangsmith;
         modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
         apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
+        nvidiaKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_nvidia_key', nvidiaKeyInput.value));
+        langsmithKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_langsmith_key', langsmithKeyInput.value));
 
         // Card hover animations
         document.querySelectorAll('.task-card').forEach(card => {

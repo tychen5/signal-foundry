@@ -84,6 +84,15 @@ class ModelSelectionRequest(BaseModel):
             "Useful when the demo server's key is rate-limited or expired."
         ),
     )
+    user_langsmith_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "User's own LangSmith API key (`lsv2_...`). When supplied, this run "
+            "is traced to the user's LangSmith project instead of the server's. "
+            "Purely optional — leave blank to use the server's project (or no "
+            "tracing if the server isn't configured)."
+        ),
+    )
 
     def picked_user_key(self) -> Optional[str]:
         """Return the right user-supplied key for the selected model.

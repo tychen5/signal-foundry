@@ -7,7 +7,7 @@
 **Live demo:** [`https://signal-foundry.zeabur.app`](https://signal-foundry.zeabur.app) (Zeabur, 2 vCPU / 4 GB / 50 GB SSD dedicated)
 
 > Routes: `/` dashboard, `/task1` CI/CD Skills, `/task2` Browser Agent, `/task3` SEC 10-K. JSON APIs under `/api/v1/{skills,browser,sec}/*`. Health at `/health`, live cost ledger at `/metrics`.
-> Browser visits to `/health`, `/metrics`, and `/api/v1/models` render reviewer-friendly HTML dashboards; API clients still receive JSON.
+> Browser visits to `/health`, `/metrics`, and `/api/v1/models` render user-friendly HTML dashboards; API clients still receive JSON.
 
 ---
 
@@ -98,9 +98,9 @@ python -m evals.task2.run_eval --vision --timeout 120   # 38-case set, Playwrigh
 - `GET /metrics` — Live cost / latency / token ledger
 - `GET /api/v1/models` — Model registry (which IDs work, which provider routes)
 
-**Reviewer-friendly model selection.** Default model is `moonshotai/kimi-k2.6` (free, NVIDIA NIM) — works out of the box. For higher quality / higher rate limit, paste your own OpenRouter API key in the UI and pick `google/gemini-3.1-pro-preview` (cheap), `anthropic/claude-opus-4.7` (premium), or `openai/gpt-5.5`. Per-request user keys are NOT stored server-side.
+**User-friendly model selection.** Default model is `moonshotai/kimi-k2.6` (free, NVIDIA NIM) — works out of the box. For higher quality / higher rate limit, paste your own OpenRouter API key in the UI and pick `google/gemini-3.1-pro-preview` (cheap), `anthropic/claude-opus-4.7` (premium), or `openai/gpt-5.5`. Per-request user keys are NOT stored server-side.
 
-**Live progress for slow Task 2 runs.** Browser-agent tasks can take 30-180 s per case (planning → executing → verifying). The Task 2 UI calls `/api/v1/browser/stream` (Server-Sent Events), so reviewers see milestones in real time:
+**Live progress for slow Task 2 runs.** Browser-agent tasks can take 30-180 s per case (planning → executing → verifying). The Task 2 UI calls `/api/v1/browser/stream` (Server-Sent Events), so users see milestones in real time:
 ```
 [10:42:15] 🧭 planning task with google/gemini-3.1-pro-preview
 [10:42:18] ✅ plan ready — 4 step(s)
@@ -112,7 +112,7 @@ python -m evals.task2.run_eval --vision --timeout 120   # 38-case set, Playwrigh
 ```
 No more spinner-and-wait — every step / healer activation / confidence score is visible.
 
-**Errors that explain themselves.** A 4xx/429/500 from the LLM provider is classified into one of `invalid_key | rate_limit | insufficient_credit | quota_exhausted | timeout | no_response | server_error` and surfaced in the UI with an actionable suggestion ("top up at openrouter.ai/credits", "rotate key on console", "wait 30 s and retry"). Reviewers don't have to dig through stack traces.
+**Errors that explain themselves.** A 4xx/429/500 from the LLM provider is classified into one of `invalid_key | rate_limit | insufficient_credit | quota_exhausted | timeout | no_response | server_error` and surfaced in the UI with an actionable suggestion ("top up at openrouter.ai/credits", "rotate key on console", "wait 30 s and retry"). Users don't have to dig through stack traces.
 
 **Live deployment verification (2026-05-07):**
 
@@ -131,9 +131,9 @@ No more spinner-and-wait — every step / healer activation / confidence score i
 
 ---
 
-## API Reference (for reviewers)
+## API Reference (for users)
 
-All examples use the live deployment at `https://signal-foundry.zeabur.app`. Replace with `http://localhost:8080` for local testing. JSON requests; responses are also JSON. The reviewer's own NVIDIA / OpenRouter API key can be passed in the `model` block per-request — never stored server-side.
+All examples use the live deployment at `https://signal-foundry.zeabur.app`. Replace with `http://localhost:8080` for local testing. JSON requests; responses are also JSON. The user's own NVIDIA / OpenRouter API key can be passed in the `model` block per-request — never stored server-side.
 
 ### POST `/api/v1/skills/run` — Task 1: CI/CD Skill against a real GitHub repo
 
@@ -151,7 +151,7 @@ Request body:
 }
 ```
 - `skill_name`: one of `lint-and-test`, `dependency-audit`, `security-scan`, `build-and-release`
-- `dry_run`: required `true` for `build-and-release` unless reviewer explicitly opts in
+- `dry_run`: required `true` for `build-and-release` unless user explicitly opts in
 - `model.model_id`: any model from `/api/v1/models`
 - `model.user_openrouter_key`: optional — supply your own key for OpenRouter models (server uses its own key for NVIDIA models)
 
@@ -246,7 +246,7 @@ Or directly by URL:
 }
 ```
 
-`use_vision=true` is only consulted if Stage 2 LLM boundary refinement actually runs. High-confidence modern HTML filings stay rule-only, so the flag has no cost or quality effect on the normal path. For reviewer demos that need to visibly compare text-only vs multimodal boundary refinement, set `force_llm=true` with an OpenRouter vision model.
+`use_vision=true` is only consulted if Stage 2 LLM boundary refinement actually runs. High-confidence modern HTML filings stay rule-only, so the flag has no cost or quality effect on the normal path. For user demos that need to visibly compare text-only vs multimodal boundary refinement, set `force_llm=true` with an OpenRouter vision model.
 
 Response (success):
 ```json
@@ -327,7 +327,7 @@ The thing that separates this repo from a one-shot prototype:
 ### Harness Guards (added in latest iterations)
 
 - **SSE streaming for Task 2** (`/api/v1/browser/stream`). The agent emits milestone events through an `asyncio.Queue` (`phase_start` → `phase_done` → `step_start`/`step_done` per action with healer flag, confidence, and error → `agent_complete`). Reverse-proxy heartbeat every 20 s prevents Caddy / Zeabur from dropping the connection on long runs. Frontend uses `fetch + ReadableStream` (not `EventSource`) so we can POST the request body in one shot. Without this, the UI was hanging silently on multi-minute browser tasks.
-- **LLM error classifier** (`src/shared/llm_errors.py`). Maps the raw provider exception (regex over the message string + HTTP code) to one of: `invalid_key`, `rate_limit`, `insufficient_credit`, `quota_exhausted`, `timeout`, `no_response`, `server_error`. Each ships with a `suggested_action` string ("top up at openrouter.ai/credits", "rotate key on console", "wait 30 s and retry"). All 3 task routers populate `ExecutionResult.cost_metadata` with the classified payload; the SSE stream emits an `error` event with the same shape; the UI shows a colour-coded banner so reviewers see the cause + the fix, not a 500.
+- **LLM error classifier** (`src/shared/llm_errors.py`). Maps the raw provider exception (regex over the message string + HTTP code) to one of: `invalid_key`, `rate_limit`, `insufficient_credit`, `quota_exhausted`, `timeout`, `no_response`, `server_error`. Each ships with a `suggested_action` string ("top up at openrouter.ai/credits", "rotate key on console", "wait 30 s and retry"). All 3 task routers populate `ExecutionResult.cost_metadata` with the classified payload; the SSE stream emits an `error` event with the same shape; the UI shows a colour-coded banner so users see the cause + the fix, not a 500.
 - **URL-based blocked-page detection** (`src/task2_browser/agent._BLOCKED_URL_MARKERS`). Deterministic check: if the agent's last URL contains `/authwall`, `/login?`, `accounts.google.com/signin`, `/cf-chl`, `/captcha`, `/access-denied`, `edgar/error`, etc., the silent-failure guard flips status to `not_found` *regardless* of what the LLM said. The redirect itself is the evidence. Fires for both `success` and `partial` states.
 - **Idempotency cache + token redaction** (Task 1). Cache key is `cicd:v1:{owner}/{repo}:{branch}:{skill}:{sha[:12]}:{dry_run}`. HEAD SHA is fetched via the GitHub REST API *before* clone, so cache hits skip the entire clone+subprocess pipeline. The clone URL has the token redacted (`https://x-access-token:***@github.com/...`) in every log line. Subprocess env strips `GITHUB_TOKEN`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY` so child processes can't exfiltrate.
 - **Selective vision** (Task 2 + Task 3). `use_vision=true` is opt-in. `is_vision_capable()` checks the model id against a registry (gemini-3.1-pro / claude-opus-4.7 / gpt-5.5); for the 4 NVIDIA NIM text-only models the toggle silently degrades to AOM-only — no `image_url` payload sent, no 4xx surfaced. Task 2 keeps a bounded screenshot history (3 frames) so the LLM sees what *changed* between actions; Task 3 renders 3 zoom levels per uncertain boundary (header zone + local context + neighbour context) with a yellow `<mark>` highlight at the candidate position.
@@ -568,7 +568,7 @@ Reports committed to `evals/task2/results/`.
 
 **What the silent-failure / 429 behavior demonstrates:** The 9-class root cause taxonomy (`v2_healer.txt` extends to 13 classes adding `rate_limit_429`, `login_wall`, `paywall`, `frame_detached`) and the post-hoc `_guard_against_silent_success` numeric grounding check converge to the same outcome — when the agent cannot prove an answer is real, it does NOT mark the task complete. This is the spec's highest-priority requirement.
 
-**Mitigation**: `run_eval.py` now supports `--delay N` (default 5 s) to pace requests within NVIDIA NIM's free-tier rate limit. For higher-quality runs, pass `--model anthropic/claude-opus-4.7` (OpenRouter) — the live UI lets reviewers paste their own key.
+**Mitigation**: `run_eval.py` now supports `--delay N` (default 5 s) to pace requests within NVIDIA NIM's free-tier rate limit. For higher-quality runs, pass `--model anthropic/claude-opus-4.7` (OpenRouter) — the live UI lets users paste their own key.
 
 ### Task 2 — eval set covers 38 real-world cases across 5 difficulty dimensions
 
@@ -645,7 +645,7 @@ Interpretation: Task 2 is where vision clearly pays off when visual context prev
 | Task 2 screenshot history | `use_vision=true` sends a bounded chronological screenshot history to actor + verifier; visual/sparse-AOM pages use capped full-page screenshots | The model can see state changes, modals, maps/charts, and visual-only data instead of relying only on AOM text |
 | Task 2 focused callouts | `annotate_screenshot_with_markers()` can draw numbered bounding boxes for future element-level vision evals | Makes ambiguous UI targets auditable in screenshots without changing the LLM transport schema |
 | Task 3 multi-snapshot context | Stage 2 can attach header-zone, local-context, and neighbor/comparison snapshots around each boundary | Helps distinguish real item headings from ToC/prose mentions and classify `incorporated_by_reference`, `not_applicable`, and `reserved` statuses |
-| Cost guard | Task 3 vision only renders for vision-capable OpenRouter models and is capped by `T3_VISION_MAX`; forced benchmarks are capped by `T3_FORCE_LLM_MAX` | Reviewer demos can show multimodal gains without accidentally turning every filing into a high-cost full-LLM extraction |
+| Cost guard | Task 3 vision only renders for vision-capable OpenRouter models and is capped by `T3_VISION_MAX`; forced benchmarks are capped by `T3_FORCE_LLM_MAX` | User demos can show multimodal gains without accidentally turning every filing into a high-cost full-LLM extraction |
 
 ### LLM provider live integration — 5/5 pass
 
@@ -752,12 +752,16 @@ I treat the `prompts/` directory as a versioned ledger and the AI as a fast-but-
 | ChatOpenAI `.content` returns `[{"type":"text","text":"..."}]` block list for thinking-mode models | All `.content[:200]` / regex / JSON parse sites would crash on thinking-mode responses | Created `src/shared/llm_utils.coerce_message_text`; routed every call site through it | Required the moment we set `deepseek-v4-pro` thinking-mode default |
 | `langchain_nvidia_ai_endpoints` raised `AssertionError("Multiple candidates")` for `deepseek-v4-pro` | Crashed at `ChatNVIDIA.__init__` | Switched default backend to `ChatOpenAI` with `base_url=https://integrate.api.nvidia.com/v1` — NIM is OpenAI-compatible; sidesteps the wrapper entirely | Also fixed `max_tokens` vs `max_completion_tokens` silent-drop |
 | `ChatNVIDIA(max_tokens=...)` silently no-ops because the documented kwarg is `max_completion_tokens` | Thinking-mode models returned empty `.content` with no error | Use `max_completion_tokens` in the dedicated wrapper path; OpenAI-compat path passes it through `max_tokens` | The kind of failure that's much harder to debug than a stack trace |
-
 | `page.accessibility.snapshot()` removed in Playwright ≥1.46; AI wrote code targeting the old API | Observer crashed at startup (`'Page' object has no attribute 'accessibility'`) | Migrated to `page.locator("body").aria_snapshot()` which returns a YAML-like ARIA string directly usable as LLM context — actually a better format than the old dict tree | Every browser agent run silently degraded to no accessibility signal; fixed in-session |
 | `CostTracker.record_call()` required `latency_ms` + `operation` but all 4 Task 2 call sites omitted them | Every LLM call in the browser agent raised `TypeError: missing 2 required positional arguments` and fell back to the error fallback path | Added `_t0 = time.time()` before each `ainvoke()` and explicit `operation=` tag (`"plan"`, `"decide_action"`, `"verify"`, `"heal"`) | Cost tracking was silently broken for all Task 2 runs; zero cost recorded even when LLM was called |
 | XBRL cross-validation crashed with `argument of type 'int' is not iterable` because SEC's `fy` field is an int | Stage 4 of the pipeline silently failed for every Task 3 case (caught and logged; the rule-based result was returned without XBRL verification) | `str(e.get("fy", ""))` coerces to string before substring check | Now all 4 stages of Task 3 fire, including financial-number cross-validation against the official XBRL Company Facts API |
 | Zeabur Python builder didn't include `git` binary at runtime → `git clone` fails with exit 127 | Task 1 returned `sandbox_error: "Command not found: git"` for every live request after the first deploy | Two-pronged fix: (1) Dockerfile + zbpack.json install git system package; (2) `_clone_via_api_tarball` GitHub-API fallback that downloads the repo as a tarball and extracts in pure Python — works even when git isn't installed | Defense in depth: even if Zeabur's image rebuild ever drops git again, the API path keeps Task 1 working |
 | Task 3 LLM refiner's default model was `deepseek-v4-pro` thinking-mode, which takes 200+ s per call. With ~15 boundaries to refine in a typical filing, that's a 50-minute runaway | First call took 245 s on Microsoft 2023; eval would never complete | Switched default to `kimi-k2.6` (~3 s); added inter-call rate-limit delay (`LLM_REFINER_DELAY_S`, default 1.5 s) + circuit-break after 3 consecutive 429s. Tightened the LLM-fire-trigger so most modern filings stay rule-only ($0) | The pipeline now correctly trades off quality vs latency — thinking-mode is opt-in, not default |
+| Task 1 demo button for `encode/httpx` returned `GitHub API error 422` because skill_engine ignored `repo_info["default_branch"]` and always used `request.branch="main"`; httpx defaults to `master` | Tarball API returned 422 for nonexistent ref; user demos failed | Honour `repo_info["default_branch"]` when caller left `branch` at the schema default; allows different repos to seamlessly use their own default branches | Real-world: many older OSS projects still use `master` |
+| Task 3 demo buttons (`Microsoft FY2023`, `Abbott Labs`) used hand-typed accession strings that don't exist on SEC | All demo clicks returned `404 Not Found` for `https://www.sec.gov/Archives/edgar/data/.../...txt` | Pulled real accessions from `data.sec.gov/submissions/CIK*.json` and pinned them in `templates/task3.html` | The lesson — never hand-type SEC accessions; always look them up |
+| `find_10k_filing` raised `ValueError: No 10-K / 20-F filings found for CIK X` *before* checking older submission pages | Lehman, Enron, WorldCom (whose 10-Ks pre-date the 1 000-filing recent window) failed unrecoverably | Defer the empty-list raise until after `_find_in_additional_submission_files` and `resolve_filing_from_archive` fallbacks have both been tried | Pre-bankruptcy filings are now reachable end-to-end |
+| LLM refiner's `_detect_missing_items` was silently skipped when all found boundaries had high confidence — even when `items_found < 10` | Old-format filings (Enron 2000, WorldCom 2001) detected only 3 items, all at conf=0.95, so the LLM never fired to fill the gaps | Keep iterating into the missing-item detector when `items_found < 10` regardless of per-boundary confidence; the trigger condition was already in `pipeline.py` but the refiner returned too early | Trigger now properly cascades into Stage 2 detection logic |
+| LangSmith `trace_url(trace_id)` constructed `https://smith.langchain.com/o/projects/p/{name}` URLs that always 404'd because LangSmith requires UUID org-id + project-id, not project name | "View in LangSmith" button pointed at a permanent 404 page | Made `trace_url` return None unconditionally; UI hides the button and instead shows a copy-able trace_id chip — accurate, and users can paste it into LangSmith search themselves | Honest behaviour beats a broken-link footgun |
 
 **Prompt iteration history** (kept under `prompts/<task>/`):
 - `prompts/cicd/v1_skill_match.txt` — first version had no explicit JSON schema, LLM occasionally returned prose. Added strict JSON-only instruction + few-shot examples. See `prompts/cicd/README.md` for full version log.
@@ -803,16 +807,16 @@ Per-task cost / latency / token counts are exposed live at `/metrics`.
 
 ## Latest Trace-Driven UX & Harness Tweaks
 
-This pass traced the FastAPI routes, UI templates, schemas, eval artifacts, and README against the reviewer flow. Changes made:
+This pass traced the FastAPI routes, UI templates, schemas, eval artifacts, and README against the user flow. Changes made:
 
 | Area | Tweak | Why it matters for demo/review |
 |---|---|---|
-| System pages | `/health`, `/metrics`, `/api/v1/models` now render HTML dashboards for browser navigation while preserving JSON for API clients | Reviewers can inspect readiness, spend, and model routing without reading raw JSON |
-| Dashboard | Added a reviewer launchpad and shared in-session model/API-key controls | Faster video flow across Task 1/2/3 pages |
+| System pages | `/health`, `/metrics`, `/api/v1/models` now render HTML dashboards for browser navigation while preserving JSON for API clients | Users can inspect readiness, spend, and model routing without reading raw JSON |
+| Dashboard | Added a user launchpad and shared in-session model/API-key controls | Faster video flow across Task 1/2/3 pages |
 | Task 2 UI | Fixed execution trace rendering from `[object Object]` to action + target + verification confidence; examples now prefill target URLs | Makes the PEOH loop visually auditable instead of hiding the agent's decisions |
 | Task 2 harness | Result metadata records `model_name`, `use_vision_requested`, and `use_vision_active`; v3 actor/verifier prompts consume multi-screenshot history | Makes OpenRouter vision experiments reproducible and shows whether vision really activated |
 | Task 2 tests | Playwright-heavy screenshot helpers run under `asyncio.wait_for`; opt-in live eval test executes a real BrowserAgent case | Confirms screenshot code paths do not hang and eval tests are not just render smoke |
-| Task 3 UI | Direct filing URL now sends `filing_url` (schema-correct), added `use_vision` + `force_llm` toggles, stage diagram, IBM/TSMC edge-case chips | Reviewers can exercise URL-based filings, 20-F, proxy-heavy cases, and forced multimodal refinement directly |
+| Task 3 UI | Direct filing URL now sends `filing_url` (schema-correct), added `use_vision` + `force_llm` toggles, stage diagram, IBM/TSMC edge-case chips | Users can exercise URL-based filings, 20-F, proxy-heavy cases, and forced multimodal refinement directly |
 | Task 3 evals | Added early EDGAR plain text, SPV not-applicable, duplicate-heading 20-F, and small-cap reserved-item cases | Expands LLM/vision-trigger candidates beyond clean rule-only modern 10-Ks |
 | Docs/evals | README updated from old 17/8-case claims to current 38-case Task 2 set and 27-case Task 3 set | Prevents stale documentation from understating the work |
 

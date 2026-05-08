@@ -127,7 +127,15 @@ async def run_skill(
 
         owner = repo_info["owner"]
         repo = repo_info["repo"]
+        # If user left branch at the schema default ("main") but repo's actual
+        # default is something else (e.g. encode/httpx → "master"), use the
+        # actual default. Only override when the user accepted the schema
+        # default — explicit non-"main" branches stay as-is so users can still
+        # target a specific branch.
         branch = request.branch
+        if request.branch == "main" and repo_info.get("default_branch") and repo_info["default_branch"] != "main":
+            branch = repo_info["default_branch"]
+            logger.info("branch_default_overridden", original="main", actual=branch, owner=owner, repo=repo)
         await _emit("repo_validated", owner=owner, repo=repo, branch=branch)
 
         # [3] Get HEAD SHA (fast, no clone)

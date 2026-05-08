@@ -148,11 +148,25 @@ async def stream_run_skill(request: SkillRunRequest):
     async def run_engine() -> None:
         try:
             from src.llm_provider import set_user_keys
+            from src.shared.tracing import trace_url
             set_user_keys(
                 openrouter=request.model.user_openrouter_key,
                 nvidia=request.model.user_nvidia_key,
             )
-            await engine_run_skill(request, trace_id, progress_callback=progress_callback)
+            result = await engine_run_skill(request, trace_id, progress_callback=progress_callback)
+            # Emit final result as a single SSE event so the FE doesn't have
+            # to re-run the skill via /run (was double-executing → 2× latency).
+            try:
+                result.langsmith_trace_url = trace_url(trace_id)
+            except Exception:
+                pass
+            await queue.put(
+                {
+                    "event": "result",
+                    "trace_id": trace_id,
+                    "result": result.model_dump(mode="json"),
+                }
+            )
         except FastFailError as e:
             await queue.put(
                 {

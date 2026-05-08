@@ -83,7 +83,7 @@
                     <div class="examples">
                         <button class="example-btn" onclick="document.getElementById('repo-url').value='https://github.com/tychen5/signal-foundry'">📦 signal-foundry (this repo)</button>
                         <button class="example-btn" onclick="document.getElementById('repo-url').value='https://github.com/tychen5/Medical-Summary-Builder'">🏥 Medical-Summary-Builder</button>
-                        <button class="example-btn" onclick="document.getElementById('repo-url').value='https://github.com/encode/httpx'">🌐 encode/httpx</button>
+                        <button class="example-btn" onclick="document.getElementById('repo-url').value='https://github.com/psf/requests'">🌐 psf/requests</button>
                         <button class="example-btn" onclick="document.getElementById('repo-url').value='https://github.com/pallets/click'">🖱️ pallets/click</button>
                     </div>
                 </div>
@@ -138,7 +138,7 @@
                 <span class="status-badge" id="status-badge">—</span>
                 <strong id="result-title">—</strong>
                 <span id="trace-info" class="trace-info" style="display:none">
-                    <span class="trace-id-pill" id="trace-id-pill"></span>
+                    <span class="trace-id-pill" id="trace-id-pill" title="Click to copy" style="cursor:pointer" onclick="copyTraceId()"></span>
                     <a href="#" target="_blank" id="langsmith-link" class="trace-link" style="display:none">View in LangSmith ↗</a>
                 </span>
             </div>
@@ -218,12 +218,17 @@
             }
 
             try {
-                // Stream first for live progress, then re-fetch full result via /run
+                // SSE-only: live progress AND final result come from one stream.
+                // Avoids the previous double-execution (stream + re-run) that
+                // doubled wait time on slow NVIDIA model paths.
                 const streamResp = await fetch('/api/v1/skills/stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
                     body: JSON.stringify(payload),
                 });
+                let finalData = null;
+                let finalErr = null;
+                let httpStatus = streamResp.status;
                 if (streamResp.ok && streamResp.body) {
                     const reader = streamResp.body.getReader();
                     const decoder = new TextDecoder();
@@ -239,19 +244,28 @@
                             try {
                                 const ev = JSON.parse(ln.slice(6));
                                 appendT1LiveEvent(ev);
+                                if (ev.event === 'result' && ev.result) finalData = ev.result;
+                                if (ev.event === 'error') finalErr = ev;
                             } catch (_) {}
                         }
                     }
                 }
-
-                const resp = await fetch('/api/v1/skills/run', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await resp.json();
-                _lastResult = data;
-                renderResult(data, resp.status);
+                if (finalData) {
+                    _lastResult = finalData;
+                    renderResult(finalData, httpStatus);
+                } else if (finalErr) {
+                    renderError(finalErr.user_message || finalErr.raw_error || 'Unknown error');
+                } else {
+                    // Fallback to /run if SSE failed entirely (e.g. 4xx upfront).
+                    const resp = await fetch('/api/v1/skills/run', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await resp.json();
+                    _lastResult = data;
+                    renderResult(data, resp.status);
+                }
             } catch (err) {
                 renderError(String(err));
             } finally {
@@ -298,6 +312,10 @@
                 text += `✓ summary ready · ${event.summary_preview ? event.summary_preview.slice(0, 80) + '…' : ''}`;
             } else if (event.event === 'skill_complete') {
                 text += `🏁 ${event.status} in ${event.latency_ms|0} ms · $${(event.cost_usd||0).toFixed(4)}`;
+            } else if (event.event === 'result') {
+                text += `📦 final result delivered`;
+            } else if (event.event === 'stream_end') {
+                text += `🔚 stream closed`;
             } else if (event.event === 'error') {
                 text += `❌ ${event.user_message || event.category || 'error'}`;
             } else {
@@ -306,6 +324,18 @@
             li.textContent = text;
             list.appendChild(li);
             list.scrollTop = list.scrollHeight;
+        }
+
+        function copyTraceId() {
+            const pill = document.getElementById('trace-id-pill');
+            const txt = (pill.textContent || '').replace(/^trace_id:\s*/i, '');
+            if (navigator.clipboard && txt) {
+                navigator.clipboard.writeText(txt).then(() => {
+                    const orig = pill.textContent;
+                    pill.textContent = '✓ copied';
+                    setTimeout(() => { pill.textContent = orig; }, 1200);
+                });
+            }
         }
 
         function renderResult(data, httpStatus) {

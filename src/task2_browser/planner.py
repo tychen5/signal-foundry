@@ -19,7 +19,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.llm_provider import get_llm
 from src.shared.cost_tracker import get_cost_tracker
-from src.shared.llm_utils import coerce_message_text
+from src.shared.llm_utils import coerce_message_text, extract_json_object
 from src.shared.logger import get_logger
 from src.task2_browser.schemas import (
     ActionType,
@@ -396,12 +396,18 @@ def _create_fallback_plan(task: str, target_url: Optional[str]) -> TaskPlan:
 
 
 def _parse_action(llm_response: str) -> BrowserAction:
-    """Parse LLM actor response into a single BrowserAction."""
-    # Try JSON first
-    try:
-        json_match = re.search(r"\{.*\}", llm_response, re.DOTALL)
-        if json_match:
-            raw = json.loads(json_match.group())
+    """Parse LLM actor response into a single BrowserAction.
+
+    Robust to:
+      • ```json fenced code blocks (with or without language tag)
+      • Smart quotes from copy-paste-prone models
+      • Leading prose followed by the JSON object
+      • Multiple JSON-like substrings (picks the first balanced one)
+      • Truncated responses where the closing brace is missing
+    """
+    raw = extract_json_object(llm_response)
+    if isinstance(raw, dict):
+        try:
             action_type = _map_action_type(raw.get("action", raw.get("action_type", "done")))
             return BrowserAction(
                 action_type=action_type,
@@ -411,10 +417,28 @@ def _parse_action(llm_response: str) -> BrowserAction:
                 reasoning=raw.get("reasoning", ""),
                 success_criteria=raw.get("success_criteria", ""),
             )
-    except (json.JSONDecodeError, TypeError):
-        pass
+        except (KeyError, TypeError):
+            pass
 
-    # Fallback: if response mentions "done" or "complete"
+    # Fallback A: truncated JSON whose closing brace was cut off mid-stream.
+    # Heuristic — if response contains a clear `"action": "..."` field but
+    # extract_json_object returned None (unbalanced), pull the field directly.
+    action_match = re.search(r'"action(?:_type)?"\s*:\s*"([a-z_]+)"', llm_response, re.IGNORECASE)
+    target_match = re.search(r'"target(?:_description)?"\s*:\s*"([^"]*)"', llm_response, re.IGNORECASE)
+    value_match = re.search(r'"value"\s*:\s*"([^"]*)"', llm_response, re.IGNORECASE)
+    if action_match:
+        try:
+            action_type = _map_action_type(action_match.group(1))
+            return BrowserAction(
+                action_type=action_type,
+                target_description=target_match.group(1) if target_match else "",
+                value=value_match.group(1) if value_match else "",
+                reasoning="Recovered partial action from truncated LLM response.",
+            )
+        except (KeyError, TypeError, ValueError):
+            pass
+
+    # Fallback B: prose-only response that says the task is done
     response_lower = llm_response.lower()
     if "done" in response_lower or "task complete" in response_lower or "finished" in response_lower:
         answer = llm_response.strip()
@@ -442,18 +466,15 @@ def _parse_verification(llm_response: str) -> tuple[bool, str, float]:
     """
     response_lower = llm_response.lower()
 
-    # Try JSON first — use first `{...}` that parses cleanly.
-    try:
-        json_match = re.search(r"\{.*\}", llm_response, re.DOTALL)
-        if json_match:
-            raw = json.loads(json_match.group())
-            return (
-                raw.get("complete", False),
-                raw.get("answer", raw.get("final_answer", "")),
-                raw.get("confidence", 0.5),
-            )
-    except (json.JSONDecodeError, TypeError):
-        pass
+    # Try robust JSON extractor first — handles ```json fences, smart
+    # quotes, leading prose, and balanced-brace nesting.
+    raw = extract_json_object(llm_response)
+    if isinstance(raw, dict):
+        return (
+            bool(raw.get("complete", False)),
+            str(raw.get("answer", raw.get("final_answer", "")) or ""),
+            float(raw.get("confidence", 0.5) or 0.5),
+        )
 
     # Word-boundary-aware prose fallback — avoid 'incomplete'/'completed'
     # false-firing as 'complete'. Check the first 100 chars (most LLMs front-
