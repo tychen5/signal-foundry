@@ -1070,6 +1070,39 @@ class TestPlanner:
         assert complete is False
         assert conf < 0.5
 
+    def test_parse_verification_word_boundary_incomplete(self) -> None:
+        """Regression: 'The task is incomplete.' previously substring-matched
+        'complete' and falsely returned is_complete=True. Word-boundary
+        regex must treat 'incomplete' as a negation marker."""
+        from src.task2_browser.planner import _parse_verification
+
+        complete, _, conf = _parse_verification("The task is incomplete.")
+        assert complete is False
+        assert conf < 0.5
+
+    def test_parse_verification_completed_successfully(self) -> None:
+        """Past-tense 'completed successfully' should still match positive."""
+        from src.task2_browser.planner import _parse_verification
+
+        complete, _, _ = _parse_verification(
+            "The task has been completed successfully — final answer below."
+        )
+        assert complete is True
+
+    def test_parse_verification_json_takes_precedence(self) -> None:
+        """When JSON is present, the prose heuristic shouldn't run.
+        Catches the case where the answer text contains negation but the
+        JSON `complete` field is True (or vice versa)."""
+        from src.task2_browser.planner import _parse_verification
+
+        complete, answer, conf = _parse_verification(
+            'Verdict: {"complete": true, "answer": "X is incomplete", '
+            '"confidence": 0.95}'
+        )
+        assert complete is True
+        assert conf == 0.95
+        assert "incomplete" in answer  # answer text preserved literally
+
 
 # ==============================================================================
 # Prompt Files

@@ -431,10 +431,18 @@ def _parse_action(llm_response: str) -> BrowserAction:
 
 
 def _parse_verification(llm_response: str) -> tuple[bool, str, float]:
-    """Parse LLM verification response."""
+    """Parse LLM verification response.
+
+    Returns (is_complete, final_answer, confidence). Robust to:
+    - JSON wrapping in ```json fences
+    - Multiple JSON objects in the response (takes the first)
+    - Word-boundary issues like 'incomplete' or 'completed' matching
+      'complete' as a substring
+    - Prose-only fallback when no JSON is present
+    """
     response_lower = llm_response.lower()
 
-    # Try JSON
+    # Try JSON first — use first `{...}` that parses cleanly.
     try:
         json_match = re.search(r"\{.*\}", llm_response, re.DOTALL)
         if json_match:
@@ -447,11 +455,18 @@ def _parse_verification(llm_response: str) -> tuple[bool, str, float]:
     except (json.JSONDecodeError, TypeError):
         pass
 
-    # Check for negation first
-    has_negation = any(neg in response_lower[:80] for neg in ["not complete", "not yet", "no,", "no "])
-    has_positive = "yes" in response_lower[:50] or ("complete" in response_lower[:80] and not has_negation)
+    # Word-boundary-aware prose fallback — avoid 'incomplete'/'completed'
+    # false-firing as 'complete'. Check the first 100 chars (most LLMs front-
+    # load the verdict).
+    head = response_lower[:100]
+    has_negation = bool(
+        re.search(r"\b(?:not\s+(?:yet\s+)?complete|incomplete|no(?:,|\s+the\s+task))\b", head)
+    )
+    has_positive = bool(
+        re.search(r"\b(?:yes|task\s+is\s+complete|task\s+complete|completed\s+successfully)\b", head)
+    )
     is_complete = has_positive and not has_negation
-    confidence = 0.8 if is_complete else 0.3
+    confidence = 0.7 if is_complete else 0.3
     return is_complete, llm_response.strip(), confidence
 
 
