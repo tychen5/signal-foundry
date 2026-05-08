@@ -1,8 +1,22 @@
 # Browser Agent Prompts — Version Ledger
 
-## Active: v2 (2026-05-07)
+## Active: v3 (2026-05-08, vision-aware) → v2 → v1 fallback
 
-The agent loads `v2_*.txt` first; falls back to `v1_*.txt` if absent. Both versions are kept on disk as the AI-collaboration audit trail.
+The agent loads the latest version present on disk via `_load_prompt_versioned()` in `src/task2_browser/planner.py`. Currently shipping:
+
+| Stage | Active version | Notes |
+|---|---|---|
+| planner | v3_planner.txt | STRICT JSON-only output (no markdown fences); domain-hint handling for "前往鉅亨網" style tasks; visual-content prompt anticipation |
+| actor | v3_actor.txt | Multi-screenshot timeline reasoning; visual-only element interpretation |
+| verifier | v3_verifier.txt | Strict numeric grounding + multi-field completion |
+| healer | v2_healer.txt | 13-class root-cause taxonomy (`should_retry` strictness) |
+
+### v3 (2026-05-08) — what changed vs v2
+- v3_planner.txt: added STRICT JSON-only output rule (matches the new `extract_json_object` parser in `src/shared/llm_utils.py`); added "domain hint without URL" example for live-data tasks where the user names a site (鉅亨網, cnyes) but no URL — e.g. previously the cnyes demo button hard-coded `https://www.cnyes.com/twstock/twse/TWSE.htm` which is dead, now the planner is asked to find a working URL via Google search.
+- v3_actor.txt: existing — multi-screenshot timeline reasoning with explicit instructions for change detection across consecutive viewports.
+- v3_verifier.txt: existing — stricter completion gate.
+
+The frontend now ALSO uses `extract_json_object` to parse responses, so even if the model accidentally includes a ```json fence (despite the v3 instructions), the parser recovers gracefully.
 
 ### v2_planner.txt — what changed vs v1
 - Added explicit anti-hallucination rules (numeric answers must be quotable from page text)
