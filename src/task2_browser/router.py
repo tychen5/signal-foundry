@@ -68,7 +68,17 @@ async def execute_browser_task(request: BrowserTaskRequest):
     )
 
     try:
+        from src.llm_provider import clear_user_keys, set_user_keys
         from src.task2_browser.agent import BrowserAgent
+
+        # Per-request user keys (NVIDIA + OpenRouter) — get_llm reads them from
+        # contextvars when its explicit key params are empty. This lets us
+        # support user-supplied NVIDIA keys without threading them through
+        # 7+ downstream call sites.
+        set_user_keys(
+            openrouter=request.model.user_openrouter_key,
+            nvidia=request.model.user_nvidia_key,
+        )
 
         agent = BrowserAgent(
             model_name=request.model.model_id,
@@ -162,7 +172,13 @@ async def stream_browser_task(request: BrowserTaskRequest):
 
     async def run_agent() -> None:
         try:
+            from src.llm_provider import set_user_keys
             from src.task2_browser.agent import BrowserAgent
+
+            set_user_keys(
+                openrouter=request.model.user_openrouter_key,
+                nvidia=request.model.user_nvidia_key,
+            )
             agent = BrowserAgent(
                 model_name=request.model.model_id,
                 user_api_key=request.model.user_openrouter_key,

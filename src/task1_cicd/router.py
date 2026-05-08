@@ -75,6 +75,11 @@ async def run_skill(request: SkillRunRequest):
     )
 
     try:
+        from src.llm_provider import set_user_keys
+        set_user_keys(
+            openrouter=request.model.user_openrouter_key,
+            nvidia=request.model.user_nvidia_key,
+        )
         result = await engine_run_skill(request, trace_id)
         # Skill-name mismatch is a client error — surface as 400 for clear HTTP semantics
         if result.status == ExecutionStatus.FAILED and result.failure_type == FailureType.SKILL_MISMATCH:
@@ -134,6 +139,11 @@ async def stream_run_skill(request: SkillRunRequest):
 
     async def run_engine() -> None:
         try:
+            from src.llm_provider import set_user_keys
+            set_user_keys(
+                openrouter=request.model.user_openrouter_key,
+                nvidia=request.model.user_nvidia_key,
+            )
             await engine_run_skill(request, trace_id, progress_callback=progress_callback)
         except FastFailError as e:
             await queue.put(

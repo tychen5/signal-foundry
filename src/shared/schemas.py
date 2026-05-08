@@ -76,6 +76,44 @@ class ModelSelectionRequest(BaseModel):
         default=None,
         description="User's own OpenRouter API key (avoids consuming server tokens)",
     )
+    user_nvidia_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "User's own NVIDIA NIM API key (`nvapi-...`). When supplied AND the "
+            "selected model is hosted on NIM, this overrides the server's key. "
+            "Useful when the demo server's key is rate-limited or expired."
+        ),
+    )
+
+    def picked_user_key(self) -> Optional[str]:
+        """Return the right user-supplied key for the selected model.
+
+        Routes based on which provider the model belongs to. Lets every
+        existing downstream caller keep using a single `user_api_key`
+        string parameter — no need to thread two keys through 7+ call
+        sites in agent/pipeline/healer/planner.
+        """
+        from src.config import LLMProvider, get_settings
+
+        try:
+            info = get_settings().get_model_info(self.model_id)
+            provider = info["provider"]
+        except Exception:
+            return self.user_openrouter_key
+        if provider == LLMProvider.NVIDIA and self.user_nvidia_key:
+            # When user supplies an NVIDIA key for an NVIDIA model, hand it to
+            # get_llm via the standard user_openrouter_key channel — get_llm
+            # uses its own routing, but the upstream call sites only pass one
+            # field. We solve this with a global override (see `picked_keys()`).
+            return self.user_nvidia_key
+        return self.user_openrouter_key
+
+    def picked_keys(self) -> dict:
+        """Return both keys explicitly so get_llm can route correctly."""
+        return {
+            "user_openrouter_key": self.user_openrouter_key,
+            "user_nvidia_key": self.user_nvidia_key,
+        }
 
 
 class ExecutionResult(BaseModel):

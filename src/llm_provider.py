@@ -27,10 +27,45 @@ from src.config import LLMProvider, Settings, get_settings
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
+# Per-request user API key overrides — set by the routers via
+# `set_user_keys()` before invoking the agent/pipeline. get_llm consults
+# this when the explicit `user_*_key` arguments are absent. Uses
+# contextvars so concurrent requests don't trample each other.
+import contextvars
+
+_user_openrouter_key_ctx: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "user_openrouter_key_ctx", default=None
+)
+_user_nvidia_key_ctx: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "user_nvidia_key_ctx", default=None
+)
+
+
+def set_user_keys(openrouter: Optional[str] = None, nvidia: Optional[str] = None) -> None:
+    """Set per-request user API keys.
+
+    Routers call this at the start of a request so that downstream get_llm()
+    callers (which only know about a single `user_openrouter_key` parameter)
+    can transparently use the user-supplied NVIDIA NIM key too. Keys are
+    isolated per asyncio task via contextvars — concurrent requests don't
+    leak keys across each other.
+    """
+    if openrouter is not None:
+        _user_openrouter_key_ctx.set(openrouter)
+    if nvidia is not None:
+        _user_nvidia_key_ctx.set(nvidia)
+
+
+def clear_user_keys() -> None:
+    """Reset the per-request key context (call at request teardown)."""
+    _user_openrouter_key_ctx.set(None)
+    _user_nvidia_key_ctx.set(None)
+
 
 def get_llm(
     model_name: Optional[str] = None,
     user_openrouter_key: Optional[str] = None,
+    user_nvidia_key: Optional[str] = None,
     temperature: float = 0.0,
     max_tokens: Optional[int] = None,
     settings: Optional[Settings] = None,
@@ -41,6 +76,8 @@ def get_llm(
     Args:
         model_name: Model identifier (e.g., "openai/gpt-5.5"). Uses default if None.
         user_openrouter_key: User-supplied OpenRouter key (overrides server key).
+        user_nvidia_key: User-supplied NVIDIA NIM key (overrides server key).
+            Useful when the server's key is expired or rate-limited.
         temperature: Sampling temperature. Default 0.0 for deterministic output.
         max_tokens: Max tokens for response. Uses model default if None.
         settings: Settings instance. Uses singleton if None.
@@ -49,7 +86,8 @@ def get_llm(
         BaseChatModel instance ready for .invoke() / .ainvoke() / .stream()
 
     Raises:
-        ValueError: If model_name is not in the registry.
+        ValueError: If model_name is not in the registry, or no API key
+            is available for the selected provider.
         ImportError: If required provider package is not installed.
     """
     if settings is None:
@@ -70,7 +108,17 @@ def get_llm(
     backend = os.environ.get("LLM_BACKEND", "openai_compat").lower()
 
     if provider == LLMProvider.OPENROUTER:
-        api_key = user_openrouter_key or settings.openrouter_api_key
+        api_key = (
+            user_openrouter_key
+            or _user_openrouter_key_ctx.get()
+            or settings.openrouter_api_key
+        )
+        if not api_key:
+            raise ValueError(
+                "OpenRouter API key required for this model. Either set "
+                "OPENROUTER_API_KEY on the server, or paste your own key in "
+                "the UI's 'OpenRouter API Key' field. Get one at openrouter.ai."
+            )
         if backend == "langchain_native":
             return _create_openrouter_native(actual_model, api_key, temperature, max_tokens)
         return _create_openai_compat(
@@ -84,13 +132,22 @@ def get_llm(
         )
 
     if provider == LLMProvider.NVIDIA:
-        if not settings.nvidia_api_key:
-            raise ValueError("NVIDIA API key required. Set NVIDIA_API_KEY env var.")
+        api_key = (
+            user_nvidia_key
+            or _user_nvidia_key_ctx.get()
+            or settings.nvidia_api_key
+        )
+        if not api_key:
+            raise ValueError(
+                "NVIDIA NIM API key required. Either set NVIDIA_API_KEY on "
+                "the server, or paste your own key (`nvapi-...`) in the UI's "
+                "'NVIDIA NIM API Key' field. Free keys: build.nvidia.com."
+            )
         if backend == "langchain_native":
-            return _create_nvidia_native(actual_model, settings.nvidia_api_key, temperature, max_tokens, extra_body)
+            return _create_nvidia_native(actual_model, api_key, temperature, max_tokens, extra_body)
         return _create_openai_compat(
             model_name=actual_model,
-            api_key=settings.nvidia_api_key,
+            api_key=api_key,
             base_url=NVIDIA_BASE_URL,
             temperature=temperature,
             max_tokens=max_tokens,

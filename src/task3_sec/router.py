@@ -75,8 +75,15 @@ async def extract_10k(request: SECExtractionRequest):
     )
 
     try:
+        from src.llm_provider import set_user_keys
         from src.task3_sec.pipeline import extract_10k as run_pipeline
 
+        # Per-request user keys — get_llm reads them from contextvars when its
+        # explicit user_*_key params are empty. See src/llm_provider.py.
+        set_user_keys(
+            openrouter=request.model.user_openrouter_key,
+            nvidia=request.model.user_nvidia_key,
+        )
         result = await run_pipeline(
             cik=request.cik,
             accession_number=request.accession_number,
@@ -177,8 +184,13 @@ async def stream_extract_10k(request: SECExtractionRequest):
 
     async def run_pipeline() -> None:
         try:
+            from src.llm_provider import set_user_keys
             from src.task3_sec.pipeline import extract_10k as run
 
+            set_user_keys(
+                openrouter=request.model.user_openrouter_key,
+                nvidia=request.model.user_nvidia_key,
+            )
             await run(
                 cik=request.cik,
                 accession_number=request.accession_number,
