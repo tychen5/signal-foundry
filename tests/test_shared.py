@@ -61,6 +61,89 @@ class TestCostTracker:
         assert summary["total_cost_usd"] > 0
         assert "task1" in summary["by_task"]
 
+    def test_request_cost_so_far_sums_per_trace(self):
+        """Cost-so-far returns just this trace's spend, not session total."""
+        from src.shared.cost_tracker import CostTracker
+
+        tracker = CostTracker()
+        tracker.record_call(
+            "openai/gpt-5.5", 1000, 500, 100, "task3_sec", "extract", trace_id="t1"
+        )
+        tracker.record_call(
+            "openai/gpt-5.5", 1000, 500, 100, "task3_sec", "extract", trace_id="t2"
+        )
+        c1 = tracker.request_cost_so_far("t1")
+        c2 = tracker.request_cost_so_far("t2")
+        assert c1 > 0 and c2 > 0
+        assert abs(c1 - c2) < 1e-9
+        assert tracker.request_cost_so_far("never-seen") == 0.0
+
+    def test_check_request_budget_under_cap_passes(self):
+        from src.shared.cost_tracker import CostTracker
+
+        tracker = CostTracker()
+        tracker.record_call(
+            "z-ai/glm-5.1", 100, 50, 100, "task3_sec", "extract", trace_id="t1"
+        )
+        # GLM 5.1 cost for 150 tokens is ~$0.00025 — well under default 0.50
+        tracker.check_request_budget("t1", task="task3_sec")  # no raise
+
+    def test_check_request_budget_over_cap_raises(self):
+        """When cumulative cost exceeds the cap, BudgetExceededError carries
+        actionable metadata for the router to convert to a structured error."""
+        from src.shared.cost_tracker import BudgetExceededError, CostTracker
+
+        tracker = CostTracker()
+        # Burn $1.50 of Claude Opus on a task3 trace
+        tracker.record_call(
+            "anthropic/claude-opus-4.7",
+            tokens_in=50_000,
+            tokens_out=10_000,
+            latency_ms=1000,
+            task="task3_sec",
+            operation="refine",
+            trace_id="big_trace",
+        )
+        with pytest.raises(BudgetExceededError) as exc:
+            tracker.check_request_budget(
+                "big_trace", cap_usd=0.50, task="task3_sec"
+            )
+        err = exc.value
+        assert err.trace_id == "big_trace"
+        assert err.cost_so_far > err.cap_usd
+        assert err.cap_usd == 0.50
+        assert err.task == "task3_sec"
+
+    def test_check_request_budget_default_caps_per_task(self):
+        from src.shared.cost_tracker import (
+            DEFAULT_BUDGET_CAP_USD,
+            CostTracker,
+        )
+
+        tracker = CostTracker()
+        for task in ("task1_cicd", "task2_browser", "task3_sec"):
+            assert task in DEFAULT_BUDGET_CAP_USD
+            assert DEFAULT_BUDGET_CAP_USD[task] > 0
+        # No spend → no raise even with default cap
+        tracker.check_request_budget("nonexistent", task="task3_sec")
+
+    def test_check_request_budget_disabled_with_zero_cap(self):
+        """cap_usd=0 disables the check — useful for benchmarks."""
+        from src.shared.cost_tracker import CostTracker
+
+        tracker = CostTracker()
+        tracker.record_call(
+            "anthropic/claude-opus-4.7",
+            tokens_in=999_999,
+            tokens_out=999_999,
+            latency_ms=1000,
+            task="task3_sec",
+            operation="refine",
+            trace_id="big",
+        )
+        # cap=0 → no-op even with massive spend
+        tracker.check_request_budget("big", cap_usd=0.0, task="task3_sec")
+
 
 class TestHarness:
     """Test harness engine."""

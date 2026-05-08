@@ -29,6 +29,40 @@ COST_PER_1K_TOKENS: dict[str, dict[str, float]] = {
 # Default cost if model not in registry
 DEFAULT_COST = {"input": 0.003, "output": 0.010}
 
+# Per-task default budget caps (USD per request). The spec calls out
+# "Max $0.50 per filing" for Task 3; we mirror that for the others as
+# safe defaults. The router can override via `max_cost_usd` in the request.
+DEFAULT_BUDGET_CAP_USD: dict[str, float] = {
+    "task1_cicd": 0.30,
+    "task2_browser": 0.50,
+    "task3_sec": 0.50,
+}
+
+
+class BudgetExceededError(Exception):
+    """Raised when a per-request budget cap is exceeded.
+
+    Carries enough metadata that the caller can return a clean structured
+    error (not a 500). Routers / pipelines should catch and convert to a
+    `partial` / `failed` ExecutionResult with cost_metadata populated.
+    """
+
+    def __init__(
+        self,
+        trace_id: str,
+        cost_so_far: float,
+        cap_usd: float,
+        task: str = "",
+    ) -> None:
+        self.trace_id = trace_id
+        self.cost_so_far = cost_so_far
+        self.cap_usd = cap_usd
+        self.task = task
+        super().__init__(
+            f"Budget cap exceeded for trace {trace_id}: "
+            f"${cost_so_far:.4f} > ${cap_usd:.4f} (task={task})"
+        )
+
 
 @dataclass
 class LLMCallRecord:
@@ -160,6 +194,48 @@ class CostTracker:
             "models_used": list({r.model for r in records}),
             "operations": [r.operation for r in records],
         }
+
+    def request_cost_so_far(self, trace_id: str) -> float:
+        """Sum of cost_usd for records matching this trace_id.
+
+        Cheap aggregate for budget-cap polling — pipelines call this between
+        major LLM calls to decide whether to continue.
+        """
+        return sum(r.cost_usd for r in self._records if r.trace_id == trace_id)
+
+    def check_request_budget(
+        self,
+        trace_id: str,
+        cap_usd: Optional[float] = None,
+        task: str = "",
+    ) -> None:
+        """Raise BudgetExceededError if the per-request cap is exceeded.
+
+        ``cap_usd``: explicit cap; if None, falls back to
+        DEFAULT_BUDGET_CAP_USD[task] then a global $0.50 default. Callers
+        should invoke this between major LLM calls.
+
+        No-op when cap_usd resolves to <= 0 (treated as "disabled").
+        """
+        if cap_usd is None:
+            cap_usd = DEFAULT_BUDGET_CAP_USD.get(task, 0.50)
+        if cap_usd <= 0:
+            return
+        cost = self.request_cost_so_far(trace_id)
+        if cost > cap_usd:
+            logger.warning(
+                "budget_cap_exceeded",
+                trace_id=trace_id,
+                cost_usd=round(cost, 6),
+                cap_usd=cap_usd,
+                task=task,
+            )
+            raise BudgetExceededError(
+                trace_id=trace_id,
+                cost_so_far=cost,
+                cap_usd=cap_usd,
+                task=task,
+            )
 
 
 # Singleton instance

@@ -43,6 +43,15 @@ class SECExtractionRequest(BaseModel):
             "drops layout cues. No-op for text-only NVIDIA models."
         ),
     )
+    max_cost_usd: Optional[float] = Field(
+        default=None,
+        description=(
+            "Per-request budget cap (USD). When set, the pipeline halts "
+            "further LLM-driven stages once cumulative spend on this trace "
+            "exceeds the cap. Default: $0.50 per filing (matches the spec). "
+            "Set to 0 to disable for benchmarks."
+        ),
+    )
     model: ModelSelectionRequest = Field(default_factory=ModelSelectionRequest)
 
 
@@ -94,6 +103,7 @@ async def extract_10k(request: SECExtractionRequest):
             skip_xbrl=request.skip_xbrl,
             use_vision=request.use_vision,
             force_llm=request.force_llm,
+            max_cost_usd=request.max_cost_usd,
             trace_id=trace_id,
         )
 
@@ -201,6 +211,7 @@ async def stream_extract_10k(request: SECExtractionRequest):
                 skip_xbrl=request.skip_xbrl,
                 use_vision=request.use_vision,
                 force_llm=getattr(request, "force_llm", False),
+                max_cost_usd=getattr(request, "max_cost_usd", None),
                 progress_callback=progress_callback,
                 trace_id=trace_id,
             )

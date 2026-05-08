@@ -58,6 +58,7 @@ async def extract_10k(
     skip_xbrl: bool = False,
     use_vision: bool = False,
     force_llm: bool = False,
+    max_cost_usd: Optional[float] = None,
     progress_callback: Optional[callable] = None,
     trace_id: Optional[str] = None,
 ) -> ExtractionResult:
@@ -246,6 +247,32 @@ async def extract_10k(
                 llm_calls=calls_added,
                 duration_ms=round((time.time() - stage2_start) * 1000, 1),
             )
+
+            # Cost-discipline guard — the spec calls for "Max $0.50 per
+            # filing". After Stage 2 (the only paid LLM stage in T3) we
+            # check whether we're already over budget. If so, skip Stage 3
+            # validation re-runs and stop accumulating spend; the items we
+            # have are still returned with a failure_modes flag.
+            from src.shared.cost_tracker import BudgetExceededError
+            try:
+                cost_tracker.check_request_budget(
+                    trace_id, cap_usd=max_cost_usd, task="task3_sec"
+                )
+            except BudgetExceededError as be:
+                logger.warning(
+                    "budget_cap_hit_after_stage2",
+                    trace_id=trace_id,
+                    cost=round(be.cost_so_far, 6),
+                    cap=be.cap_usd,
+                )
+                await _emit(
+                    "budget_cap_hit",
+                    cost_usd=round(be.cost_so_far, 6),
+                    cap_usd=be.cap_usd,
+                )
+                stages_used.append("budget_cap_hit")
+                # Skip remaining LLM-driven stages
+                skip_llm = True
         except Exception as e:
             logger.warning("stage2_failed", error=str(e))
             stages_used.append("llm_refine_failed")
