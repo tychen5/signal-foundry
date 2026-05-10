@@ -1,0 +1,433 @@
+{
+  "run_at": "2026-05-08T10:26:14.840296+00:00",
+  "mode": {
+    "timeout_s": 240.0,
+    "force_llm_task3": true
+  },
+  "summary": {
+    "groups": [
+      {
+        "task": "task3",
+        "model": "google/gemini-3.1-pro-preview",
+        "use_vision": false,
+        "cases": 5,
+        "ok_rate": 0.8,
+        "total_cost_usd": 0.046195,
+        "avg_latency_ms": 158837.7,
+        "llm_calls": 28
+      },
+      {
+        "task": "task3",
+        "model": "google/gemini-3.1-pro-preview",
+        "use_vision": true,
+        "cases": 5,
+        "ok_rate": 0.6,
+        "total_cost_usd": 0.039959,
+        "avg_latency_ms": 202197.3,
+        "llm_calls": 25
+      },
+      {
+        "task": "task3",
+        "model": "moonshotai/kimi-k2.6",
+        "use_vision": false,
+        "cases": 5,
+        "ok_rate": 0.6,
+        "total_cost_usd": 0.0224,
+        "avg_latency_ms": 131420.7,
+        "llm_calls": 6
+      },
+      {
+        "task": "task3",
+        "model": "moonshotai/kimi-k2.6",
+        "use_vision": true,
+        "cases": 5,
+        "ok_rate": 1.0,
+        "total_cost_usd": 0.0,
+        "avg_latency_ms": 23759.7,
+        "llm_calls": 0
+      }
+    ]
+  },
+  "rows": [
+    {
+      "task": "task3",
+      "case_id": "t3_american_express_1994_plain_text",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 10,
+      "items_total": 23,
+      "avg_confidence": 0.988,
+      "cost_usd": 0.01897,
+      "latency_ms": 100932.7,
+      "llm_calls": 5,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_asset_backed_trust_2011_not_applicable",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": false,
+      "status": "error",
+      "ok": false,
+      "items_extracted": 0,
+      "items_total": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 240000.0,
+      "llm_calls": 0,
+      "stages_used": [],
+      "force_llm": true,
+      "error": ""
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_kingsoft_cloud_2022_20f_duplicate_heading",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": false,
+      "status": "error",
+      "ok": false,
+      "items_extracted": 0,
+      "items_total": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 240000.0,
+      "llm_calls": 0,
+      "stages_used": [],
+      "force_llm": true,
+      "error": ""
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_enron_2000_complex_segments",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 15,
+      "items_total": 23,
+      "avg_confidence": 0.933,
+      "cost_usd": 0.00343,
+      "latency_ms": 48573.5,
+      "llm_calls": 1,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_lehman_2007_investment_bank",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 20,
+      "items_total": 23,
+      "avg_confidence": 0.907,
+      "cost_usd": 0.0,
+      "latency_ms": 27597.4,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_american_express_1994_plain_text",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 10,
+      "items_total": 23,
+      "avg_confidence": 0.9,
+      "cost_usd": 0.0,
+      "latency_ms": 21169.8,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_asset_backed_trust_2011_not_applicable",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 20,
+      "items_total": 23,
+      "avg_confidence": 0.91,
+      "cost_usd": 0.0,
+      "latency_ms": 19917.6,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_kingsoft_cloud_2022_20f_duplicate_heading",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 16,
+      "items_total": 23,
+      "avg_confidence": 0.541,
+      "cost_usd": 0.0,
+      "latency_ms": 27605.7,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_enron_2000_complex_segments",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 15,
+      "items_total": 23,
+      "avg_confidence": 0.907,
+      "cost_usd": 0.0,
+      "latency_ms": 23684.0,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_lehman_2007_investment_bank",
+      "model": "moonshotai/kimi-k2.6",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 20,
+      "items_total": 23,
+      "avg_confidence": 0.907,
+      "cost_usd": 0.0,
+      "latency_ms": 26421.6,
+      "llm_calls": 0,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_american_express_1994_plain_text",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 11,
+      "items_total": 24,
+      "avg_confidence": 1.0,
+      "cost_usd": 0.008714,
+      "latency_ms": 69953.5,
+      "llm_calls": 5,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_asset_backed_trust_2011_not_applicable",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 20,
+      "items_total": 23,
+      "avg_confidence": 0.962,
+      "cost_usd": 0.006206,
+      "latency_ms": 100532.5,
+      "llm_calls": 3,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_kingsoft_cloud_2022_20f_duplicate_heading",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": false,
+      "status": "error",
+      "ok": false,
+      "items_extracted": 0,
+      "items_total": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 240000.0,
+      "llm_calls": 0,
+      "stages_used": [],
+      "force_llm": true,
+      "error": ""
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_enron_2000_complex_segments",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 20,
+      "items_total": 28,
+      "avg_confidence": 0.996,
+      "cost_usd": 0.015335,
+      "latency_ms": 204302.3,
+      "llm_calls": 10,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_lehman_2007_investment_bank",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": false,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 25,
+      "items_total": 28,
+      "avg_confidence": 0.979,
+      "cost_usd": 0.01594,
+      "latency_ms": 179400.2,
+      "llm_calls": 10,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_american_express_1994_plain_text",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 11,
+      "items_total": 24,
+      "avg_confidence": 1.0,
+      "cost_usd": 0.008744,
+      "latency_ms": 104682.8,
+      "llm_calls": 5,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_asset_backed_trust_2011_not_applicable",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": true,
+      "status": "error",
+      "ok": false,
+      "items_extracted": 0,
+      "items_total": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 240000.0,
+      "llm_calls": 0,
+      "stages_used": [],
+      "force_llm": true,
+      "error": ""
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_kingsoft_cloud_2022_20f_duplicate_heading",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": true,
+      "status": "error",
+      "ok": false,
+      "items_extracted": 0,
+      "items_total": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 240000.0,
+      "llm_calls": 0,
+      "stages_used": [],
+      "force_llm": true,
+      "error": ""
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_enron_2000_complex_segments",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 20,
+      "items_total": 28,
+      "avg_confidence": 0.996,
+      "cost_usd": 0.015405,
+      "latency_ms": 194576.2,
+      "llm_calls": 10,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    },
+    {
+      "task": "task3",
+      "case_id": "t3_lehman_2007_investment_bank",
+      "model": "google/gemini-3.1-pro-preview",
+      "use_vision": true,
+      "status": "success",
+      "ok": true,
+      "items_extracted": 25,
+      "items_total": 28,
+      "avg_confidence": 0.978,
+      "cost_usd": 0.01581,
+      "latency_ms": 231727.4,
+      "llm_calls": 10,
+      "stages_used": [
+        "rule_based",
+        "llm_refine",
+        "validation"
+      ],
+      "force_llm": true
+    }
+  ]
+}
