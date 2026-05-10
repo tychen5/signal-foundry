@@ -110,7 +110,6 @@ async def plan_task(
         "timeout", "Connection", "ReadError", "ConnectError",
         "503", "502", "504", "429", "Internal Server Error",
     )
-    last_err: Optional[Exception] = None
     for attempt in range(2):
         try:
             _t0 = time.time()
@@ -134,7 +133,6 @@ async def plan_task(
             return _parse_plan(_resp_text(response), task_description, target_url)
 
         except Exception as e:
-            last_err = e
             err_str = str(e)
             if attempt == 0 and any(m in err_str for m in transient_markers):
                 logger.info("planning_retrying_after_transient", error=err_str[:160])

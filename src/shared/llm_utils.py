@@ -6,7 +6,6 @@ import json
 import re
 from typing import Any, Optional
 
-
 # Smart-quote / Unicode artifacts the JSON extractor must normalise. LLMs
 # (especially via OpenRouter) occasionally inject these, breaking strict
 # json.loads. List is intentionally short — over-aggressive normalisation
