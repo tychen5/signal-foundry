@@ -896,3 +896,693 @@ class TestAPIRoutes:
         """Missing required fields should return 422."""
         resp = client.post("/api/v1/skills/run", json={})
         assert resp.status_code == 422
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Auto-Router (LLM-driven skill orchestration)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestAutoRouterPlanSanitiser:
+    """The plan sanitiser is the safety net between the LLM and the executor.
+
+    It MUST never let through:
+      - skills not in VALID_SKILLS
+      - skills the user excluded
+      - duplicates
+      - build-and-release without an explicit release-intent in the query
+    And it MUST cap the plan at max_skills."""
+
+    def test_sanitiser_filters_unknown(self):
+        from src.task1_cicd.auto_router import _sanitise_plan
+
+        plan = _sanitise_plan(
+            ["security-scan", "frobozz-skill"], [], 4, "do something"
+        )
+        assert plan == ["security-scan"]
+
+    def test_sanitiser_dedupes(self):
+        from src.task1_cicd.auto_router import _sanitise_plan
+
+        plan = _sanitise_plan(
+            ["security-scan", "Security-Scan", "dependency-audit"], [], 4, "do something"
+        )
+        assert plan == ["security-scan", "dependency-audit"]
+
+    def test_sanitiser_respects_exclude_hint(self):
+        from src.task1_cicd.auto_router import _sanitise_plan
+
+        plan = _sanitise_plan(
+            ["security-scan", "dependency-audit"],
+            ["security-scan"],
+            4,
+            "audit deps",
+        )
+        assert plan == ["dependency-audit"]
+        assert "security-scan" not in plan
+
+    def test_sanitiser_caps_at_max_skills(self):
+        from src.task1_cicd.auto_router import _sanitise_plan
+
+        plan = _sanitise_plan(
+            ["security-scan", "dependency-audit", "lint-and-test"],
+            [],
+            2,
+            "check this repo",
+        )
+        assert len(plan) == 2
+
+    def test_sanitiser_blocks_build_release_when_query_silent(self):
+        """build-and-release is the only write-capable skill — never auto-picked
+        unless the user's NL query mentions release/ship/etc."""
+        from src.task1_cicd.auto_router import _sanitise_plan
+
+        plan = _sanitise_plan(
+            ["build-and-release", "security-scan"],
+            [],
+            4,
+            "are there any leaked secrets in the source?",
+        )
+        assert "build-and-release" not in plan
+        assert "security-scan" in plan
+
+    def test_sanitiser_allows_build_release_when_query_explicit(self):
+        from src.task1_cicd.auto_router import _sanitise_plan
+
+        plan = _sanitise_plan(
+            ["build-and-release", "lint-and-test"],
+            [],
+            4,
+            "time to ship a release of this repo",
+        )
+        assert "build-and-release" in plan
+
+    def test_sanitiser_fallback_on_empty(self):
+        """Degenerate fallback when the LLM returned nothing usable."""
+        from src.task1_cicd.auto_router import _sanitise_plan
+
+        plan = _sanitise_plan([], [], 4, "do something useful")
+        assert plan == ["dependency-audit", "security-scan"]
+
+    def test_sanitiser_fallback_respects_exclude(self):
+        """Even the fallback shouldn't include excluded skills."""
+        from src.task1_cicd.auto_router import _sanitise_plan
+
+        plan = _sanitise_plan([], ["security-scan"], 4, "anything")
+        assert "security-scan" not in plan
+        assert "dependency-audit" in plan
+
+
+class TestAutoRouterHelpers:
+    def test_normalise_skill_list_drops_unknown(self):
+        from src.task1_cicd.auto_router import _normalise_skill_list
+
+        out = _normalise_skill_list(["security-scan", "FOO", "dependency-audit"])
+        assert out == ["security-scan", "dependency-audit"]
+
+    def test_normalise_skill_list_handles_none(self):
+        from src.task1_cicd.auto_router import _normalise_skill_list
+
+        assert _normalise_skill_list(None) == []
+        assert _normalise_skill_list([]) == []
+
+    def test_normalise_skill_list_dedupes(self):
+        from src.task1_cicd.auto_router import _normalise_skill_list
+
+        out = _normalise_skill_list(["security-scan", "security-scan"])
+        assert out == ["security-scan"]
+
+    def test_looks_like_release_query_positive(self):
+        from src.task1_cicd.auto_router import _looks_like_release_query
+
+        for q in [
+            "please cut a release of this repo",
+            "ship it to production",
+            "publish a new version",
+            "tag and ship",
+        ]:
+            assert _looks_like_release_query(q), q
+
+    def test_looks_like_release_query_negative(self):
+        from src.task1_cicd.auto_router import _looks_like_release_query
+
+        for q in [
+            "scan for leaked api keys",
+            "audit my dependencies",
+            "run the test suite",
+            "check the code for vulnerabilities",
+        ]:
+            assert not _looks_like_release_query(q), q
+
+    def test_compact_findings_dependency_audit(self):
+        from src.task1_cicd.auto_router import _compact_findings
+
+        raw = {
+            "total_dependencies": 42,
+            "vulnerabilities": [{"cve_id": "CVE-1"}, {"cve_id": "CVE-2"}],
+            "critical_count": 1,
+            "high_count": 1,
+            "outdated": [{"package": "foo"}],
+        }
+        compact = _compact_findings("dependency-audit", raw)
+        assert compact["cve_count"] == 2
+        assert compact["critical_count"] == 1
+        assert compact["outdated_count"] == 1
+        assert compact["total_dependencies"] == 42
+
+    def test_compact_findings_security_scan(self):
+        from src.task1_cicd.auto_router import _compact_findings
+
+        raw = {
+            "files_scanned": 12,
+            "findings": [{"severity": "high"}, {"severity": "low"}],
+            "severity_counts": {"high": 1, "low": 1},
+        }
+        compact = _compact_findings("security-scan", raw)
+        assert compact["finding_count"] == 2
+        assert compact["files_scanned"] == 12
+
+    def test_compact_findings_unknown_skill(self):
+        from src.task1_cicd.auto_router import _compact_findings
+
+        assert _compact_findings("nonsense-skill", {"foo": "bar"}) == {}
+
+    def test_aggregate_signals_combines_skills(self):
+        from src.task1_cicd.auto_router import _aggregate_signals
+        from src.task1_cicd.schemas import AutoRouterStep
+
+        steps = [
+            AutoRouterStep(
+                iteration=1,
+                skill_executed="dependency-audit",
+                raw_result={
+                    "vulnerabilities": [{"cve_id": "CVE-1"}, {"cve_id": "CVE-2"}],
+                    "outdated": [{"package": "foo"}],
+                },
+            ),
+            AutoRouterStep(
+                iteration=2,
+                skill_executed="security-scan",
+                raw_result={
+                    "findings": [
+                        {"finding_type": "secret"},
+                        {"finding_type": "secret"},
+                        {"finding_type": "sast"},
+                    ],
+                },
+            ),
+        ]
+        signals = _aggregate_signals(steps)
+        assert signals["total_cves"] == 2
+        assert signals["total_outdated"] == 1
+        assert signals["total_secrets"] == 2
+        assert signals["total_sast"] == 1
+
+
+class TestAutoRouterSchemas:
+    def test_request_minimal(self):
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/owner/repo",
+            natural_language_query="check for leaked secrets",
+        )
+        assert req.branch == "main"
+        assert req.dry_run is True
+        assert req.max_iterations == 4
+        assert req.include_skills_hint == []
+        assert req.exclude_skills_hint == []
+
+    def test_request_rejects_short_query(self):
+        from pydantic import ValidationError
+
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        with pytest.raises(ValidationError):
+            AutoRouterRequest(
+                repo_url="https://github.com/owner/repo",
+                natural_language_query="hi",
+            )
+
+    def test_request_caps_max_iterations(self):
+        from pydantic import ValidationError
+
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        with pytest.raises(ValidationError):
+            AutoRouterRequest(
+                repo_url="https://github.com/o/r",
+                natural_language_query="a real query",
+                max_iterations=99,
+            )
+
+    def test_step_schema(self):
+        from src.task1_cicd.schemas import AutoRouterStep
+
+        step = AutoRouterStep(iteration=1, skill_executed="security-scan")
+        assert step.cache_hit is False
+        assert step.cost_usd == 0.0
+
+    def test_result_schema_default_lists(self):
+        from src.task1_cicd.schemas import AutoRouterResult
+
+        res = AutoRouterResult(query="x")
+        assert res.skills_executed == []
+        assert res.steps == []
+
+
+class TestAutoRouterPromptFiles:
+    def _prompt_dir(self) -> Path:
+        return Path(__file__).resolve().parent.parent / "prompts" / "cicd"
+
+    def test_plan_prompt_exists(self):
+        path = self._prompt_dir() / "v1_auto_router_plan.txt"
+        assert path.exists()
+
+    def test_plan_prompt_template_vars(self):
+        path = self._prompt_dir() / "v1_auto_router_plan.txt"
+        content = path.read_text()
+        for var in (
+            "{user_query}",
+            "{repo_url}",
+            "{branch}",
+            "{max_skills}",
+            "{include_hint}",
+            "{exclude_hint}",
+        ):
+            assert var in content, f"missing template var: {var}"
+
+    def test_decide_prompt_exists(self):
+        path = self._prompt_dir() / "v1_auto_router_decide.txt"
+        assert path.exists()
+
+    def test_decide_prompt_template_vars(self):
+        path = self._prompt_dir() / "v1_auto_router_decide.txt"
+        content = path.read_text()
+        for var in (
+            "{user_query}",
+            "{executed_skills}",
+            "{remaining_plan}",
+            "{last_skill}",
+            "{exclude_hint}",
+        ):
+            assert var in content, f"missing template var: {var}"
+
+    def test_synthesize_prompt_exists(self):
+        path = self._prompt_dir() / "v1_auto_router_synthesize.txt"
+        assert path.exists()
+
+    def test_synthesize_prompt_template_vars(self):
+        path = self._prompt_dir() / "v1_auto_router_synthesize.txt"
+        content = path.read_text()
+        for var in (
+            "{user_query}",
+            "{executed_skills}",
+            "{per_skill_summaries}",
+            "{total_cves}",
+            "{total_secrets}",
+        ):
+            assert var in content, f"missing template var: {var}"
+
+
+class TestAutoRouterLoop:
+    """End-to-end tests with mocked LLM stages and a stubbed skill engine.
+
+    The orchestration loop has 5 invariants we want to lock in:
+      1. The plan from _llm_plan drives execution order.
+      2. Decision 'continue' walks the remaining plan, 'add_skill' pivots,
+         'stop' terminates.
+      3. The same skill is never executed twice.
+      4. The exclude_hint is honored even when the LLM tries to violate it.
+      5. The iteration cap and budget cap are hard stops.
+    """
+
+    @pytest.mark.asyncio
+    async def test_two_skill_plan_executes_in_order(self):
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/owner/repo",
+            natural_language_query="check for leaked secrets and CVEs",
+        )
+
+        async def fake_plan(request, trace_id):
+            return (
+                ["dependency-audit", "security-scan"],
+                {"dependency-audit": "audit deps", "security-scan": "scan code"},
+                "user wants vulns + leaked secrets",
+                0.9,
+            )
+
+        async def fake_decide(*args, **kwargs):
+            executed = kwargs.get("executed_skills") or args[3]
+            if len(executed) >= 2:
+                return ("stop", None, "intent satisfied", 0.9)
+            return ("continue", None, "next in plan", 0.85)
+
+        async def fake_synth(request, steps, trace_id):
+            return f"Ran {len(steps)} skills successfully."
+
+        order: list[str] = []
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            order.append(skill_request.skill_name)
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={
+                    "skill": skill_request.skill_name,
+                    "status": "clean",
+                    "summary": f"{skill_request.skill_name} done",
+                    "commit_sha": "abc123",
+                },
+                cost_metadata={},
+                latency_ms=10.0,
+            )
+
+        with patch.object(ar, "_llm_plan", fake_plan), \
+             patch.object(ar, "_llm_decide", fake_decide), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            result = await ar.run_auto_router(req, "trace-aux-1")
+
+        assert result.status.value == "success"
+        assert order == ["dependency-audit", "security-scan"]
+        payload = result.result
+        assert payload["skill_executed"] == ["dependency-audit", "security-scan"]
+        assert payload["skills_executed"] == ["dependency-audit", "security-scan"]
+        assert payload["iterations_used"] == 2
+        assert payload["terminated_reason"] == "router_stop"
+        assert payload["final_synthesis"].startswith("Ran 2 skills")
+
+    @pytest.mark.asyncio
+    async def test_add_skill_pivots_remaining_plan(self):
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/o/r",
+            natural_language_query="check the code thoroughly please",
+        )
+
+        async def fake_plan(request, trace_id):
+            return (["dependency-audit"], {"dependency-audit": "audit deps"}, "intent", 0.7)
+
+        decisions = iter([
+            # After first skill: pivot to security-scan
+            ("add_skill", "security-scan", "deps look fine, but we should check secrets too", 0.8),
+            # After second skill: stop
+            ("stop", None, "all clear", 0.9),
+        ])
+
+        async def fake_decide(*args, **kwargs):
+            return next(decisions)
+
+        async def fake_synth(*args, **kwargs):
+            return "ok"
+
+        order = []
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            order.append(skill_request.skill_name)
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={"skill": skill_request.skill_name, "status": "clean", "summary": "x"},
+                cost_metadata={},
+                latency_ms=5.0,
+            )
+
+        with patch.object(ar, "_llm_plan", fake_plan), \
+             patch.object(ar, "_llm_decide", fake_decide), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            result = await ar.run_auto_router(req, "trace-aux-2")
+
+        assert order == ["dependency-audit", "security-scan"]
+        payload = result.result
+        assert payload["iterations_used"] == 2
+
+    @pytest.mark.asyncio
+    async def test_exclude_hint_is_hard_block_during_decision(self):
+        """Even if the decide-LLM picks an excluded skill, we MUST drop it."""
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/o/r",
+            natural_language_query="check this repo",
+            exclude_skills_hint=["security-scan"],
+        )
+
+        async def fake_plan(request, trace_id):
+            return (["dependency-audit"], {"dependency-audit": "audit"}, "intent", 0.7)
+
+        async def fake_decide(*args, **kwargs):
+            # LLM tries to pivot to security-scan despite exclude hint.
+            return ("add_skill", "security-scan", "we should also scan for secrets", 0.8)
+
+        async def fake_synth(*args, **kwargs):
+            return "ok"
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={"skill": skill_request.skill_name, "status": "clean", "summary": "x"},
+                cost_metadata={},
+                latency_ms=5.0,
+            )
+
+        # The defensive scrub happens INSIDE _llm_decide. Since we monkeypatch
+        # _llm_decide, the scrub doesn't apply — but `add_skill` with a forbidden
+        # skill still funnels through `remaining_plan = [next_skill]` which then
+        # hits the in-loop dedupe + sanity guards. So we wrap _llm_decide with
+        # the scrub logic mirroring production: any next_skill in exclude_hint
+        # becomes None, and the loop should treat that as a soft no-op pivot.
+
+        async def fake_decide_scrubbed(*args, **kwargs):
+            action, next_skill, reasoning, conf = await fake_decide(*args, **kwargs)
+            exclude_hint = kwargs.get("exclude_hint") or []
+            if next_skill in exclude_hint:
+                next_skill = None
+            return action, next_skill, reasoning, conf
+
+        with patch.object(ar, "_llm_plan", fake_plan), \
+             patch.object(ar, "_llm_decide", fake_decide_scrubbed), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            result = await ar.run_auto_router(req, "trace-aux-excl")
+
+        payload = result.result
+        # security-scan must NEVER appear in skills_executed
+        assert "security-scan" not in payload["skills_executed"]
+
+    @pytest.mark.asyncio
+    async def test_iteration_cap_terminates_loop(self):
+        """Even with a long plan and 'continue' decisions, the iteration cap stops us."""
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/o/r",
+            natural_language_query="check the whole repo for everything",
+            max_iterations=2,
+        )
+
+        async def fake_plan(request, trace_id):
+            return (
+                ["dependency-audit", "security-scan", "lint-and-test"],
+                {},
+                "broad audit",
+                0.8,
+            )
+
+        async def fake_decide(*args, **kwargs):
+            return ("continue", None, "keep going", 0.9)
+
+        async def fake_synth(*args, **kwargs):
+            return "ok"
+
+        order = []
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            order.append(skill_request.skill_name)
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={"skill": skill_request.skill_name, "status": "clean", "summary": "x"},
+                cost_metadata={},
+                latency_ms=5.0,
+            )
+
+        with patch.object(ar, "_llm_plan", fake_plan), \
+             patch.object(ar, "_llm_decide", fake_decide), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            result = await ar.run_auto_router(req, "trace-aux-cap")
+
+        payload = result.result
+        assert payload["iterations_used"] == 2
+        assert payload["terminated_reason"] == "iteration_cap"
+        assert len(order) == 2
+
+    @pytest.mark.asyncio
+    async def test_skill_failure_aborts_loop(self):
+        """A failed skill should stop the loop without calling decide for nothing."""
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, FailureType, TaskType
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/o/r",
+            natural_language_query="check this",
+        )
+
+        async def fake_plan(request, trace_id):
+            return (["dependency-audit", "security-scan"], {}, "intent", 0.8)
+
+        decide_called = []
+
+        async def fake_decide(*args, **kwargs):
+            decide_called.append(1)
+            return ("continue", None, "keep going", 0.9)
+
+        async def fake_synth(*args, **kwargs):
+            return "ok"
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            return ExecutionResult(
+                status=ExecutionStatus.FAILED,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                error="repo not found",
+                failure_type=FailureType.REPO_NOT_FOUND,
+            )
+
+        with patch.object(ar, "_llm_plan", fake_plan), \
+             patch.object(ar, "_llm_decide", fake_decide), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            result = await ar.run_auto_router(req, "trace-aux-fail")
+
+        payload = result.result
+        # After a failed skill, we MUST NOT call _llm_decide (saves money).
+        assert decide_called == []
+        assert payload["terminated_reason"] == "skill_failed"
+
+    @pytest.mark.asyncio
+    async def test_include_hint_reorders_plan(self):
+        """include_hint should push hinted skills to the front of the plan."""
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/o/r",
+            natural_language_query="check this repo for everything",
+            include_skills_hint=["security-scan"],
+        )
+
+        async def fake_plan(request, trace_id):
+            # LLM put dependency-audit first, but user hinted security-scan.
+            return (["dependency-audit", "security-scan"], {}, "intent", 0.8)
+
+        async def fake_decide(*args, **kwargs):
+            executed = kwargs.get("executed_skills") or args[3]
+            return ("continue", None, "next", 0.9) if len(executed) < 2 else ("stop", None, "done", 0.9)
+
+        async def fake_synth(*args, **kwargs):
+            return "ok"
+
+        order = []
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            order.append(skill_request.skill_name)
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={"skill": skill_request.skill_name, "status": "clean", "summary": "x"},
+                cost_metadata={},
+                latency_ms=5.0,
+            )
+
+        with patch.object(ar, "_llm_plan", fake_plan), \
+             patch.object(ar, "_llm_decide", fake_decide), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            await ar.run_auto_router(req, "trace-aux-incl")
+
+        # security-scan must run FIRST because it was hinted.
+        assert order[0] == "security-scan"
+
+
+class TestAutoRouterAPI:
+    @pytest.fixture
+    def client(self):
+        from fastapi.testclient import TestClient
+
+        from src.main import app
+        return TestClient(app)
+
+    def test_auto_run_validates_body(self, client):
+        """Missing required fields should return 422."""
+        resp = client.post("/api/v1/skills/auto/run", json={})
+        assert resp.status_code == 422
+
+    def test_auto_run_validates_short_query(self, client):
+        resp = client.post(
+            "/api/v1/skills/auto/run",
+            json={
+                "repo_url": "https://github.com/o/r",
+                "natural_language_query": "x",
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_auto_run_returns_execution_result_schema(self, client):
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+
+        async def fake_engine(req, trace_id, progress_callback=None):
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={
+                    "query": req.natural_language_query,
+                    "skills_executed": ["dependency-audit"],
+                    "skill_executed": ["dependency-audit"],
+                    "final_synthesis": "ok",
+                    "steps": [],
+                    "iterations_used": 1,
+                    "terminated_reason": "router_stop",
+                    "total_cost_usd": 0.0,
+                    "total_latency_ms": 5.0,
+                },
+                cost_metadata={"cost_usd": 0.0},
+                latency_ms=5.0,
+            )
+
+        with patch("src.task1_cicd.auto_router.run_auto_router", AsyncMock(side_effect=fake_engine)):
+            resp = client.post(
+                "/api/v1/skills/auto/run",
+                json={
+                    "repo_url": "https://github.com/o/r",
+                    "natural_language_query": "scan for leaked api keys",
+                },
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "success"
+        assert "skill_executed" in body["result"]
+        assert body["result"]["skill_executed"] == ["dependency-audit"]
