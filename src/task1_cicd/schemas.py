@@ -188,3 +188,91 @@ class SkillListResponse(BaseModel):
     """Available skills listing."""
 
     skills: list[dict[str, Any]]
+
+
+# --- Auto-Router (LLM-driven skill orchestration) ---
+
+
+class AutoRouterRequest(BaseModel):
+    """Natural-language CI/CD request — router LLM picks which skills to run."""
+
+    repo_url: str = Field(..., description="GitHub repository URL")
+    branch: str = Field(default="main", description="Branch to analyze")
+    natural_language_query: str = Field(
+        ...,
+        description=(
+            "Free-form description of what the user wants checked. "
+            "Examples: 'check if there are any leaked secrets', "
+            "'audit my deps for CVEs', 'is this safe to ship?'"
+        ),
+        min_length=3,
+    )
+    include_skills_hint: list[str] = Field(
+        default_factory=list,
+        description="Skill names the user suggests routing through (soft hint).",
+    )
+    exclude_skills_hint: list[str] = Field(
+        default_factory=list,
+        description="Skill names the user explicitly does NOT want run (hard block).",
+    )
+    dry_run: bool = Field(
+        default=True,
+        description="If build-and-release is selected, run in preview mode (no GitHub release created).",
+    )
+    max_iterations: int = Field(
+        default=4,
+        ge=1,
+        le=6,
+        description="Hard cap on router decision iterations (defends against runaway loops).",
+    )
+    max_skills: int = Field(
+        default=4,
+        ge=1,
+        le=4,
+        description="Maximum number of distinct skills the router may run (≤4 = total catalog).",
+    )
+    budget_cap_usd: Optional[float] = Field(
+        default=None,
+        description=(
+            "Optional per-request LLM budget cap in USD. Leave None to use the "
+            "task default ($0.30 for task1_cicd)."
+        ),
+    )
+    model: ModelSelectionRequest = Field(default_factory=ModelSelectionRequest)
+
+
+class AutoRouterStep(BaseModel):
+    """One iteration of the router loop = one skill execution + the router's reflection on it."""
+
+    iteration: int
+    skill_executed: str
+    rationale: str = ""  # why this skill was picked at this iteration
+    decision_after: str = ""  # "continue" | "add_skill" | "stop" | "" (terminal)
+    decision_reasoning: str = ""
+    decision_confidence: float = 0.0
+    status: str = ""  # the skill result status (clean/findings/passed/etc.)
+    summary: str = ""  # the per-skill result summary (LLM-generated)
+    cache_hit: bool = False
+    cost_usd: float = 0.0
+    latency_ms: float = 0.0
+    raw_result: Optional[dict[str, Any]] = None  # full skill result, for the FE timeline
+
+
+class AutoRouterResult(BaseModel):
+    """Final structured payload returned by the auto-router."""
+
+    query: str
+    overall_intent: str = ""
+    initial_plan: list[str] = Field(default_factory=list)
+    plan_confidence: float = 0.0
+    skills_executed: list[str] = Field(default_factory=list)
+    steps: list[AutoRouterStep] = Field(default_factory=list)
+    final_synthesis: str = ""
+    iterations_used: int = 0
+    terminated_reason: str = ""  # "router_stop" | "iteration_cap" | "budget_cap" | "plan_exhausted" | "error"
+    total_cost_usd: float = 0.0
+    total_latency_ms: float = 0.0
+    repo_url: str = ""
+    branch: str = ""
+    commit_sha: str = ""
+    dry_run: bool = True
