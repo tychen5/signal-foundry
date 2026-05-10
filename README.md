@@ -6,6 +6,7 @@
 
 **Live demo:** [`https://signal-foundry.zeabur.app`](https://signal-foundry.zeabur.app) (Zeabur, 2 vCPU / 4 GB / 50 GB SSD dedicated)
 **🎥 Video Walkthroughs:** [YouTube Playlist (Overview & Tasks 1-3)](https://www.youtube.com/playlist?list=PLihQVz7VBjYHZ2JDSF-L9TfihXHNHuTCw)
+> *Alternatively, you can view the raw MP4 recordings directly in this repository: [01-Overview](demo_videos/01-Overview.mp4) | [02-Task1](demo_videos/02-Task1.mp4) | [03-Task2](demo_videos/03-Task2.mp4) | [04-Task3](demo_videos/04-Task3.mp4)*
 
 > Routes: `/` dashboard, `/task1` CI/CD Skills, `/task2` Browser Agent, `/task3` SEC 10-K. JSON APIs under `/api/v1/{skills,browser,sec}/*`. Health at `/health`, live cost ledger at `/metrics`.
 > Browser visits to `/health`, `/metrics`, and `/api/v1/models` render user-friendly HTML dashboards; API clients still receive JSON.
