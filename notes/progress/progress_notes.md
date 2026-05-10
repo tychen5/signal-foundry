@@ -1,6 +1,6 @@
 # TODO checklist
 
-1. []
+1. [x] Phase 0 
     1. [x] 請先查看了解 @_JobDescription.md 相關background與搜尋理解公司需要的方向
         - ✅ 已完成。VICI Holdings — 金融交易公司，LLM Agent + RL核心能力，交易自動化與市場洞察。
     2. [x] 接著查看此repo將要實作的三個項目之描述與目標預期 @_TaskDescription.md
@@ -171,7 +171,8 @@
 8. [x] Phase 8 README展示與說明強化 ✅ (2026-05-08, partial — items 1, 2, 4 done; item 3 ongoing)
   1. [x] README markdown table fixed: AI Collaboration Log table had an orphan blank line splitting one logical table into two; merged so all rows render on GitHub. Architecture diagram already aligned in original ASCII art form.
   2. [x] README updated comprehensively: 35-case T3 eval (was 27/30), 100% pass rate, $0 rule-only cost, v4 boundary-refine prompt, vision benchmark results on 5 hard edge-case filings, BYOK 3-key pattern (OpenRouter / NVIDIA / LangSmith), "What's new in latest sweep" section front-loaded, 289 unit tests (+13 from JSON extractor coverage).
-  3. [] 先依據 @notes/_briefs/_TaskDescription.md 分析面試官會想要喜歡看到的解釋/說明/內容還會有哪些，好好思考以後再進行更多更豐富的補充與展示。 (Ongoing — README已新增"What's new"與vision benchmark slice，可繼續迭代)
+  3. [x] 先依據 @notes/_briefs/_TaskDescription.md 分析面試官會想要喜歡看到的解釋/說明/內容還會有哪些，好好思考以後再進行更多更豐富的補充與展示。
+      - ✅ 已完成。README 903 行，涵蓋：Architecture diagram, Design Trade-offs (9 rows), Context Engineering Decisions (5 subsections), Known Failure Modes (per-task tables), AI Collaboration Log (12 real bug entries), Cost & Latency 表, Vision Benchmark 結果, vs OpenClaw/HermesAgent 9-dimension 比較表, Future Roadmap (6 items)。全面審計通過 (289 tests, 0 lint errors)。
   4. [x] "reviewer/面試官" language replaced throughout README and templates with user-centric "user/User/Users" wording. UI says "Quick launchpad" instead of "Reviewer launchpad". system.html says "Usage Guidance" instead of "Reviewer Guidance".
 
 
@@ -193,9 +194,9 @@
 
 ---
 
-## 🔄 當前狀態 (2026-05-06, Phase 4 完成)
+## 🔄 當前狀態 (2026-05-10, 全部 Phases 0–9 完成)
 
-### ✅ 全部 Phases (0–4) 完成！
+### ✅ 全部 Phases (0–9) 完成！
 
 | Phase | Task | 狀態 | Tests |
 |-------|------|------|-------|
@@ -203,43 +204,24 @@
 | Phase 1 | Task 3: SEC 10-K Pipeline | ✅ | 46 tests (+4 regression) |
 | Phase 2 | Task 2: Browser Agent | ✅ | 50 tests (+8 silent-failure) |
 | Phase 3 | Task 1: CI/CD Skills Engine | ✅ | 79 tests |
-| UI Templates | task1.html, task2.html, task3.html | ✅ | — |
-| Phase 4 | LLM provider unification + live eval runs + AGENTS/CLAUDE updates + README rewrite | ✅ | +5 opt-in live integration tests |
-| **Total** | | | **193 unit + 5 live integration tests** |
+| Phase 4 | LLM unification + live evals + AGENTS/CLAUDE/README | ✅ | +5 live integration |
+| Phase 5 | Eval expansion + vision integration + live sweeps | ✅ | +25 regression |
+| Phase 6 | System-wide hardening + BYOK + Zeabur deploy | ✅ | (completed via 7-9) |
+| Phase 7 | UI/UX polish + SSE streaming + error classification | ✅ | — |
+| Phase 8 | README enrichment + edge-case sweep | ✅ | +25 regression |
+| Phase 9 | LLM strengthening + JSON extractors + UX iteration | ✅ | +13 JSON extractor |
+| **Total** | | | **289 unit + 7 opt-in live tests** |
 
-### ✅ Phase 4 完成項目 (Section 5 — 強化優化所有 tasks)
+### 🎯 Final Audit (2026-05-10)
 
-1. **LLM provider 統一 OpenAI-compat backend** — `src/llm_provider.py` 預設 `langchain_openai.ChatOpenAI` 指向 NVIDIA NIM / OpenRouter base_url。修掉了 `langchain-nvidia-ai-endpoints` 在 `deepseek-v4-pro` 的 `Multiple candidates` AssertionError，與 `max_tokens` vs `max_completion_tokens` 的 silent-drop bug。Per-model `extra_body` (NIM thinking-mode toggles) 寫入 `MODEL_REGISTRY`。`LLM_BACKEND=langchain_native` 可切回原生 wrapper。
-2. **Skill registry get_llm 簽名修正** — 之前傳 `ModelSelectionRequest` 物件給期望 `model_name: str` 的 `get_llm`，活化 LLM 路徑瞬間就 crash。改為傳字串並寫了 `tests/test_llm_integration.py::test_skill_registry_llm_match_returns_canonical_skill` 鎖死。
-3. **Chat-content coercion (`src/shared/llm_utils.coerce_message_text`)** — 新版 ChatOpenAI / Anthropic 回傳 `.content` 可能是 `[{"type":"text","text":"..."}]` block list。`summary[:200]` 直接 `KeyError: slice(...)`。建了 helper、所有 task LLM call site 都路由過去。
-4. **SecurityScanResult.summary 改名為 severity_counts** — namespace collision 把 LLM summary 字串 silently 蓋掉的 bug。同時把 skill_engine 的 merge order 改成 `**raw_result` 在前、engine fields 在後永遠勝出。
-5. **Validator 嚴格 status 檢測** — Tesla 2023 Item 1 被誤判為 `incorporated_by_reference` 因為 body 同時有 "incorporated" 和 "reference" (Tesla was incorporated in 2003 / for reference, see…)。改用 `rule_parser.detect_item_status` 的嚴格 header-zone heuristic。回歸測試 `test_fix_status_does_not_false_fire_on_long_business_section` 鎖死。
-6. **NOT_FOUND 占位 char_range fix** — `[0,0]` 占位之前觸發 `char_range_bounds` 假錯誤，改為跳過 NOT_FOUND items 的範圍檢查。
-7. **Optional items 政策** — Item 6 (SEC release 33-10890 in 2021 廢止)、1C/9C (2023 新增)、16 (一直都是 optional) — coverage check 不再為這些 missing 而失敗。
-8. **Browser silent-failure guard** — `BrowserAgent._guard_against_silent_success` 在 verifier 說 "task complete" 之後再 ground 一次：(a) hedge phrases (中英 9+ 種變體) → `status="not_found"`；(b) 答案中數字若都不在 observed page text 裡 → `status="unverified"`，failure_modes 紀錄具體假數字。是 spec 最高分項目。
-9. **Healer 補強 9-class 之外的 deterministic 診斷** — 429 rate-limit (back off + retry)、403 anti-bot (不重試)、TLS/cert errors、frame-detached / target-closed mid-action navigation。
-10. **Task 2 eval set +5 真實情境 cases** — 玩股網 TX 盤後支撐壓力、TWSE 個股查詢、cnyes 加權指數、Yahoo Finance options chain、example.com 反幻覺 negative case。從 12 case 擴到 17 case。
-11. **Task 3 真實 SEC 8-case eval 跑完並 commit** — 100% pass、$0 cost、~1.9 s avg latency。Report 在 `evals/task3/results/`。
-12. **Task 1 真實 5-case eval 跑完並 commit** — 5/5 pass against real GitHub repos + 真實 NVIDIA LLM。$0.0068 total、avg 6.1s、p95 12.0s。Report 在 `evals/task1/results/`。
-13. **Live LLM integration test** — `RUN_LLM_INTEGRATION=1 pytest tests/test_llm_integration.py` 5/5 pass，涵蓋 4 個 NVIDIA 模型 + 1 個 OpenRouter 模型 + 端到端 skill registry LLM disambiguator。
-14. **AGENTS.md** — 加入完整 per-task engineering notes (Task 1/2/3 的 context engineering decisions, LLM touch points, red lines, idempotency) + cross-cutting harness engineering highlights。
-15. **CLAUDE.md** — 加入 red lines (chat content coercion、silent-failure guard、optional items 政策) + harness quick reference。
-16. **README** — 完整改寫。eval 結果表格、harness engineering highlights section、AI collaboration log (列出 LLM 一開始寫錯的 6 個 bug 和修法)、Zeabur URL、cost / latency 表。
-17. **requirements.txt** — 加入 `langchain-openai>=0.2.10` (新預設 backend)。
-18. **Settings extra='ignore'** — 容忍 .env 中的 Zeabur 變數，不為 deployment metadata 而 crash。
-19. **Eval results 進 git** — `.gitignore` 開放 `evals/*/results/*.{json,md}` 進 commit，方便 README 引用。
-
-### 🎯 達成度與設計亮點
-
-- **Eval discipline**: Task 1 + Task 3 都有 100% 通過率的 committed live eval reports，搭配 deterministic checks (no_crash, has_result, correct_skill, dry_run_no_tag, has_summary, pipeline_validation, required_items, expected_status_items)。
-- **Cost discipline**: Task 1 5 cases 總成本 $0.0068；Task 3 8 cases rule-only 路徑 $0。Per-task / per-skill 成本即時 expose 在 `/metrics`。
-- **Silent-failure prevention**: Task 2 的 `_guard_against_silent_success` 是面試官最在意的能力 — 在 hedging 和 numeric grounding 兩條軸上都做了。
-- **Harness > model 哲學**: LLM provider 抽象層、cost tracker、chat content coercion、reactive planning、selective LLM、idempotency cache 都是 wrapper 層的工作，不靠單一模型能力。
-- **誠實的 failure log**: AGENTS.md 和 README 的 AI Collaboration Log 真實列出了 LLM 一開始寫錯的 6 個 bug 和我修的方法。比假裝一切順利更有可信度。
-- **OpenClaw / HermesAgent 比較表**: README 列出 9 個維度上的差異，每一個都對應到 repo 中具體的程式碼。
+- **289 tests pass**, 7 skipped (gated live LLM tests), **0 lint errors**
+- **Eval coverage**: T1 5 cases, T2 38 cases, T3 35 cases = **78 total**
+- **Cost discipline**: T1 $0.007/5-case, T3 $0/35-case (rule-only), T2 $0.01-0.05/request
+- **Deployment**: `signal-foundry.zeabur.app` live, `/health` + `/metrics` + all 3 task APIs verified
+- **README**: 903 lines with architecture diagram, 9-row tradeoffs table, 12-entry AI collab log, vision benchmark, vs OpenClaw/HermesAgent comparison
 
 ### 🚧 真正剩下還需要做的 :
-...
+（無 — 全部 TODO checklist 已完成。未來可選的優化方向見 README Future Roadmap。）
 
 
 ---
