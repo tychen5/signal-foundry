@@ -24,6 +24,11 @@ This is not a "make it work" demo — it's three systems engineered around the t
 
 Every section of this README is paired with the *deliberate engineering decision* that addresses one of those failure modes — and where I noticed the spec asks for things that even a strong off-the-shelf agent (OpenClaw / HermesAgent) doesn't ship.
 
+### What's new in the latest sweep (Phase 10: Task 1 Auto-Router)
+
+- **Task 1 Auto-Router** — natural-language CI/CD orchestration. The user types a free-form query ("are there any leaked secrets and vulnerable deps?") and a router LLM autonomously plans an ordered set of skills, executes them via the existing 13-step engine, **reflects after every result** (continue / pivot to a different skill / stop), and synthesizes a single answer tying everything back to the original question. New endpoints: `POST /api/v1/skills/auto/run` + `POST /api/v1/skills/auto/stream` (SSE). The demo response surfaces a top-level `skill_executed` field so a reviewer can confirm at a glance which skills the LLM picked. See [Task 1 — Auto-Router](#task-1--auto-router-llm-driven-skill-orchestration).
+- The frontend at [`/task1`](https://signal-foundry.zeabur.app/task1) was rebuilt around an **Auto / Manual** mode toggle. Auto mode adds a NL query box, include/exclude skill hint chips, an iteration timeline that shows the router's plan → per-step decision → final synthesis, and an SSE live-trace.
+
 ### What's new in the latest sweep (Phase 8 + Phase 9)
 
 - **Task 3 eval set 30 → 35 cases**, 100% pass rate on rule-only path. Added pre-bankruptcy filings (Enron FY2000 plain-text, WorldCom FY2001, Lehman FY2007) and going-concern cases (Sears 2017) to genuinely exercise the LLM-trigger conditions. See [Task 3 — latest eval sweep](#task-3--latest-eval-sweep-3535-pass-100-0-rule-only-cost).
@@ -104,7 +109,9 @@ python -m evals.task2.run_eval --vision --timeout 120   # 38-case set, Playwrigh
 - `GET /task1` — CI/CD Skills runner UI
 - `GET /task2` — Browser Agent UI
 - `GET /task3` — SEC 10-K Extraction UI
-- `POST /api/v1/skills/run` — Run a CI/CD skill against a GitHub repo
+- `POST /api/v1/skills/run` — Run a single named CI/CD skill against a GitHub repo
+- `POST /api/v1/skills/auto/run` — **Auto-Router**: NL query → LLM picks + chains skills (PEPS loop)
+- `POST /api/v1/skills/auto/stream` — SSE stream of the auto-router's plan → execute → decide → synthesize
 - `POST /api/v1/browser/execute` — Execute a browser task via natural language
 - `POST /api/v1/sec/extract` — Extract items from a 10-K filing
 - `GET /metrics` — Live cost / latency / token ledger
@@ -412,6 +419,134 @@ curl -X POST http://localhost:8080/api/v1/skills/run \
 curl -X POST http://localhost:8080/api/v1/skills/run \
   -d '{"repo_url":"...","skill_name":"please make sure no API tokens are committed in the source tree"}'
 ```
+
+### Task 1 — Auto-Router (LLM-driven skill orchestration)
+
+The four skills above are precise instruments. The **Auto-Router** is the conductor: a user asks a fuzzy question in natural language and the router LLM decides which skills to play, in what order, when to stop, and how to summarize the joint result.
+
+**Why a separate auto-router on top of the existing skill engine?** Because the spec said *"if you handed this off to OpenClaw / HermesAgent, what would they get wrong?"* — and the answer is that a generic agent would either run every tool every time (no cost discipline), or pick one tool and stop (no composition). Neither matches a CI/CD use case where the right answer to *"is this safe to ship?"* is *"run dependency-audit + security-scan, then if either flags anything serious, also run lint-and-test to make sure nothing's broken."*
+
+**PEPS loop — Plan → Execute → Postmortem → Synthesize:**
+
+```
+[user query] ──► PLAN (LLM) ──► ordered skill list (e.g. [dep-audit, security-scan])
+                    │
+                    ▼
+              ┌─ EXECUTE one skill (existing 13-step engine, with cache reuse)
+              │       │
+              │       ▼
+              │  POSTMORTEM (LLM): given prior + new result,
+              │       continue plan / pivot to a different skill / stop?
+              │       │
+              │       ├── continue ─► next skill in plan
+              │       ├── add_skill ─► run a new skill the prior result implied
+              │       └── stop ─► break loop
+              │
+              └──── (loops with hard caps: max_iterations=4, budget_cap_usd=$0.30)
+                    │
+                    ▼
+              SYNTHESIZE (LLM): one paragraph tying skill outputs back to the user's question
+```
+
+The router LLM does **three** kinds of LLM calls per request: one Plan, one Postmortem per executed skill, one Synthesize. Plus the per-skill summary the existing engine writes. So a 2-skill auto-router run is typically ~5 LLM calls totalling **$0.005–$0.015** depending on model, well under the per-request `task1_cicd` budget cap of $0.30.
+
+**Defensive layers — *agentic* doesn't mean *unsafe*:**
+
+| Layer | Guarantee | Where enforced |
+|---|---|---|
+| Plan sanitiser | LLM cannot smuggle in unknown skill names, duplicates, or excluded skills | `_sanitise_plan()` in `auto_router.py` |
+| Write-skill gate | `build-and-release` is the only write-capable skill; the router refuses to schedule it unless the user's NL query contains release/ship/tag/publish/version-bump intent — even if the planner LLM tries to | `_looks_like_release_query()` heuristic, applied in both plan and postmortem |
+| Iteration cap | Hard ceiling (default 4, max 6) — the loop terminates with `terminated_reason="iteration_cap"` even if the LLM keeps saying "continue" | Loop guard in `run_auto_router()` |
+| Budget cap | Default $0.30/req from the existing `cost_tracker.DEFAULT_BUDGET_CAP_USD["task1_cicd"]` — applied between iterations | `tracker.request_cost_so_far(trace_id)` |
+| Idempotency | A skill never runs twice in the same loop. Each underlying `run_skill()` call hits the existing SHA-keyed cache → identical repo+skill = instant cache hit, $0 LLM, no clone | Deduplication in plan + `executed_skills` check in postmortem |
+| Hard exclude | The `exclude_skills_hint` list is honored at plan time AND at postmortem time, so a runaway LLM "add_skill" pivot can't override what the user explicitly forbade | Both `_llm_plan` and `_llm_decide` scrub `next_skill ∈ exclude_hint` |
+| Empty-plan fallback | If the LLM returns garbage, default to the two cheap read-only skills (`dependency-audit`, `security-scan`) — never crash the request | `_sanitise_plan` final branch |
+
+**Reviewer demo evidence.** The `result.skill_executed` field on every successful auto-router response is the single value to grep for — it's the canonical record of *what the LLM actually picked*. Example response shape:
+
+```jsonc
+{
+  "status": "success",
+  "task": "task1_cicd",
+  "trace_id": "abc1...",
+  "result": {
+    "query": "please check if there are any vulnerable dependencies or leaked credentials",
+    "overall_intent": "user wants both supply-chain CVE check and secret/SAST scan of source",
+    "initial_plan": ["dependency-audit", "security-scan"],
+    "plan_confidence": 0.94,
+    "skill_executed": ["dependency-audit", "security-scan"],   // ◄─ reviewer-facing field
+    "skills_executed": ["dependency-audit", "security-scan"],  // alias for grep flexibility
+    "steps": [
+      {
+        "iteration": 1,
+        "skill_executed": "dependency-audit",
+        "rationale": "the query explicitly asks about vulnerable deps",
+        "status": "vulnerabilities_found",
+        "summary": "OSV.dev returned 3 advisories on jinja2…",
+        "decision_after": "continue",
+        "decision_reasoning": "still need to address the 'leaked credentials' part",
+        "cost_usd": 0.0023,
+        "latency_ms": 4170,
+        "raw_result": { /* full DependencyAuditResult */ }
+      },
+      {
+        "iteration": 2,
+        "skill_executed": "security-scan",
+        "rationale": "covers the 'leaked credentials' half of the query",
+        "status": "clean",
+        "summary": "Bandit + regex scan: no secrets detected across 187 files",
+        "decision_after": "stop",
+        "decision_reasoning": "both halves of the query are answered",
+        "cost_usd": 0.0019,
+        "latency_ms": 6420,
+        "raw_result": { /* full SecurityScanResult */ }
+      }
+    ],
+    "final_synthesis": "Three jinja2 advisories were found by dependency-audit (CVE-2024-…, all medium-severity), and security-scan detected no leaked secrets across 187 scanned files. The single recommended next action is to bump jinja2 to 3.1.4 or later.",
+    "iterations_used": 2,
+    "terminated_reason": "router_stop",
+    "total_cost_usd": 0.0098,
+    "total_latency_ms": 11620
+  }
+}
+```
+
+**Try it via the live demo:**
+
+```bash
+# Auto-router: LLM picks the skills from a fuzzy NL query
+curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repo_url": "https://github.com/tychen5/signal-foundry",
+    "branch": "main",
+    "natural_language_query": "please check if there are any vulnerable dependencies or CVEs and any leaked credentials in the source code",
+    "model": {"model_id": "moonshotai/kimi-k2.6"}
+  }' | jq '.result.skill_executed'
+# => ["dependency-audit", "security-scan"]
+
+# Same idea but with hint chips: include security-scan, exclude lint-and-test
+curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repo_url": "https://github.com/tychen5/signal-foundry",
+    "natural_language_query": "give this repo a CI/CD health check",
+    "include_skills_hint": ["security-scan"],
+    "exclude_skills_hint": ["lint-and-test"]
+  }' | jq '.result.skill_executed, .result.terminated_reason'
+```
+
+Or open [`/task1`](https://signal-foundry.zeabur.app/task1) in a browser, leave the mode toggle on **🤖 Auto (LLM routes)**, type a NL query, and watch the SSE-driven iteration timeline render plan → decision → final synthesis live.
+
+**Frontend redesign (Auto/Manual mode):** the legacy single-skill form is now the **Manual** tab; switching to **Auto** swaps in (a) a NL query textarea with one-click suggestion chips, (b) include/exclude hint chips that toggle mutually-exclusively per skill, (c) a plan strip showing the LLM's initial plan, (d) per-iteration cards that fill in live as SSE events arrive (status pill, summary, decision pill `CONTINUE` / `PIVOT` / `STOP` with the LLM's reasoning), and (e) a final synthesis box prominently above the iteration list. The same trace-ID copy pill and LangSmith deep-link work in both modes.
+
+**Future extensions** (noted but deliberately not yet built — happy to expand in interview):
+
+- **Knowledge-graph augmented routing** — feed prior-run skill outputs into a small vector store so the router can reference *"last week security-scan found a leaked AWS key in this file"* when planning today's run.
+- **Multi-agent reviewer subagents** — when the synthesis confidence is below a threshold, fork a `code-reviewer` + `security-scanner` subagent (in their own context windows) to independently re-read the raw findings, then aggregate. Mirrors what `/code-review` does in vanilla Claude Code.
+- **Two extra read-only skills** that would slot in cleanly without touching the loop:
+  - `repo-overview` — a cheap "what does this repo do, what languages/tools" warm-up. Useful as the router's first call when the NL query is very generic ("check this repo").
+  - `commit-quality` — analyses the last N commits for hygiene (conventional-commits compliance, message quality, force-push history). Composes naturally with `build-and-release`.
 
 ---
 
