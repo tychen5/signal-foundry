@@ -8,65 +8,152 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <style>
-        .skill-form { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        /* ── Layout primitives ────────────────────────────────────────── */
+        .skill-form { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 1.5rem 1.5rem 1.25rem; margin-bottom: 1.5rem; }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
         .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
         .form-group.full { grid-column: 1 / -1; }
-        label { font-size: 0.85rem; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
-        input[type="text"], input[type="url"], select { background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; padding: 0.6rem 0.8rem; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
-        input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
-        .dry-run-row { display: flex; align-items: center; gap: 0.8rem; padding: 0.75rem; background: #0f172a; border-radius: 6px; border: 1px solid #334155; }
+        label { font-size: 0.78rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
+        input[type="text"], input[type="url"], select, textarea { background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; padding: 0.65rem 0.85rem; font-size: 0.9rem; width: 100%; box-sizing: border-box; font-family: inherit; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.18); }
+        textarea { resize: vertical; min-height: 84px; line-height: 1.55; }
+        small.hint-text { color: #64748b; font-size: 0.77rem; line-height: 1.45; }
+
+        /* ── Mode toggle (auto vs manual) ─────────────────────────────── */
+        .mode-toggle { display: inline-flex; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 3px; margin-bottom: 1rem; }
+        .mode-toggle button { background: transparent; border: none; color: #94a3b8; padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: background 0.15s, color 0.15s; }
+        .mode-toggle button.active { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; box-shadow: 0 2px 8px rgba(99,102,241,0.35); }
+        .mode-toggle button:hover:not(.active) { color: #e2e8f0; }
+        .mode-tag { display: inline-block; font-size: 0.7rem; background: rgba(99,102,241,0.15); color: #a5b4fc; padding: 2px 8px; border-radius: 4px; margin-left: 0.5rem; vertical-align: middle; }
+
+        /* ── Hint chips (include/exclude) ─────────────────────────────── */
+        .hint-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+        .hint-section { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 0.75rem 0.85rem; }
+        .hint-section h5 { font-size: 0.74rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.55rem; }
+        .hint-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .hint-chip { background: #1e293b; border: 1px solid #334155; color: #cbd5e1; border-radius: 14px; padding: 0.32rem 0.75rem; font-size: 0.77rem; cursor: pointer; user-select: none; transition: all 0.15s; }
+        .hint-chip:hover { border-color: #475569; }
+        .hint-chip.active.include { background: rgba(34,197,94,0.18); border-color: rgba(34,197,94,0.55); color: #86efac; }
+        .hint-chip.active.exclude { background: rgba(239,68,68,0.16); border-color: rgba(239,68,68,0.55); color: #fca5a5; text-decoration: line-through; }
+
+        /* ── Dry-run row ──────────────────────────────────────────────── */
+        .dry-run-row { display: flex; align-items: center; gap: 0.8rem; padding: 0.7rem 0.85rem; background: #0f172a; border-radius: 6px; border: 1px solid #334155; }
         .dry-run-row.danger { border-color: #ef4444; background: rgba(239,68,68,0.08); }
-        .dry-run-row label { font-size: 0.9rem; text-transform: none; letter-spacing: 0; color: #e2e8f0; margin: 0; }
-        .dry-run-row .warn { color: #ef4444; font-size: 0.8rem; margin-left: auto; display: none; }
+        .dry-run-row label { font-size: 0.88rem; text-transform: none; letter-spacing: 0; color: #e2e8f0; margin: 0; font-weight: 400; }
+        .dry-run-row .warn { color: #ef4444; font-size: 0.78rem; margin-left: auto; display: none; }
         .dry-run-row.danger .warn { display: block; }
-        input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: #3b82f6; cursor: pointer; }
-        .run-btn { background: linear-gradient(135deg, #3b82f6, #6366f1); color: white; border: none; border-radius: 8px; padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; transition: opacity 0.2s, transform 0.1s; }
-        .run-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
-        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .result-panel { display: none; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; }
+        input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: #6366f1; cursor: pointer; }
+
+        /* ── Run button ───────────────────────────────────────────────── */
+        .run-btn { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 9px; padding: 0.85rem 2rem; font-size: 0.95rem; font-weight: 600; cursor: pointer; width: 100%; transition: opacity 0.18s, transform 0.1s, box-shadow 0.18s; box-shadow: 0 4px 16px rgba(99,102,241,0.25); }
+        .run-btn:hover:not(:disabled) { opacity: 0.95; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.35); }
+        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        /* ── Result panel ─────────────────────────────────────────────── */
+        .result-panel { display: none; background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 1.5rem; }
         .result-panel.visible { display: block; }
-        .result-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
-        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .result-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em; }
         .status-badge.success { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
         .status-badge.failed { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
-        .status-badge.running { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); animation: pulse 1.5s ease-in-out infinite; }
+        .status-badge.running { background: rgba(99,102,241,0.18); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.4); animation: pulse 1.5s ease-in-out infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
-        .meta-row { display: flex; gap: 2rem; font-size: 0.85rem; color: #64748b; margin-bottom: 1.25rem; flex-wrap: wrap; }
-        .meta-item strong { color: #94a3b8; }
-        .summary-box { background: #0f172a; border-left: 3px solid #3b82f6; border-radius: 0 6px 6px 0; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; line-height: 1.6; color: #cbd5e1; }
-        .error-box { background: rgba(239,68,68,0.08); border-left: 3px solid #ef4444; border-radius: 0 6px 6px 0; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.9rem; color: #fca5a5; font-family: 'JetBrains Mono', monospace; }
-        .skill-detail { margin-bottom: 1.25rem; }
-        .skill-detail h4 { font-size: 0.85rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
-        .issues-table, .findings-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        .issues-table th, .findings-table th { background: #0f172a; color: #64748b; padding: 0.5rem 0.75rem; text-align: left; font-weight: 500; }
-        .issues-table td, .findings-table td { padding: 0.5rem 0.75rem; border-top: 1px solid #1e293b; color: #cbd5e1; }
-        .issues-table tr:hover td, .findings-table tr:hover td { background: rgba(59,130,246,0.05); }
+        .meta-row { display: flex; gap: 1.5rem; font-size: 0.83rem; color: #64748b; margin-bottom: 1.1rem; flex-wrap: wrap; }
+        .meta-item strong, .meta-row strong { color: #94a3b8; }
+
+        /* Synthesis box (auto-router final answer) */
+        .synthesis-box { background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.05)); border: 1px solid rgba(99,102,241,0.4); border-left: 4px solid #6366f1; border-radius: 0 10px 10px 0; padding: 1rem 1.15rem; margin-bottom: 1.25rem; font-size: 0.92rem; line-height: 1.65; color: #e2e8f0; }
+        .synthesis-box .label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #a5b4fc; margin-bottom: 0.4rem; font-weight: 600; }
+        .synthesis-box.skeleton { color: #64748b; font-style: italic; }
+
+        /* Plan strip */
+        .plan-strip { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.65rem 0.85rem; background: #0f172a; border: 1px dashed #334155; border-radius: 8px; margin-bottom: 1.1rem; font-size: 0.83rem; color: #94a3b8; }
+        .plan-strip .plan-skill { background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.3); color: #c7d2fe; border-radius: 14px; padding: 2px 9px; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; }
+        .plan-strip .plan-skill.executed { background: rgba(34,197,94,0.13); border-color: rgba(34,197,94,0.45); color: #86efac; }
+        .plan-strip .arrow { color: #475569; font-size: 0.85rem; }
+
+        /* Iteration timeline */
+        .iterations-section { margin-bottom: 1.25rem; }
+        .iterations-section h4 { font-size: 0.83rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
+        .iter-card { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 0.95rem 1.1rem; margin-bottom: 0.75rem; transition: border-color 0.2s; }
+        .iter-card.running { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.12); }
+        .iter-card.done { border-color: rgba(34,197,94,0.4); }
+        .iter-card.failed { border-color: rgba(239,68,68,0.5); }
+        .iter-head { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+        .iter-num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border-radius: 50%; font-size: 0.74rem; font-weight: 700; }
+        .iter-skill { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: #c7d2fe; font-weight: 600; }
+        .iter-status-pill { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+        .iter-status-pill.clean, .iter-status-pill.success, .iter-status-pill.passed { background: rgba(34,197,94,0.14); color: #86efac; }
+        .iter-status-pill.warnings, .iter-status-pill.partial { background: rgba(234,179,8,0.14); color: #fde68a; }
+        .iter-status-pill.findings, .iter-status-pill.vulnerabilities_found, .iter-status-pill.failed { background: rgba(239,68,68,0.14); color: #fca5a5; }
+        .iter-status-pill.running { background: rgba(99,102,241,0.18); color: #a5b4fc; }
+        .iter-meta { font-size: 0.74rem; color: #64748b; margin-left: auto; }
+        .iter-rationale { font-size: 0.83rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 0.5rem; padding-left: 32px; }
+        .iter-rationale .label { color: #64748b; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 0.4rem; }
+        .iter-summary { font-size: 0.85rem; color: #e2e8f0; line-height: 1.55; padding-left: 32px; }
+        .iter-decision { margin-top: 0.6rem; padding-left: 32px; font-size: 0.8rem; color: #94a3b8; }
+        .iter-decision .action-pill { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; padding: 1px 7px; border-radius: 8px; margin-right: 0.4rem; font-weight: 600; }
+        .iter-decision .action-pill.continue { background: rgba(34,197,94,0.16); color: #86efac; }
+        .iter-decision .action-pill.add_skill { background: rgba(234,179,8,0.18); color: #fde68a; }
+        .iter-decision .action-pill.stop { background: rgba(99,102,241,0.18); color: #a5b4fc; }
+
+        /* Skill detail */
+        .skill-detail { margin-top: 0.55rem; padding-left: 32px; }
+        .skill-detail h5 { font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin: 0.65rem 0 0.4rem; }
+        .issues-table, .findings-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        .issues-table th, .findings-table th { background: #1e293b; color: #64748b; padding: 0.45rem 0.7rem; text-align: left; font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .issues-table td, .findings-table td { padding: 0.45rem 0.7rem; border-top: 1px solid #1e293b; color: #cbd5e1; }
         .sev-critical { color: #ef4444; font-weight: 600; }
         .sev-high { color: #f97316; font-weight: 600; }
         .sev-medium { color: #eab308; }
         .sev-low { color: #22c55e; }
-        .test-counts { display: flex; gap: 1.5rem; }
-        .count-item { text-align: center; padding: 0.75rem 1.25rem; background: #0f172a; border-radius: 8px; }
-        .count-item .count { font-size: 1.5rem; font-weight: 700; }
-        .count-item .label { font-size: 0.75rem; color: #64748b; }
+        .test-counts { display: flex; gap: 0.85rem; flex-wrap: wrap; }
+        .count-item { text-align: center; padding: 0.55rem 0.95rem; background: #1e293b; border-radius: 7px; min-width: 75px; }
+        .count-item .count { font-size: 1.25rem; font-weight: 700; }
+        .count-item .label { font-size: 0.68rem; color: #64748b; letter-spacing: 0.04em; text-transform: uppercase; }
         .count-pass .count { color: #22c55e; }
         .count-fail .count { color: #ef4444; }
         .count-warn .count { color: #eab308; }
         .count-neutral .count { color: #94a3b8; }
-        .changelog-box { background: #0f172a; border-radius: 6px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #cbd5e1; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
-        .confirm-release-btn { background: #ef4444; color: white; border: none; border-radius: 6px; padding: 0.6rem 1.25rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; margin-top: 0.75rem; }
-        .confirm-release-btn:hover { background: #dc2626; }
-        .raw-toggle { background: none; border: 1px solid #334155; color: #64748b; border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 0.8rem; cursor: pointer; margin-top: 0.75rem; }
+
+        /* Skill executed highlight (for the demo brief) */
+        .demo-highlight { background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02)); border: 1px solid rgba(34,197,94,0.35); border-radius: 8px; padding: 0.6rem 0.85rem; margin-bottom: 1rem; font-size: 0.82rem; color: #cbd5e1; }
+        .demo-highlight strong { color: #86efac; font-weight: 600; }
+        .demo-highlight code { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.3); padding: 1px 6px; border-radius: 3px; color: #86efac; font-size: 0.78rem; }
+
+        /* Cost row */
+        .cost-row { font-size: 0.78rem; color: #475569; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #1e293b; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+        .cost-row strong { color: #64748b; }
+
+        /* Raw json */
+        .raw-toggle { background: none; border: 1px solid #334155; color: #64748b; border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 0.78rem; cursor: pointer; margin-top: 0.75rem; }
         .raw-toggle:hover { border-color: #475569; color: #94a3b8; }
-        .raw-json { display: none; background: #0f172a; border-radius: 6px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #94a3b8; white-space: pre-wrap; overflow-x: auto; max-height: 400px; overflow-y: auto; margin-top: 0.5rem; }
+        .raw-json { display: none; background: #0f172a; border-radius: 6px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #94a3b8; white-space: pre-wrap; overflow-x: auto; max-height: 400px; overflow-y: auto; margin-top: 0.5rem; }
         .raw-json.visible { display: block; }
-        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
+
+        /* Spinner */
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .cve-link { color: #60a5fa; text-decoration: none; font-size: 0.8rem; }
+
+        /* Demo query suggestions */
+        .nl-examples { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+        .nl-example { background: #1e293b; border: 1px solid #334155; color: #94a3b8; border-radius: 14px; padding: 4px 11px; font-size: 0.76rem; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+        .nl-example:hover { border-color: #6366f1; color: #c7d2fe; }
+
+        /* Manual mode skill list */
+        .manual-only { display: none; }
+        body.manual-mode .auto-only { display: none; }
+        body.manual-mode .manual-only { display: block; }
+        .cve-link { color: #60a5fa; text-decoration: none; font-size: 0.78rem; }
         .cve-link:hover { text-decoration: underline; }
-        .no-issues { color: #22c55e; font-size: 0.9rem; padding: 0.5rem 0; }
-        .cost-row { font-size: 0.8rem; color: #475569; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #1e293b; }
+        .no-issues { color: #22c55e; font-size: 0.85rem; padding: 0.4rem 0; }
+        .changelog-box { background: #1e293b; border-radius: 6px; padding: 0.85rem; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: #cbd5e1; white-space: pre-wrap; max-height: 280px; overflow-y: auto; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .form-row, .hint-grid { grid-template-columns: 1fr; }
+            .iter-rationale, .iter-summary, .iter-decision, .skill-detail { padding-left: 0; }
+        }
     </style>
 </head>
 <body>
@@ -74,8 +161,14 @@
         <header class="header">
             <a href="/" style="color:#64748b;font-size:0.85rem;text-decoration:none;">← Dashboard</a>
             <h1>📋 CI/CD Skills Engine</h1>
-            <p>GitHub CI/CD workflows as reusable Claude Skills — sandbox execution, idempotency, dry-run safety.</p>
+            <p>GitHub CI/CD workflows as Claude Skills — sandbox execution, idempotency, dry-run safety, and an LLM auto-router that picks skills from a natural-language query.</p>
         </header>
+
+        <!-- ── Mode toggle ──────────────────────────────────────────── -->
+        <div class="mode-toggle" role="tablist" aria-label="Execution mode">
+            <button id="mode-auto" class="active" onclick="setMode('auto')">🤖 Auto (LLM routes)</button>
+            <button id="mode-manual" onclick="setMode('manual')">⚙️ Manual (single skill)</button>
+        </div>
 
         <div class="skill-form">
             <div class="form-row">
@@ -90,51 +183,115 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ── Auto-mode controls ───────────────────────────────── -->
+            <div class="auto-only">
+                <div class="form-row">
+                    <div class="form-group full">
+                        <label>Natural-language query <span class="mode-tag">LLM routes</span></label>
+                        <textarea id="nl-query" rows="2" placeholder="e.g. please check if there are any vulnerable dependencies or leaked API keys"></textarea>
+                        <small class="hint-text">The router LLM reads this query, plans an ordered set of skills, runs them, and writes a single answer that ties results back to your question.</small>
+                        <div class="nl-examples">
+                            <span class="nl-example" onclick="setQuery('please check if there are any vulnerable dependencies or CVEs and any leaked credentials in the source code')">vulns + leaked creds</span>
+                            <span class="nl-example" onclick="setQuery('scan for leaked api keys, hardcoded secrets, or anything sensitive committed to the repo')">leaked secrets</span>
+                            <span class="nl-example" onclick="setQuery('audit my dependencies for known CVEs and outdated packages')">dep audit</span>
+                            <span class="nl-example" onclick="setQuery('is this repo safe to ship to production right now?')">ship-readiness</span>
+                            <span class="nl-example" onclick="setQuery('do a full CI/CD health check on this repo')">full health check</span>
+                            <span class="nl-example" onclick="setQuery('run the test suite and lint and report the failures')">tests + lint</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group full">
+                        <label>Skill hints <small class="hint-text" style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:0.5rem;">— optional. Click a skill to mark it as include (👍) or exclude (🚫). Empty = full LLM autonomy.</small></label>
+                        <div class="hint-grid">
+                            <div class="hint-section">
+                                <h5>👍 Include hints (suggest these)</h5>
+                                <div class="hint-chips" id="include-chips">
+                                    <span class="hint-chip" data-skill="lint-and-test">lint-and-test</span>
+                                    <span class="hint-chip" data-skill="dependency-audit">dependency-audit</span>
+                                    <span class="hint-chip" data-skill="security-scan">security-scan</span>
+                                    <span class="hint-chip" data-skill="build-and-release">build-and-release</span>
+                                </div>
+                            </div>
+                            <div class="hint-section">
+                                <h5>🚫 Exclude hints (skip these)</h5>
+                                <div class="hint-chips" id="exclude-chips">
+                                    <span class="hint-chip" data-skill="lint-and-test">lint-and-test</span>
+                                    <span class="hint-chip" data-skill="dependency-audit">dependency-audit</span>
+                                    <span class="hint-chip" data-skill="security-scan">security-scan</span>
+                                    <span class="hint-chip" data-skill="build-and-release">build-and-release</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Manual-mode controls ─────────────────────────────── -->
+            <div class="manual-only">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Skill</label>
+                        <select id="skill-select">
+                            <option value="lint-and-test">lint-and-test — ruff/pytest or eslint/jest</option>
+                            <option value="dependency-audit">dependency-audit — CVE check via OSV.dev</option>
+                            <option value="security-scan">security-scan — secret regex + Bandit SAST</option>
+                            <option value="build-and-release">build-and-release — changelog + tag/release</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Branch</label>
+                        <input type="text" id="branch-manual" value="main" placeholder="main">
+                    </div>
+                </div>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
-                    <label>Branch</label>
+                    <label>Branch <small class="hint-text auto-only" style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(auto mode)</small></label>
                     <input type="text" id="branch" value="main" placeholder="main">
                 </div>
                 <div class="form-group">
-                    <label>Skill</label>
-                    <select id="skill-select">
-                        <option value="lint-and-test">lint-and-test — Run ruff + pytest / eslint + jest</option>
-                        <option value="dependency-audit">dependency-audit — Check CVEs via OSV.dev</option>
-                        <option value="security-scan">security-scan — Secret detection + Bandit SAST</option>
-                        <option value="build-and-release">build-and-release — Analyze commits, generate changelog</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>LLM Model</label>
+                    <label>Router LLM</label>
                     <select id="model-select">
                         {% for model in models %}
                         <option value="{{ model.id }}">{{ model.display_name }}</option>
                         {% endfor %}
                     </select>
-                    <small style="color:#888">NVIDIA = free with rate limits; OpenRouter = paid (use your own key)</small>
+                    <small class="hint-text">NVIDIA = free w/ rate limits · OpenRouter = paid (BYO key)</small>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>OpenRouter API Key <small class="hint-text" style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(only for OpenRouter models)</small></label>
+                    <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
+                    <small class="hint-text"><a href="https://openrouter.ai/credits" target="_blank" style="color:#6366f1;">openrouter.ai/credits</a></small>
                 </div>
                 <div class="form-group">
-                    <label>OpenRouter API Key (only required if you select an OpenRouter model)</label>
-                    <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
-                    <small style="color:#888"><a href="https://openrouter.ai/credits" target="_blank">openrouter.ai/credits</a> · NVIDIA NIM key:</small>
-                    <input type="text" id="user-nvidia-key" placeholder="nvapi-... (optional override)" style="margin-top:0.35rem">
+                    <label>NVIDIA NIM Key <small class="hint-text" style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(optional)</small></label>
+                    <input type="text" id="user-nvidia-key" placeholder="nvapi-... (optional override)">
                 </div>
             </div>
+
             <div class="form-row">
                 <div class="form-group full">
-                    <label>Execution Mode</label>
+                    <label>Execution mode</label>
                     <div class="dry-run-row" id="dry-run-row">
                         <input type="checkbox" id="dry-run" checked>
-                        <label for="dry-run">Dry-run mode (preview only — no GitHub releases created)</label>
-                        <span class="warn">⚠️ LIVE MODE — will create GitHub tags/releases</span>
+                        <label for="dry-run">Dry-run (preview only — no GitHub releases created)</label>
+                        <span class="warn">⚠️ LIVE MODE — will create tags/releases</span>
                     </div>
+                    <small class="hint-text">Only applies when build-and-release runs. All read-only skills always run live.</small>
                 </div>
             </div>
-            <button class="run-btn" id="run-btn" onclick="runSkill()">Run Skill</button>
+
+            <button class="run-btn" id="run-btn" onclick="runRequest()">🚀 Run Auto-Router</button>
         </div>
 
+        <!-- ── Result panel ─────────────────────────────────────────── -->
         <div class="result-panel" id="result-panel">
             <div class="result-header">
                 <span class="status-badge" id="status-badge">—</span>
@@ -144,13 +301,45 @@
                     <a href="#" target="_blank" id="langsmith-link" class="trace-link" style="display:none">View in LangSmith ↗</a>
                 </span>
             </div>
+
+            <!-- Demo highlight strip — surfaces skill_executed for reviewers -->
+            <div class="demo-highlight" id="demo-highlight" style="display:none">
+                <strong>✓ LLM-selected skills:</strong>
+                <span id="demo-highlight-skills"></span>
+                <span style="color:#64748b;margin-left:0.5rem;font-size:0.78rem;">— see <code>skill_executed</code> field in raw JSON for reviewer verification.</span>
+            </div>
+
+            <!-- Synthesis (auto mode only) -->
+            <div class="synthesis-box" id="synthesis-box" style="display:none">
+                <span class="label">🧠 Auto-Router Synthesis</span>
+                <span id="synthesis-text">—</span>
+            </div>
+
+            <!-- Plan strip (auto mode only) -->
+            <div class="plan-strip" id="plan-strip" style="display:none">
+                <span style="color:#64748b;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;">Plan:</span>
+                <span id="plan-skills"></span>
+                <span id="plan-confidence" style="margin-left:auto;color:#64748b;"></span>
+            </div>
+
+            <!-- Live progress trace -->
             <div class="live-trace" id="live-trace" style="display:none">
-                <h4>📡 Skill Engine Progress</h4>
+                <h4>📡 Engine Progress</h4>
                 <ul id="live-events" class="live-events"></ul>
             </div>
+
             <div class="meta-row" id="meta-row"></div>
-            <div id="summary-section"></div>
-            <div id="skill-detail-section"></div>
+
+            <!-- Iteration timeline (auto mode) -->
+            <div class="iterations-section" id="iterations-section" style="display:none">
+                <h4>📊 Iteration Timeline</h4>
+                <div id="iterations-container"></div>
+            </div>
+
+            <!-- Single skill detail (manual mode) -->
+            <div id="manual-summary-section"></div>
+            <div id="manual-detail-section"></div>
+
             <div class="cost-row" id="cost-row"></div>
             <button class="raw-toggle" onclick="toggleRaw()">Show raw JSON</button>
             <div class="raw-json" id="raw-json"></div>
@@ -158,20 +347,90 @@
     </div>
 
     <script>
+        // ────────────────────────────────────────────────────────────────
+        // State
+        // ────────────────────────────────────────────────────────────────
+        let _mode = 'auto';
+        let _includeHints = new Set();
+        let _excludeHints = new Set();
         let _lastResult = null;
+        let _iterationsByNum = {};   // iteration int → DOM card
 
-        document.getElementById('dry-run').addEventListener('change', function() {
-            const row = document.getElementById('dry-run-row');
-            row.classList.toggle('danger', !this.checked);
-        });
+        // ────────────────────────────────────────────────────────────────
+        // Mode toggle
+        // ────────────────────────────────────────────────────────────────
+        function setMode(mode) {
+            _mode = mode;
+            const btnAuto = document.getElementById('mode-auto');
+            const btnManual = document.getElementById('mode-manual');
+            const runBtn = document.getElementById('run-btn');
+            if (mode === 'auto') {
+                document.body.classList.remove('manual-mode');
+                btnAuto.classList.add('active');
+                btnManual.classList.remove('active');
+                runBtn.textContent = '🚀 Run Auto-Router';
+            } else {
+                document.body.classList.add('manual-mode');
+                btnAuto.classList.remove('active');
+                btnManual.classList.add('active');
+                runBtn.textContent = '🚀 Run Single Skill';
+                // Show dry-run row only for build-and-release in manual mode
+                updateDryRunVisibility();
+            }
+        }
 
-        document.getElementById('skill-select').addEventListener('change', function() {
-            const dryRunGroup = document.getElementById('dry-run-row').parentElement.parentElement;
-            dryRunGroup.style.display = (this.value === 'build-and-release') ? 'grid' : 'none';
-        });
-        // Initially hide dry-run for non-release skills
-        document.getElementById('skill-select').dispatchEvent(new Event('change'));
+        function updateDryRunVisibility() {
+            const dryRunRow = document.getElementById('dry-run-row').closest('.form-group');
+            if (_mode === 'manual') {
+                const skill = document.getElementById('skill-select').value;
+                dryRunRow.style.display = (skill === 'build-and-release') ? 'flex' : 'none';
+            } else {
+                // Auto mode: always show — user might be asking for release
+                dryRunRow.style.display = 'flex';
+            }
+        }
 
+        // ────────────────────────────────────────────────────────────────
+        // Hint chips
+        // ────────────────────────────────────────────────────────────────
+        function setupChipBindings() {
+            document.querySelectorAll('#include-chips .hint-chip').forEach(chip => {
+                chip.addEventListener('click', () => toggleHint(chip, 'include'));
+            });
+            document.querySelectorAll('#exclude-chips .hint-chip').forEach(chip => {
+                chip.addEventListener('click', () => toggleHint(chip, 'exclude'));
+            });
+        }
+
+        function toggleHint(chip, kind) {
+            const skill = chip.dataset.skill;
+            const otherSet = (kind === 'include') ? _excludeHints : _includeHints;
+            const thisSet = (kind === 'include') ? _includeHints : _excludeHints;
+            const otherChip = document.querySelector(
+                `#${kind === 'include' ? 'exclude' : 'include'}-chips .hint-chip[data-skill="${skill}"]`
+            );
+
+            if (thisSet.has(skill)) {
+                thisSet.delete(skill);
+                chip.classList.remove('active', kind);
+            } else {
+                thisSet.add(skill);
+                chip.classList.add('active', kind);
+                // Mutually exclusive: clearing the OTHER hint if it was set
+                if (otherSet.has(skill)) {
+                    otherSet.delete(skill);
+                    if (otherChip) otherChip.classList.remove('active', kind === 'include' ? 'exclude' : 'include');
+                }
+            }
+        }
+
+        function setQuery(text) {
+            document.getElementById('nl-query').value = text;
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // Shared persistence
+        // ────────────────────────────────────────────────────────────────
         function hydrateSharedControls() {
             const modelSelect = document.getElementById('model-select');
             const apiKeyInput = document.getElementById('user-api-key');
@@ -182,212 +441,390 @@
             modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
             apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
         }
-        hydrateSharedControls();
 
-        async function runSkill() {
+        document.getElementById('dry-run').addEventListener('change', function() {
+            document.getElementById('dry-run-row').classList.toggle('danger', !this.checked);
+        });
+        document.getElementById('skill-select').addEventListener('change', updateDryRunVisibility);
+
+        setupChipBindings();
+        hydrateSharedControls();
+        setMode('auto');
+
+        // ────────────────────────────────────────────────────────────────
+        // Run dispatch
+        // ────────────────────────────────────────────────────────────────
+        async function runRequest() {
             const btn = document.getElementById('run-btn');
-            const panel = document.getElementById('result-panel');
             const repoUrl = document.getElementById('repo-url').value.trim();
-            const branch = document.getElementById('branch').value.trim() || 'main';
-            const skill = document.getElementById('skill-select').value;
             const modelId = document.getElementById('model-select').value;
             const apiKey = document.getElementById('user-api-key').value.trim();
+            const nvidiaKey = (document.getElementById('user-nvidia-key') || {}).value || '';
             const dryRun = document.getElementById('dry-run').checked;
 
             if (!repoUrl) { alert('Please enter a GitHub repository URL.'); return; }
 
+            const model = { model_id: modelId };
+            if (apiKey) model.user_openrouter_key = apiKey;
+            if (nvidiaKey.trim()) model.user_nvidia_key = nvidiaKey.trim();
+
+            resetResultPanel();
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span>Running skill...';
-
-            const payload = {
-                repo_url: repoUrl,
-                branch: branch,
-                skill_name: skill,
-                dry_run: (skill === 'build-and-release') ? dryRun : true,
-                model: { model_id: modelId }
-            };
-            if (apiKey) payload.model.user_openrouter_key = apiKey;
-            const nvidiaKey = (document.getElementById('user-nvidia-key') || {}).value || '';
-            if (nvidiaKey.trim()) payload.model.user_nvidia_key = nvidiaKey.trim();
-
-            // Reset prior result chrome but KEEP the panel visible so the
-            // live-trace box is on-screen as soon as Run Skill is clicked.
-            // (Previously panel.classList.remove('visible') hid the entire
-            // result panel until the run finished, masking SSE events.)
-            const liveTrace = document.getElementById('live-trace');
-            const liveEvents = document.getElementById('live-events');
-            const badge = document.getElementById('status-badge');
-            const title = document.getElementById('result-title');
-            const metaRow = document.getElementById('meta-row');
-            const summarySection = document.getElementById('summary-section');
-            const detailSection = document.getElementById('skill-detail-section');
-            const costRow = document.getElementById('cost-row');
-            const rawJson = document.getElementById('raw-json');
-            panel.classList.add('visible');           // <-- show the panel up front
-            badge.className = 'status-badge running';
-            badge.textContent = 'RUNNING';
-            title.textContent = 'Skill engine is processing…';
-            if (metaRow) metaRow.innerHTML = '';
-            if (summarySection) summarySection.innerHTML = '';
-            if (detailSection) detailSection.innerHTML = '';
-            if (costRow) costRow.innerHTML = '';
-            if (rawJson) rawJson.classList.remove('visible');
-            if (liveTrace) {
-                liveEvents.innerHTML = '';
-                liveTrace.style.display = 'block';
-            }
-            // Auto-scroll to the live trace so users see events as they arrive
-            panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+            btn.innerHTML = '<span class="spinner"></span>Running…';
 
             try {
-                // SSE-only: live progress AND final result come from one stream.
-                // Avoids the previous double-execution (stream + re-run) that
-                // doubled wait time on slow NVIDIA model paths.
-                const streamResp = await fetch('/api/v1/skills/stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-                    body: JSON.stringify(payload),
-                });
-                let finalData = null;
-                let finalErr = null;
-                let httpStatus = streamResp.status;
-                if (streamResp.ok && streamResp.body) {
-                    const reader = streamResp.body.getReader();
-                    const decoder = new TextDecoder();
-                    let buf = '';
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done) break;
-                        buf += decoder.decode(value, { stream: true });
-                        const lines = buf.split('\n');
-                        buf = lines.pop() || '';
-                        for (const ln of lines) {
-                            if (!ln.startsWith('data: ')) continue;
-                            try {
-                                const ev = JSON.parse(ln.slice(6));
-                                appendT1LiveEvent(ev);
-                                if (ev.event === 'result' && ev.result) finalData = ev.result;
-                                if (ev.event === 'error') finalErr = ev;
-                            } catch (_) {}
-                        }
-                    }
-                }
-                if (finalData) {
-                    _lastResult = finalData;
-                    renderResult(finalData, httpStatus);
-                } else if (finalErr) {
-                    renderError(finalErr.user_message || finalErr.raw_error || 'Unknown error');
+                if (_mode === 'auto') {
+                    const branch = document.getElementById('branch').value.trim() || 'main';
+                    const query = document.getElementById('nl-query').value.trim();
+                    if (!query) { alert('Please enter a natural-language query.'); btn.disabled = false; btn.textContent = '🚀 Run Auto-Router'; return; }
+                    const payload = {
+                        repo_url: repoUrl,
+                        branch,
+                        natural_language_query: query,
+                        include_skills_hint: [..._includeHints],
+                        exclude_skills_hint: [..._excludeHints],
+                        dry_run: dryRun,
+                        model,
+                    };
+                    await streamAuto(payload);
                 } else {
-                    // Fallback to /run if SSE failed entirely (e.g. 4xx upfront).
-                    const resp = await fetch('/api/v1/skills/run', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    const data = await resp.json();
-                    _lastResult = data;
-                    renderResult(data, resp.status);
+                    const branch = document.getElementById('branch-manual').value.trim() || 'main';
+                    const skill = document.getElementById('skill-select').value;
+                    const payload = {
+                        repo_url: repoUrl,
+                        branch,
+                        skill_name: skill,
+                        dry_run: (skill === 'build-and-release') ? dryRun : true,
+                        model,
+                    };
+                    await streamManual(payload);
                 }
             } catch (err) {
                 renderError(String(err));
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Run Skill';
+                btn.textContent = (_mode === 'auto') ? '🚀 Run Auto-Router' : '🚀 Run Single Skill';
             }
         }
 
-        function appendT1LiveEvent(event) {
-            const list = document.getElementById('live-events');
-            if (!list) return;
-            const li = document.createElement('li');
-            li.className = 'live-event live-event-' + event.event;
-            const ts = new Date().toLocaleTimeString();
-            let text = `[${ts}] `;
-            if (event.event === 'stream_start') {
-                text += `🔌 stream open · trace ${event.trace_id ? event.trace_id.slice(0,8) : ''}`;
-            } else if (event.event === 'skill_start') {
-                text += `🚀 ${event.repo}@${event.branch} · skill="${event.requested_skill}" · model=${event.model || 'default'}` +
-                        (event.dry_run ? ' · dry-run' : '');
-            } else if (event.event === 'skill_resolved') {
-                text += `✓ skill resolved: ${event.skill} (conf ${(event.confidence*100|0)}%)`;
-            } else if (event.event === 'repo_validated') {
-                text += `✓ repo validated: ${event.owner}/${event.repo}@${event.branch}`;
-            } else if (event.event === 'sha_fetched') {
-                text += `✓ HEAD sha: ${event.commit_sha}`;
-            } else if (event.event === 'cache_hit') {
-                text += `⚡ cache HIT — skipping clone+run`;
-            } else if (event.event === 'cache_miss') {
-                text += `cache miss — fresh run`;
-            } else if (event.event === 'clone_start') {
-                text += `📥 cloning ${event.owner}/${event.repo}...`;
-            } else if (event.event === 'clone_done') {
-                text += `✓ clone done · sha ${event.commit_sha}`;
-            } else if (event.event === 'language_detected') {
-                text += `✓ language: ${event.language}`;
-            } else if (event.event === 'skill_run_start') {
-                text += `🛠️ running ${event.skill} (${event.language})...`;
-            } else if (event.event === 'skill_run_done') {
-                text += `✓ ${event.skill} done · status="${event.status}"`;
-            } else if (event.event === 'summarize_start') {
-                text += `📝 LLM summarizing (${event.model})...`;
-            } else if (event.event === 'summarize_done') {
-                text += `✓ summary ready · ${event.summary_preview ? event.summary_preview.slice(0, 80) + '…' : ''}`;
-            } else if (event.event === 'skill_complete') {
-                text += `🏁 ${event.status} in ${event.latency_ms|0} ms · $${(event.cost_usd||0).toFixed(4)}`;
-            } else if (event.event === 'result') {
-                text += `📦 final result delivered`;
-            } else if (event.event === 'stream_end') {
-                text += `🔚 stream closed`;
-            } else if (event.event === 'error') {
-                text += `❌ ${event.user_message || event.category || 'error'}`;
-            } else {
-                text += `${event.event}`;
-            }
-            li.textContent = text;
-            list.appendChild(li);
-            list.scrollTop = list.scrollHeight;
-        }
-
-        function copyTraceId() {
-            const pill = document.getElementById('trace-id-pill');
-            const txt = (pill.textContent || '').replace(/^trace_id:\s*/i, '');
-            if (navigator.clipboard && txt) {
-                navigator.clipboard.writeText(txt).then(() => {
-                    const orig = pill.textContent;
-                    pill.textContent = '✓ copied';
-                    setTimeout(() => { pill.textContent = orig; }, 1200);
-                });
-            }
-        }
-
-        function renderResult(data, httpStatus) {
+        function resetResultPanel() {
             const panel = document.getElementById('result-panel');
-            const badge = document.getElementById('status-badge');
-            const title = document.getElementById('result-title');
-            const metaRow = document.getElementById('meta-row');
-            const summarySection = document.getElementById('summary-section');
-            const detailSection = document.getElementById('skill-detail-section');
-            const costRow = document.getElementById('cost-row');
-            const rawJson = document.getElementById('raw-json');
+            const liveTrace = document.getElementById('live-trace');
+            const liveEvents = document.getElementById('live-events');
+            panel.classList.add('visible');
+            document.getElementById('status-badge').className = 'status-badge running';
+            document.getElementById('status-badge').textContent = 'RUNNING';
+            document.getElementById('result-title').textContent = (_mode === 'auto') ? 'Auto-router is planning…' : 'Skill engine is processing…';
+            document.getElementById('meta-row').innerHTML = '';
+            document.getElementById('synthesis-box').style.display = 'none';
+            document.getElementById('plan-strip').style.display = 'none';
+            document.getElementById('demo-highlight').style.display = 'none';
+            document.getElementById('iterations-section').style.display = 'none';
+            document.getElementById('iterations-container').innerHTML = '';
+            document.getElementById('manual-summary-section').innerHTML = '';
+            document.getElementById('manual-detail-section').innerHTML = '';
+            document.getElementById('cost-row').innerHTML = '';
+            document.getElementById('raw-json').classList.remove('visible');
+            document.getElementById('raw-json').textContent = '';
+            liveEvents.innerHTML = '';
+            liveTrace.style.display = 'block';
+            _iterationsByNum = {};
+            panel.scrollIntoView({behavior:'smooth', block:'start'});
+        }
 
-            // Trace ID + LangSmith deep-link (click pill to copy full id)
+        // ────────────────────────────────────────────────────────────────
+        // Auto-router stream
+        // ────────────────────────────────────────────────────────────────
+        async function streamAuto(payload) {
+            const resp = await fetch('/api/v1/skills/auto/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                body: JSON.stringify(payload),
+            });
+            if (!resp.ok || !resp.body) {
+                const text = await resp.text();
+                renderError(text || ('HTTP ' + resp.status));
+                return;
+            }
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+            let finalData = null, finalErr = null;
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+                const lines = buf.split('\n');
+                buf = lines.pop() || '';
+                for (const ln of lines) {
+                    if (!ln.startsWith('data: ')) continue;
+                    let ev;
+                    try { ev = JSON.parse(ln.slice(6)); } catch (_) { continue; }
+                    handleAutoEvent(ev);
+                    if (ev.event === 'result' && ev.result) finalData = ev.result;
+                    if (ev.event === 'error') finalErr = ev;
+                }
+            }
+            if (finalData) {
+                _lastResult = finalData;
+                renderAutoFinal(finalData);
+            } else if (finalErr) {
+                renderError(finalErr.user_message || finalErr.raw_error || 'Unknown error');
+            }
+        }
+
+        function handleAutoEvent(ev) {
+            appendLiveEvent(ev);
+            const ts = new Date().toLocaleTimeString();
+
+            if (ev.event === 'plan_done') {
+                renderPlanStrip(ev);
+            } else if (ev.event === 'iteration_start') {
+                openIterationCard(ev);
+            } else if (ev.event === 'iteration_skill_done') {
+                completeIterationCard(ev);
+            } else if (ev.event === 'iteration_decision') {
+                appendDecisionToCard(ev);
+            } else if (ev.event === 'synthesize_start') {
+                const sb = document.getElementById('synthesis-box');
+                sb.style.display = 'block';
+                sb.classList.add('skeleton');
+                document.getElementById('synthesis-text').textContent = 'Auto-router is synthesizing the final answer…';
+            }
+        }
+
+        function renderPlanStrip(ev) {
+            const strip = document.getElementById('plan-strip');
+            const skillsContainer = document.getElementById('plan-skills');
+            const confEl = document.getElementById('plan-confidence');
+            skillsContainer.innerHTML = '';
+            (ev.plan || []).forEach((skill, idx) => {
+                const span = document.createElement('span');
+                span.className = 'plan-skill';
+                span.id = `plan-skill-${skill}`;
+                span.textContent = skill;
+                skillsContainer.appendChild(span);
+                if (idx < (ev.plan.length - 1)) {
+                    const arrow = document.createElement('span');
+                    arrow.className = 'arrow';
+                    arrow.textContent = '→';
+                    skillsContainer.appendChild(arrow);
+                }
+            });
+            confEl.textContent = `intent: ${ev.overall_intent || 'n/a'} · plan conf: ${Math.round((ev.confidence||0)*100)}%`;
+            strip.style.display = 'flex';
+
+            // Reveal the iterations section now that we know we'll have at least one
+            document.getElementById('iterations-section').style.display = 'block';
+        }
+
+        function openIterationCard(ev) {
+            const card = document.createElement('div');
+            card.className = 'iter-card running';
+            card.id = `iter-card-${ev.iteration}`;
+            card.innerHTML = `
+                <div class="iter-head">
+                    <span class="iter-num">${ev.iteration}</span>
+                    <span class="iter-skill">${escHtml(ev.skill || '')}</span>
+                    <span class="iter-status-pill running">running</span>
+                    <span class="iter-meta">⏳ executing…</span>
+                </div>
+                ${ev.rationale ? `<div class="iter-rationale"><span class="label">Why:</span>${escHtml(ev.rationale)}</div>` : ''}
+                <div class="iter-summary" id="iter-summary-${ev.iteration}" style="display:none"></div>
+                <div class="skill-detail" id="iter-detail-${ev.iteration}" style="display:none"></div>
+                <div class="iter-decision" id="iter-decision-${ev.iteration}" style="display:none"></div>
+            `;
+            document.getElementById('iterations-container').appendChild(card);
+            _iterationsByNum[ev.iteration] = card;
+            // Mark the plan-strip skill as executing
+            const planChip = document.getElementById(`plan-skill-${ev.skill}`);
+            if (planChip) planChip.classList.add('executed');
+        }
+
+        function completeIterationCard(ev) {
+            const card = _iterationsByNum[ev.iteration];
+            if (!card) return;
+            card.classList.remove('running');
+            card.classList.add('done');
+            const head = card.querySelector('.iter-head');
+            const pill = head.querySelector('.iter-status-pill');
+            pill.classList.remove('running');
+            const status = (ev.status || '').toLowerCase();
+            pill.classList.add(status || 'success');
+            pill.textContent = ev.status || 'done';
+            head.querySelector('.iter-meta').textContent = `${(ev.cache_hit ? '⚡ cache · ' : '')}${ev.latency_ms || 0} ms`;
+
+            const summaryDiv = document.getElementById(`iter-summary-${ev.iteration}`);
+            if (ev.summary_preview) {
+                summaryDiv.textContent = ev.summary_preview;
+                summaryDiv.style.display = 'block';
+            }
+        }
+
+        function appendDecisionToCard(ev) {
+            const card = _iterationsByNum[ev.iteration];
+            if (!card) return;
+            const decisionDiv = document.getElementById(`iter-decision-${ev.iteration}`);
+            const action = ev.action || 'stop';
+            const label = action === 'continue' ? 'Continue plan' : (action === 'add_skill' ? 'Pivot — add skill' : 'Stop');
+            decisionDiv.innerHTML = `<span class="action-pill ${action}">${label.toUpperCase()}</span>${escHtml(ev.reasoning || '')}` +
+                (ev.next_skill ? ` <span style="color:#64748b">→</span> <code style="color:#c7d2fe;font-family:'JetBrains Mono',monospace;font-size:0.8rem">${escHtml(ev.next_skill)}</code>` : '') +
+                ` <span style="color:#475569;margin-left:0.5rem;font-size:0.75rem">(conf ${Math.round((ev.confidence||0)*100)}%)</span>`;
+            decisionDiv.style.display = 'block';
+        }
+
+        function renderAutoFinal(data) {
+            const r = data.result || {};
+            const status = (data.status === 'success') ? 'SUCCESS' : 'FAILED';
+            const badge = document.getElementById('status-badge');
+            badge.className = 'status-badge ' + (status === 'SUCCESS' ? 'success' : 'failed');
+            badge.textContent = status;
+
+            document.getElementById('result-title').textContent =
+                `Auto-router executed ${(r.skills_executed || []).length} skill${(r.skills_executed || []).length === 1 ? '' : 's'}` +
+                (r.terminated_reason ? ` (${r.terminated_reason})` : '');
+
+            // Reviewer demo highlight
+            const skillsExecuted = r.skills_executed || r.skill_executed || [];
+            if (skillsExecuted.length) {
+                document.getElementById('demo-highlight').style.display = 'block';
+                document.getElementById('demo-highlight-skills').innerHTML =
+                    skillsExecuted.map(s => `<code>${escHtml(s)}</code>`).join(' + ');
+            }
+
+            // Synthesis
+            if (r.final_synthesis) {
+                const sb = document.getElementById('synthesis-box');
+                sb.classList.remove('skeleton');
+                sb.style.display = 'block';
+                document.getElementById('synthesis-text').textContent = r.final_synthesis;
+            }
+
+            // Trace info
+            renderTrace(data);
+
+            // Meta row
+            const lat = data.latency_ms ? `<span><strong>Latency:</strong> ${Math.round(data.latency_ms)} ms</span>` : '';
+            const iters = `<span><strong>Iterations:</strong> ${r.iterations_used || 0}</span>`;
+            const sha = r.commit_sha ? `<span><strong>Commit:</strong> <code>${escHtml(r.commit_sha)}</code></span>` : '';
+            const branch = r.branch ? `<span><strong>Branch:</strong> ${escHtml(r.branch)}</span>` : '';
+            const planConf = r.plan_confidence ? `<span><strong>Plan conf:</strong> ${Math.round(r.plan_confidence*100)}%</span>` : '';
+            document.getElementById('meta-row').innerHTML = [iters, lat, sha, branch, planConf].filter(Boolean).join('');
+
+            // Per-iteration deep details (skill data tables, etc.)
+            (r.steps || []).forEach(step => {
+                const detail = document.getElementById(`iter-detail-${step.iteration}`);
+                if (!detail) return;
+                detail.innerHTML = renderSkillDetail(step.skill_executed, step.raw_result || {});
+                detail.style.display = 'block';
+            });
+
+            // Cost
+            const cost = (data.cost_metadata || {}).cost_usd;
+            const tokens = (data.cost_metadata || {}).tokens_in;
+            const calls = (data.cost_metadata || {}).calls;
+            document.getElementById('cost-row').innerHTML = [
+                cost !== undefined ? `<span><strong>Cost:</strong> $${Number(cost).toFixed(6)}</span>` : '',
+                tokens ? `<span><strong>Tokens in:</strong> ${tokens}</span>` : '',
+                calls ? `<span><strong>LLM calls:</strong> ${calls}</span>` : '',
+                r.terminated_reason ? `<span><strong>Stop reason:</strong> ${escHtml(r.terminated_reason)}</span>` : '',
+            ].filter(Boolean).join('');
+
+            document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // Manual single-skill stream (uses existing /skills/stream)
+        // ────────────────────────────────────────────────────────────────
+        async function streamManual(payload) {
+            const resp = await fetch('/api/v1/skills/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                body: JSON.stringify(payload),
+            });
+            if (!resp.ok || !resp.body) {
+                const text = await resp.text();
+                renderError(text || ('HTTP ' + resp.status));
+                return;
+            }
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+            let finalData = null, finalErr = null;
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+                const lines = buf.split('\n');
+                buf = lines.pop() || '';
+                for (const ln of lines) {
+                    if (!ln.startsWith('data: ')) continue;
+                    let ev;
+                    try { ev = JSON.parse(ln.slice(6)); } catch (_) { continue; }
+                    appendLiveEvent(ev);
+                    if (ev.event === 'result' && ev.result) finalData = ev.result;
+                    if (ev.event === 'error') finalErr = ev;
+                }
+            }
+            if (finalData) {
+                _lastResult = finalData;
+                renderManualFinal(finalData);
+            } else if (finalErr) {
+                renderError(finalErr.user_message || finalErr.raw_error || 'Unknown error');
+            }
+        }
+
+        function renderManualFinal(data) {
+            const badge = document.getElementById('status-badge');
+            badge.className = 'status-badge ' + (data.status === 'failed' ? 'failed' : 'success');
+            badge.textContent = (data.status === 'failed') ? 'FAILED' : 'SUCCESS';
+
+            const r = data.result || {};
+            document.getElementById('result-title').textContent = r.skill || '—';
+
+            document.getElementById('demo-highlight').style.display = 'block';
+            document.getElementById('demo-highlight-skills').innerHTML =
+                `<code>${escHtml(r.skill || '')}</code>`;
+
+            renderTrace(data);
+
+            const lang = r.language ? `<span><strong>Language:</strong> ${escHtml(r.language)}</span>` : '';
+            const sha = r.commit_sha ? `<span><strong>Commit:</strong> <code>${escHtml(r.commit_sha)}</code></span>` : '';
+            const branch = r.branch ? `<span><strong>Branch:</strong> ${escHtml(r.branch)}</span>` : '';
+            const lat = data.latency_ms ? `<span><strong>Latency:</strong> ${Math.round(data.latency_ms)} ms</span>` : '';
+            const conf = r.match_confidence ? `<span><strong>Match:</strong> ${Math.round(r.match_confidence * 100)}%</span>` : '';
+            document.getElementById('meta-row').innerHTML = [lang, sha, branch, lat, conf].filter(Boolean).join('');
+
+            if (r.summary) {
+                document.getElementById('manual-summary-section').innerHTML =
+                    `<div class="synthesis-box" style="display:block"><span class="label">Summary</span>${escHtml(r.summary)}</div>`;
+            }
+            document.getElementById('manual-detail-section').innerHTML = renderSkillDetail(r.skill, r);
+
+            const cost = (data.cost_metadata || {}).cost_usd;
+            const tokens = (data.cost_metadata || {}).tokens_in;
+            document.getElementById('cost-row').innerHTML = cost !== undefined
+                ? `<span><strong>Cost:</strong> $${Number(cost).toFixed(6)}</span><span><strong>Tokens in:</strong> ${tokens || '—'}</span>`
+                : '';
+            document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // Trace info pill
+        // ────────────────────────────────────────────────────────────────
+        function renderTrace(data) {
             const traceInfo = document.getElementById('trace-info');
             const tracePill = document.getElementById('trace-id-pill');
             const lsLink = document.getElementById('langsmith-link');
             if (data.trace_id) {
                 tracePill.textContent = 'trace: ' + data.trace_id.slice(0, 8);
-                tracePill.title = 'Click to copy full trace id: ' + data.trace_id;
-                tracePill.onclick = () => {
-                    navigator.clipboard.writeText(data.trace_id).then(() => {
-                        tracePill.classList.add('copied');
-                        const orig = tracePill.textContent;
-                        tracePill.textContent = '✓ copied';
-                        setTimeout(() => {
-                            tracePill.textContent = orig;
-                            tracePill.classList.remove('copied');
-                        }, 1500);
-                    });
-                };
+                tracePill.title = 'Click to copy: ' + data.trace_id;
+                tracePill.onclick = () => navigator.clipboard.writeText(data.trace_id).then(() => {
+                    const orig = tracePill.textContent;
+                    tracePill.textContent = '✓ copied';
+                    setTimeout(() => { tracePill.textContent = orig; }, 1200);
+                });
                 traceInfo.style.display = 'inline-flex';
             } else {
                 traceInfo.style.display = 'none';
@@ -398,52 +835,66 @@
             } else {
                 lsLink.style.display = 'none';
             }
-            // Auto-scroll to result after run completes
-            document.getElementById('result-panel').scrollIntoView({behavior:'smooth', block:'start'});
-
-            if (httpStatus >= 400 || data.status === 'failed') {
-                badge.className = 'status-badge failed';
-                badge.textContent = 'FAILED';
-                const errorMsg = data.detail || data.error || 'Unknown error';
-                title.textContent = 'Skill execution failed';
-                metaRow.innerHTML = '';
-                summarySection.innerHTML = `<div class="error-box">${escHtml(errorMsg)}</div>`;
-                detailSection.innerHTML = '';
-                costRow.innerHTML = '';
-            } else {
-                const r = data.result || {};
-                badge.className = 'status-badge success';
-                badge.textContent = 'SUCCESS';
-                badge.textContent += r.cache_hit ? ' (cached)' : '';
-                title.textContent = r.skill || data.result?.skill || '—';
-
-                const lang = r.language ? `<span><strong>Language:</strong> ${escHtml(r.language)}</span>` : '';
-                const sha = r.commit_sha ? `<span><strong>Commit:</strong> <code>${escHtml(r.commit_sha)}</code></span>` : '';
-                const branch = r.branch ? `<span><strong>Branch:</strong> ${escHtml(r.branch)}</span>` : '';
-                const lat = data.latency_ms ? `<span><strong>Latency:</strong> ${Math.round(data.latency_ms)}ms</span>` : '';
-                const conf = r.match_confidence ? `<span><strong>Match:</strong> ${Math.round(r.match_confidence * 100)}%</span>` : '';
-                metaRow.innerHTML = [lang, sha, branch, lat, conf].filter(Boolean).join('');
-
-                if (r.summary) {
-                    summarySection.innerHTML = `<div class="summary-box">${escHtml(r.summary)}</div>`;
-                }
-
-                detailSection.innerHTML = renderSkillDetail(r);
-
-                const cost = (data.cost_metadata || {}).cost_usd;
-                const tokens = (data.cost_metadata || {}).tokens_in;
-                costRow.innerHTML = cost !== undefined
-                    ? `Cost: $${cost.toFixed(6)} | Tokens in: ${tokens || '—'}`
-                    : '';
-            }
-
-            rawJson.textContent = JSON.stringify(data, null, 2);
-            rawJson.classList.remove('visible');
-            panel.classList.add('visible');
         }
 
-        function renderSkillDetail(r) {
-            const skill = r.skill || '';
+        function copyTraceId() {
+            const pill = document.getElementById('trace-id-pill');
+            const txt = (pill.title || '').replace(/^Click to copy:\s*/i, '');
+            if (navigator.clipboard && txt) navigator.clipboard.writeText(txt);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // Live events (SSE feed)
+        // ────────────────────────────────────────────────────────────────
+        function appendLiveEvent(ev) {
+            const list = document.getElementById('live-events');
+            if (!list) return;
+            const li = document.createElement('li');
+            li.className = 'live-event live-event-' + ev.event;
+            const ts = new Date().toLocaleTimeString();
+            let text = `[${ts}] `;
+
+            if (ev.event === 'stream_start')              text += `🔌 stream open · trace ${ev.trace_id ? ev.trace_id.slice(0,8) : ''}`;
+            else if (ev.event === 'auto_router_start')    text += `🤖 auto-router · query="${(ev.query||'').slice(0,80)}" · model=${ev.model || 'default'}`;
+            else if (ev.event === 'plan_done')            text += `📋 plan: [${(ev.plan||[]).join(' → ')}] · conf ${Math.round((ev.confidence||0)*100)}%`;
+            else if (ev.event === 'iteration_start')      text += `▶️ iter ${ev.iteration} · ${ev.skill}${ev.rationale ? ' · ' + ev.rationale.slice(0,80) : ''}`;
+            else if (ev.event === 'skill_progress')       text += `   └─ ${ev.inner ? ev.inner.event : ''}${ev.inner && ev.inner.summary_preview ? ': ' + ev.inner.summary_preview.slice(0,60) : ''}`;
+            else if (ev.event === 'iteration_skill_done') text += `✓ iter ${ev.iteration} done · ${ev.skill} · status=${ev.status}${ev.cache_hit ? ' (cache)' : ''} · ${ev.latency_ms||0} ms`;
+            else if (ev.event === 'iteration_decision')   text += `🧭 iter ${ev.iteration} decision: ${ev.action}${ev.next_skill ? ' → ' + ev.next_skill : ''} · ${(ev.reasoning||'').slice(0,80)}`;
+            else if (ev.event === 'synthesize_start')     text += `📝 synthesizing final answer…`;
+            else if (ev.event === 'synthesize_done')      text += `✓ synthesis ready · ${(ev.synthesis_preview||'').slice(0,80)}…`;
+            else if (ev.event === 'auto_router_complete') text += `🏁 auto-router done · skills=[${(ev.skills_executed||[]).join(', ')}] · ${ev.iterations_used} iters · $${(ev.total_cost_usd||0).toFixed(4)}`;
+
+            // Manual mode events (existing engine)
+            else if (ev.event === 'skill_start')          text += `🚀 ${ev.repo}@${ev.branch} · skill="${ev.requested_skill}"`;
+            else if (ev.event === 'skill_resolved')       text += `✓ skill resolved: ${ev.skill} (${(ev.confidence*100|0)}%)`;
+            else if (ev.event === 'repo_validated')       text += `✓ repo validated: ${ev.owner}/${ev.repo}@${ev.branch}`;
+            else if (ev.event === 'sha_fetched')          text += `✓ HEAD sha: ${ev.commit_sha}`;
+            else if (ev.event === 'cache_hit')            text += `⚡ cache HIT`;
+            else if (ev.event === 'cache_miss')           text += `cache miss — fresh run`;
+            else if (ev.event === 'clone_start')          text += `📥 cloning ${ev.owner}/${ev.repo}…`;
+            else if (ev.event === 'clone_done')           text += `✓ clone done · sha ${ev.commit_sha}`;
+            else if (ev.event === 'language_detected')    text += `✓ language: ${ev.language}`;
+            else if (ev.event === 'skill_run_start')      text += `🛠️ running ${ev.skill} (${ev.language})…`;
+            else if (ev.event === 'skill_run_done')       text += `✓ ${ev.skill} done · status="${ev.status}"`;
+            else if (ev.event === 'summarize_start')      text += `📝 LLM summarizing…`;
+            else if (ev.event === 'summarize_done')       text += `✓ summary ready`;
+            else if (ev.event === 'skill_complete')       text += `🏁 ${ev.status} · ${ev.latency_ms|0} ms · $${(ev.cost_usd||0).toFixed(4)}`;
+            else if (ev.event === 'result')               text += `📦 final result`;
+            else if (ev.event === 'stream_end')           text += `🔚 stream closed`;
+            else if (ev.event === 'error')                text += `❌ ${ev.user_message || ev.category || 'error'}`;
+            else                                          text += ev.event;
+
+            li.textContent = text;
+            list.appendChild(li);
+            list.scrollTop = list.scrollHeight;
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // Skill-detail renderers (reused for both modes)
+        // ────────────────────────────────────────────────────────────────
+        function renderSkillDetail(skill, r) {
+            if (!r) return '';
             if (skill === 'lint-and-test') return renderLintAndTest(r);
             if (skill === 'dependency-audit') return renderDependencyAudit(r);
             if (skill === 'security-scan') return renderSecurityScan(r);
@@ -452,113 +903,110 @@
         }
 
         function renderLintAndTest(r) {
-            let html = '<div class="skill-detail">';
-            const lintOk = r.lint_passed !== false;
-            const testOk = r.tests_passed !== false;
-            html += '<h4>Test Counts</h4><div class="test-counts">';
-            html += `<div class="count-item count-${testOk ? 'pass' : 'fail'}"><div class="count">${r.tests_pass ?? '—'}</div><div class="label">Passed</div></div>`;
-            html += `<div class="count-item count-fail"><div class="count">${r.tests_fail ?? 0}</div><div class="label">Failed</div></div>`;
-            html += `<div class="count-item count-warn"><div class="count">${r.tests_error ?? 0}</div><div class="label">Errors</div></div>`;
-            html += `<div class="count-item count-neutral"><div class="count">${r.tests_skipped ?? 0}</div><div class="label">Skipped</div></div>`;
+            let html = '';
+            html += '<h5>Test counts</h5><div class="test-counts">';
+            html += `<div class="count-item count-pass"><div class="count">${r.test_passed_count ?? 0}</div><div class="label">Passed</div></div>`;
+            html += `<div class="count-item count-fail"><div class="count">${r.test_failed_count ?? 0}</div><div class="label">Failed</div></div>`;
+            html += `<div class="count-item count-warn"><div class="count">${r.test_skipped_count ?? 0}</div><div class="label">Skipped</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${r.lint_issue_count ?? (r.lint_issues || []).length}</div><div class="label">Lint issues</div></div>`;
             html += '</div>';
             const issues = r.lint_issues || [];
-            html += '<h4 style="margin-top:1rem;">Lint Issues</h4>';
-            if (!issues.length) {
-                html += '<p class="no-issues">✓ No lint issues found</p>';
-            } else {
-                html += '<table class="issues-table"><thead><tr><th>File</th><th>Line</th><th>Code</th><th>Message</th></tr></thead><tbody>';
-                issues.slice(0, 50).forEach(i => {
-                    html += `<tr><td>${escHtml(i.filename || '')}</td><td>${i.row || ''}:${i.col || ''}</td><td>${escHtml(i.code || '')}</td><td>${escHtml(i.message || '')}</td></tr>`;
+            if (issues.length) {
+                html += '<h5>Lint issues</h5><table class="issues-table"><thead><tr><th>File</th><th>Line</th><th>Code</th><th>Message</th></tr></thead><tbody>';
+                issues.slice(0, 15).forEach(i => {
+                    html += `<tr><td>${escHtml(i.file || i.filename || '')}</td><td>${i.line || i.row || ''}:${i.col || ''}</td><td>${escHtml(i.code || '')}</td><td>${escHtml(i.message || '')}</td></tr>`;
                 });
-                if (issues.length > 50) html += `<tr><td colspan="4" style="color:#64748b;text-align:center;">... ${issues.length - 50} more issues</td></tr>`;
+                if (issues.length > 15) html += `<tr><td colspan="4" style="color:#64748b;text-align:center;font-size:0.78rem">… ${issues.length - 15} more</td></tr>`;
                 html += '</tbody></table>';
             }
-            html += '</div>';
             return html;
         }
 
         function renderDependencyAudit(r) {
-            let html = '<div class="skill-detail">';
+            let html = '';
             const vulns = r.vulnerabilities || [];
-            const outdated = r.outdated_packages || [];
-            html += `<div class="test-counts" style="margin-bottom:1rem;">`;
-            html += `<div class="count-item count-${vulns.length ? 'fail' : 'pass'}"><div class="count">${vulns.length}</div><div class="label">CVEs Found</div></div>`;
+            const outdated = r.outdated || r.outdated_packages || [];
+            html += '<div class="test-counts">';
+            html += `<div class="count-item count-${vulns.length ? 'fail' : 'pass'}"><div class="count">${vulns.length}</div><div class="label">CVEs</div></div>`;
+            html += `<div class="count-item count-${r.critical_count ? 'fail' : 'neutral'}"><div class="count">${r.critical_count ?? 0}</div><div class="label">Critical</div></div>`;
+            html += `<div class="count-item count-${r.high_count ? 'fail' : 'neutral'}"><div class="count">${r.high_count ?? 0}</div><div class="label">High</div></div>`;
             html += `<div class="count-item count-${outdated.length ? 'warn' : 'pass'}"><div class="count">${outdated.length}</div><div class="label">Outdated</div></div>`;
-            html += `<div class="count-item count-neutral"><div class="count">${r.packages_scanned ?? '—'}</div><div class="label">Scanned</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${r.total_dependencies ?? '—'}</div><div class="label">Total deps</div></div>`;
             html += '</div>';
             if (vulns.length) {
-                html += '<h4>Vulnerabilities</h4><table class="findings-table"><thead><tr><th>Package</th><th>Version</th><th>CVE</th><th>Severity</th><th>Fixed</th></tr></thead><tbody>';
-                vulns.forEach(v => {
-                    const sevClass = 'sev-' + (v.severity || 'low').toLowerCase();
-                    html += `<tr><td>${escHtml(v.package_name || '')}</td><td>${escHtml(v.installed_version || '')}</td>`;
-                    html += `<td><a class="cve-link" href="https://osv.dev/vulnerability/${escHtml(v.vuln_id || '')}" target="_blank">${escHtml(v.vuln_id || '')}</a></td>`;
-                    html += `<td class="${sevClass}">${(v.severity || '').toUpperCase()}</td><td>${escHtml(v.fixed_version || 'none')}</td></tr>`;
+                html += '<h5>Vulnerabilities</h5><table class="findings-table"><thead><tr><th>Package</th><th>Version</th><th>CVE</th><th>Severity</th><th>Fixed in</th></tr></thead><tbody>';
+                vulns.slice(0, 10).forEach(v => {
+                    const sev = (v.severity || 'low').toLowerCase();
+                    const cveId = v.cve_id || v.osv_id || v.vuln_id || '';
+                    html += `<tr><td>${escHtml(v.package || v.package_name || '')}</td><td>${escHtml(v.version || v.installed_version || '')}</td>`;
+                    html += `<td><a class="cve-link" href="https://osv.dev/vulnerability/${escHtml(cveId)}" target="_blank">${escHtml(cveId)}</a></td>`;
+                    html += `<td class="sev-${sev}">${(v.severity || '').toUpperCase()}</td><td>${escHtml(v.fixed_version || 'none')}</td></tr>`;
                 });
+                if (vulns.length > 10) html += `<tr><td colspan="5" style="color:#64748b;text-align:center;font-size:0.78rem">… ${vulns.length - 10} more</td></tr>`;
                 html += '</tbody></table>';
             } else {
-                html += '<p class="no-issues">✓ No known vulnerabilities found</p>';
+                html += '<p class="no-issues">✓ No known vulnerabilities</p>';
             }
-            html += '</div>';
             return html;
         }
 
         function renderSecurityScan(r) {
-            let html = '<div class="skill-detail">';
+            let html = '';
             const findings = r.findings || [];
-            const critical = findings.filter(f => f.severity === 'critical').length;
-            const high = findings.filter(f => f.severity === 'high').length;
-            html += `<div class="test-counts" style="margin-bottom:1rem;">`;
-            html += `<div class="count-item count-${critical ? 'fail' : 'neutral'}"><div class="count">${critical}</div><div class="label">Critical</div></div>`;
-            html += `<div class="count-item count-${high ? 'fail' : 'neutral'}"><div class="count">${high}</div><div class="label">High</div></div>`;
-            html += `<div class="count-item count-neutral"><div class="count">${findings.length - critical - high}</div><div class="label">Lower</div></div>`;
-            html += `<div class="count-item count-neutral"><div class="count">${r.files_scanned ?? '—'}</div><div class="label">Files Scanned</div></div>`;
+            const sev = r.severity_counts || {};
+            html += '<div class="test-counts">';
+            html += `<div class="count-item count-${sev.critical ? 'fail' : 'neutral'}"><div class="count">${sev.critical || 0}</div><div class="label">Critical</div></div>`;
+            html += `<div class="count-item count-${sev.high ? 'fail' : 'neutral'}"><div class="count">${sev.high || 0}</div><div class="label">High</div></div>`;
+            html += `<div class="count-item count-${sev.medium ? 'warn' : 'neutral'}"><div class="count">${sev.medium || 0}</div><div class="label">Medium</div></div>`;
+            html += `<div class="count-item count-${sev.low ? 'warn' : 'neutral'}"><div class="count">${sev.low || 0}</div><div class="label">Low</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${r.files_scanned ?? '—'}</div><div class="label">Scanned</div></div>`;
             html += '</div>';
             if (findings.length) {
-                html += '<h4>Findings</h4><table class="findings-table"><thead><tr><th>Severity</th><th>Type</th><th>File</th><th>Line</th><th>Recommendation</th></tr></thead><tbody>';
-                findings.slice(0, 30).forEach(f => {
+                html += '<h5>Findings</h5><table class="findings-table"><thead><tr><th>Severity</th><th>Type</th><th>File</th><th>Line</th><th>Tool</th></tr></thead><tbody>';
+                findings.slice(0, 15).forEach(f => {
                     const sevClass = 'sev-' + (f.severity || 'low').toLowerCase();
                     html += `<tr><td class="${sevClass}">${(f.severity || '').toUpperCase()}</td><td>${escHtml(f.finding_type || '')}</td>`;
-                    html += `<td style="font-family:monospace;font-size:0.8rem">${escHtml(f.file_path || '')}</td><td>${f.line_number || '—'}</td>`;
-                    html += `<td style="font-size:0.8rem">${escHtml(f.recommendation || '')}</td></tr>`;
+                    html += `<td style="font-family:monospace;font-size:0.75rem">${escHtml(f.file || f.file_path || '')}</td><td>${f.line || f.line_number || '—'}</td>`;
+                    html += `<td style="font-size:0.78rem">${escHtml(f.tool || '')}</td></tr>`;
                 });
-                if (findings.length > 30) html += `<tr><td colspan="5" style="color:#64748b;text-align:center;">... ${findings.length - 30} more findings</td></tr>`;
+                if (findings.length > 15) html += `<tr><td colspan="5" style="color:#64748b;text-align:center;font-size:0.78rem">… ${findings.length - 15} more</td></tr>`;
                 html += '</tbody></table>';
             } else {
-                html += '<p class="no-issues">✓ No secrets or SAST issues found</p>';
+                html += '<p class="no-issues">✓ No secrets or SAST issues</p>';
             }
-            html += '</div>';
             return html;
         }
 
         function renderBuildAndRelease(r) {
-            let html = '<div class="skill-detail">';
-            html += `<div class="test-counts" style="margin-bottom:1rem;">`;
+            let html = '<div class="test-counts">';
             html += `<div class="count-item count-neutral"><div class="count">${escHtml(r.current_version || 'none')}</div><div class="label">Current</div></div>`;
             html += `<div class="count-item count-pass"><div class="count">${escHtml(r.next_version || '—')}</div><div class="label">Next</div></div>`;
             html += `<div class="count-item count-neutral"><div class="count">${escHtml(r.version_bump || '—')}</div><div class="label">Bump</div></div>`;
-            html += `<div class="count-item count-neutral"><div class="count">${r.commits_analyzed ?? 0}</div><div class="label">Commits</div></div>`;
+            html += `<div class="count-item count-neutral"><div class="count">${r.commits_since_tag ?? 0}</div><div class="label">Commits</div></div>`;
             html += '</div>';
             if (r.changelog) {
-                html += '<h4>Changelog Preview</h4>';
+                html += '<h5>Changelog</h5>';
                 html += `<div class="changelog-box">${escHtml(r.changelog)}</div>`;
             }
-            if (r.dry_run) {
-                html += `<p style="font-size:0.85rem;color:#64748b;margin-top:0.75rem;">Dry-run mode — no tag created. Uncheck "Dry-run mode" and re-run to create the release.</p>`;
-            } else if (r.release_url) {
-                html += `<p style="margin-top:0.75rem;"><a href="${escHtml(r.release_url)}" target="_blank" style="color:#22c55e;">✓ Release created: ${escHtml(r.next_version || '')}</a></p>`;
+            if (r.release_url) {
+                html += `<p style="margin-top:0.5rem;"><a href="${escHtml(r.release_url)}" target="_blank" style="color:#22c55e;">✓ Release: ${escHtml(r.next_version || '')}</a></p>`;
+            } else if (r.dry_run) {
+                html += `<p style="font-size:0.8rem;color:#64748b;margin-top:0.5rem;">Dry-run mode — no tag created.</p>`;
             }
-            html += '</div>';
             return html;
         }
 
+        // ────────────────────────────────────────────────────────────────
+        // Errors + utilities
+        // ────────────────────────────────────────────────────────────────
         function renderError(msg) {
-            document.getElementById('status-badge').className = 'status-badge failed';
-            document.getElementById('status-badge').textContent = 'ERROR';
+            const badge = document.getElementById('status-badge');
+            badge.className = 'status-badge failed';
+            badge.textContent = 'ERROR';
             document.getElementById('result-title').textContent = 'Request failed';
-            document.getElementById('meta-row').innerHTML = '';
-            document.getElementById('summary-section').innerHTML = `<div class="error-box">${escHtml(msg)}</div>`;
-            document.getElementById('skill-detail-section').innerHTML = '';
-            document.getElementById('cost-row').innerHTML = '';
+            document.getElementById('manual-summary-section').innerHTML =
+                `<div class="synthesis-box" style="display:block;border-color:rgba(239,68,68,0.5);background:rgba(239,68,68,0.06)">${escHtml(msg)}</div>`;
+            document.getElementById('synthesis-box').style.display = 'none';
             document.getElementById('result-panel').classList.add('visible');
         }
 
@@ -571,13 +1019,6 @@
         function escHtml(str) {
             return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
-
-        // Show dry-run only for build-and-release
-        document.getElementById('skill-select').addEventListener('change', function() {
-            const isRelease = this.value === 'build-and-release';
-            const dryRunGroup = document.getElementById('dry-run-row').closest('.form-group');
-            dryRunGroup.style.display = isRelease ? 'flex' : 'none';
-        });
     </script>
 </body>
 </html>
