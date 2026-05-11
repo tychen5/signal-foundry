@@ -66,11 +66,33 @@ class FailureType(str, Enum):
 
 
 class ModelSelectionRequest(BaseModel):
-    """User's model selection, optionally with their own API key."""
+    """User's model selection, optionally with their own API key.
+
+    `model_id` is free-text: pass any `publisher/model-name` string the
+    chosen provider hosts (e.g. `openai/gpt-5.5`,
+    `moonshotai/kimi-k2.6`, `qwen/qwen3-next-80b-a3b-instruct`,
+    `anthropic/claude-opus-4.7`, `nvidia/nemotron-3-super-120b-a12b`).
+    The server doesn't require the value to be in its registry — the
+    registry is just a curated set with extra metadata (cost rates,
+    `extra_body` for thinking-mode toggles). Unknown IDs are routed via
+    the publisher-prefix heuristic, or via the `provider` hint below.
+    """
 
     model_id: str = Field(
         default="moonshotai/kimi-k2.6",
-        description="Model identifier from the registry",
+        description=(
+            "Model identifier as 'provider/model-name'. Accepts ANY model "
+            "the chosen provider hosts, not just the registry defaults."
+        ),
+    )
+    provider: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional explicit provider routing for free-text model_ids whose "
+            "publisher prefix the server doesn't recognise. Set to "
+            "'openrouter' or 'nvidia'. When omitted, the server infers from "
+            "the model_id prefix (openai/, anthropic/, google/, moonshotai/, …)."
+        ),
     )
     user_openrouter_key: Optional[str] = Field(
         default=None,
@@ -105,7 +127,7 @@ class ModelSelectionRequest(BaseModel):
         from src.config import LLMProvider, get_settings
 
         try:
-            info = get_settings().get_model_info(self.model_id)
+            info = get_settings().get_model_info(self.model_id, provider_hint=self.provider)
             provider = info["provider"]
         except Exception:
             return self.user_openrouter_key

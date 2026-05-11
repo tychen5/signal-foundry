@@ -38,33 +38,41 @@ _user_openrouter_key_ctx: "contextvars.ContextVar[Optional[str]]" = contextvars.
 _user_nvidia_key_ctx: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
     "user_nvidia_key_ctx", default=None
 )
+_provider_hint_ctx: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar("provider_hint_ctx", default=None)
 
 
-def set_user_keys(openrouter: Optional[str] = None, nvidia: Optional[str] = None) -> None:
+def set_user_keys(
+    openrouter: Optional[str] = None,
+    nvidia: Optional[str] = None,
+    provider_hint: Optional[str] = None,
+) -> None:
     """Set per-request user API keys.
 
-    Routers call this at the start of a request so that downstream get_llm()
-    callers (which only know about a single `user_openrouter_key` parameter)
-    can transparently use the user-supplied NVIDIA NIM key too. Keys are
-    isolated per asyncio task via contextvars — concurrent requests don't
-    leak keys across each other.
+    Routers call this at the start of a request so downstream get_llm()
+    callers can transparently use user-supplied keys and a provider hint
+    for free-text model IDs. Values are isolated per asyncio task via
+    contextvars — concurrent requests don't leak keys across each other.
     """
     if openrouter is not None:
         _user_openrouter_key_ctx.set(openrouter)
     if nvidia is not None:
         _user_nvidia_key_ctx.set(nvidia)
+    if provider_hint is not None:
+        _provider_hint_ctx.set(provider_hint)
 
 
 def clear_user_keys() -> None:
     """Reset the per-request key context (call at request teardown)."""
     _user_openrouter_key_ctx.set(None)
     _user_nvidia_key_ctx.set(None)
+    _provider_hint_ctx.set(None)
 
 
 def get_llm(
     model_name: Optional[str] = None,
     user_openrouter_key: Optional[str] = None,
     user_nvidia_key: Optional[str] = None,
+    provider_hint: Optional[str] = None,
     temperature: float = 0.0,
     max_tokens: Optional[int] = None,
     settings: Optional[Settings] = None,
@@ -78,6 +86,8 @@ def get_llm(
         user_openrouter_key: User-supplied OpenRouter key (overrides server key).
         user_nvidia_key: User-supplied NVIDIA NIM key (overrides server key).
             Useful when the server's key is expired or rate-limited.
+        provider_hint: Explicit provider routing for free-text model IDs whose
+            publisher prefix is not in the built-in heuristic.
         temperature: Sampling temperature. Default 0.0 for deterministic output.
         max_tokens: Max tokens for response. Uses model default if None.
         settings: Settings instance. Uses singleton if None.
@@ -100,7 +110,8 @@ def get_llm(
     if model_name is None:
         model_name = settings.default_model
 
-    model_info = settings.get_model_info(model_name)
+    effective_provider_hint = provider_hint or _provider_hint_ctx.get()
+    model_info = settings.get_model_info(model_name, provider_hint=effective_provider_hint)
     provider = model_info["provider"]
     actual_model = model_info["model_name"]
     default_max_tokens = model_info.get("max_tokens", 8192)
@@ -112,11 +123,7 @@ def get_llm(
     backend = os.environ.get("LLM_BACKEND", "openai_compat").lower()
 
     if provider == LLMProvider.OPENROUTER:
-        api_key = (
-            user_openrouter_key
-            or _user_openrouter_key_ctx.get()
-            or settings.openrouter_api_key
-        )
+        api_key = user_openrouter_key or _user_openrouter_key_ctx.get() or settings.openrouter_api_key
         if not api_key:
             raise ValueError(
                 "OpenRouter API key required for this model. Either set "
@@ -137,11 +144,7 @@ def get_llm(
         )
 
     if provider == LLMProvider.NVIDIA:
-        api_key = (
-            user_nvidia_key
-            or _user_nvidia_key_ctx.get()
-            or settings.nvidia_api_key
-        )
+        api_key = user_nvidia_key or _user_nvidia_key_ctx.get() or settings.nvidia_api_key
         if not api_key:
             raise ValueError(
                 "NVIDIA NIM API key required. Either set NVIDIA_API_KEY on "
@@ -188,10 +191,7 @@ def _create_openai_compat(
     try:
         from langchain_openai import ChatOpenAI
     except ImportError as e:
-        raise ImportError(
-            "langchain-openai package not installed. "
-            "Run: pip install langchain-openai"
-        ) from e
+        raise ImportError("langchain-openai package not installed. Run: pip install langchain-openai") from e
 
     if not api_key:
         raise ValueError(f"{provider_label.upper()} API key required.")
@@ -256,8 +256,7 @@ def _create_openrouter_native(
         from langchain_openrouter import ChatOpenRouter
     except ImportError as e:
         raise ImportError(
-            "langchain-openrouter package not installed. "
-            "Run: pip install langchain-openrouter (or unset LLM_BACKEND)"
+            "langchain-openrouter package not installed. Run: pip install langchain-openrouter (or unset LLM_BACKEND)"
         ) from e
 
     if not api_key:

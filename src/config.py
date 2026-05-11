@@ -160,11 +160,71 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
-    def get_model_info(self, model_id: str) -> dict:
-        """Get model configuration by ID. Falls back to default model if not found."""
+    def get_model_info(
+        self,
+        model_id: str,
+        provider_hint: Optional[str] = None,
+    ) -> dict:
+        """Get model configuration for a (possibly free-text) model_id.
+
+        Resolution order:
+          1. Exact MODEL_REGISTRY hit → use the registered config
+             (preserves curated `extra_body` for thinking-mode models +
+             documented `max_tokens` + display_name).
+          2. `provider_hint` is "openrouter" or "nvidia" → synthesise a
+             pass-through config for that provider.
+          3. Prefix heuristic via `infer_provider_from_model_id` → same.
+          4. Nothing fits → raise ValueError so the caller can return 400
+             with a clear "set provider explicitly" message instead of
+             silently swapping in the demo default model (which has bitten
+             reviewers running benchmarks with their own model IDs).
+
+        This lets users bring ANY model the chosen provider hosts — e.g.
+        `qwen/qwen3-next-80b-a3b-instruct`, `nvidia/nemotron-3-super-...`,
+        or anything new on openrouter.ai — without us needing to ship a
+        registry update.
+        """
+        from src.shared.llm_validation import (
+            infer_provider_from_model_id,
+            validate_model_id_shape,
+        )
+
+        shape_error = validate_model_id_shape(model_id)
+        if shape_error:
+            raise ValueError(shape_error)
+
         if model_id in MODEL_REGISTRY:
             return MODEL_REGISTRY[model_id]
-        return MODEL_REGISTRY.get(self.default_model, list(MODEL_REGISTRY.values())[0])
+
+        # Free-text path: synthesise a config from the hint or heuristic.
+        provider_str: Optional[str] = None
+        hint = provider_hint.strip().lower() if provider_hint else None
+        if hint in ("openrouter", "nvidia"):
+            provider_str = hint
+        elif hint:
+            raise ValueError(f"provider hint must be 'openrouter' or 'nvidia', got {provider_hint!r}.")
+        else:
+            provider_str = infer_provider_from_model_id(model_id)
+
+        if not provider_str:
+            raise ValueError(
+                f"Cannot infer provider for free-text model_id {model_id!r}. "
+                "Set `model.provider` to 'openrouter' or 'nvidia' explicitly, "
+                "or pick a model whose publisher prefix is recognised "
+                "(openai/, anthropic/, google/, moonshotai/, qwen/, nvidia/, …)."
+            )
+
+        return {
+            "provider": LLMProvider(provider_str),
+            "model_name": model_id,
+            "display_name": f"{model_id} (free-text, {provider_str})",
+            # Conservative cap. Users running long-context workflows
+            # (Task 3 SEC filings) should explicitly pick a registry
+            # model that ships a higher cap; this default keeps free-text
+            # runs reasonably bounded.
+            "max_tokens": 8192,
+            "extra_body": None,
+        }
 
     @staticmethod
     def list_models() -> list[dict]:
