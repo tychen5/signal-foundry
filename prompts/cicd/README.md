@@ -34,18 +34,22 @@ LLM is used at these points in the Task 1 pipeline:
 
 **Total LLM cost per single-skill request**: $0.001–$0.004 (rule matching hits avoid the first call entirely).
 
-### Auto-Router mode (`/api/v1/skills/auto/run`) — variable (typically 4–6 LLM calls)
+### Auto-Router mode (`/api/v1/skills/auto/run`) — variable (typically 3–6 LLM calls)
 
-The auto-router runs 1× **plan**, *N*× **postmortem** (one per executed skill before the last one), 1× **synthesize**, plus the existing per-skill **summary** the engine writes for each underlying execution.
+The auto-router runs 1× **plan** (only when an NL query is provided), *N*× **postmortem** (one per executed skill before the last one), 1× **synthesize**, plus the existing per-skill **summary** the engine writes for each underlying execution.
 
 | Stage | Prompt | Calls per request | Why |
 |---|---|---|---|
-| Plan | `v1_auto_router_plan.txt` | 1 | Pick the ordered skill set from the NL query |
+| Plan | `v1_auto_router_plan.txt` | **1 if NL query present, 0 if chip-only mode** | Pick the ordered skill set from the NL query. Skipped entirely when the user supplies only chips — the include hints ARE the plan in that case |
 | Skill execution + per-skill summary | `v1_result_summary.txt` (re-used) | N (= `len(executed_skills)`) | Same path as single-skill mode |
 | Postmortem | `v1_auto_router_decide.txt` | N − 1 typically (last iteration may skip if iteration cap or budget cap hits) | Decide continue / pivot / stop |
 | Synthesize | `v1_auto_router_synthesize.txt` | 1 | Tie all skill outputs back to the user's question |
 
-For a typical 2-skill auto-router run: 1 plan + 2 summaries + 1 postmortem + 1 synthesize = **5 LLM calls** ≈ $0.005–$0.015 depending on the model. The default per-request budget cap (`cost_tracker.DEFAULT_BUDGET_CAP_USD["task1_cicd"]`) is **$0.30**, well above the typical run.
+For a typical 2-skill auto-router run: 1 plan + 2 summaries + 1 postmortem + 1 synthesize = **5 LLM calls** ≈ $0.005–$0.015 depending on the model.
+
+**Chip-only (empty NL query) mode** saves the plan call: 0 plan + 2 summaries + 1 postmortem + 1 synthesize = **4 LLM calls**. The chips themselves are the deterministic plan, so the planner LLM has nothing useful to add — this is a strict cost win, not a fidelity trade-off. The decide- and synthesize-stage prompts receive a synthesized `{user_query}` substitute string (e.g. *"User did not provide a free-form query; running the user-selected skill set: security-scan."*) so they still have something coherent to read.
+
+The default per-request budget cap (`cost_tracker.DEFAULT_BUDGET_CAP_USD["task1_cicd"]`) is **$0.30**, well above any of these modes.
 
 ## Version History
 
