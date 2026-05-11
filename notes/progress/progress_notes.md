@@ -230,9 +230,11 @@
         ...etc
       Step 3...
       ...etc
-  3. [] 請幫我再次從頭到尾檢查一次，確定目前 repo 所實作的 github CICD pipeline 的總流程、task1、task2、task3、shared engine的程式邏輯與設計、後端 API 的設計、前後端整合、UX/UI (包括@task1, @task2, @task3, home, health, metrics, model-selector, api-reference 等所有頁面)、Error Reporting、Error Handling、Error Recovery，以及所有相關README說明都已經有完美實作到位，解決所有題目的問題與需求細節(@notes/_briefs/_TaskDescription.md)。
-    * [] 確認FE/UI按鈕沒有令人confuse的duplicate按鈕或是操作behavior出現
-    * [] 審閱過所有的UI流程、API使用、input output都是符合好理解好懂的，且都能正常work使用沒有任何的bugs與潛在風險錯誤，使用者體驗與開發者體驗都很好
+  3. [] Task 2 UI Browser Agent，如果使用者用的是openroyter key，則在task2頁面中的Use vision (multi-modal)要預設是勾選的
+    * [] `💹 cnyes 加權指數 (TW)` example請幫我換成其他不需要CAPTCHA的網站來做demo以能夠取得股市加權指數值。
+  4. [] 請幫我再次從頭到尾檢查一次，確定目前 repo 所實作的 github CICD pipeline 的總流程、task1、task2、task3、shared engine的程式邏輯與設計、後端 API 的設計、前後端整合、UX/UI (包括@task1, @task2, @task3, home, health, metrics, model-selector, api-reference 等所有頁面)、Error Reporting、Error Handling、Error Recovery，以及所有相關README說明都已經有完美實作到位，解決所有題目的問題與需求細節(@notes/_briefs/_TaskDescription.md)。
+    * [] 確認FE/UI按鈕沒有令人confuse的duplicate按鈕或是操作behavior出現(例如Quick launchpad中的按鈕和底下的Footer中的按鈕，如果後者我點擊的話也可以正常運作，但這會令使用者感到困惑因此建議清理重新整理重新設計規劃Quick launchpad/quick-actions中需要展示的快捷入口按鈕，讓他更加直覺好用，不要太複雜，且也可以從quick actions中快速看到各個任務的簡要狀態描述與快速操作等等，而不只是單純一個button，在設計時就要考慮到要如何將所有最常用最好用的功能整合到這個介面中，且也要兼顧到美觀與易用性，例如直接於簡要的描述與狀態資訊等等(但不要和Header的hero-stats重複顯示)，而不只是單純一個button)，但又可以提供豐富彈性的功能feature，並展示有用好用的豐富資訊給使用者。請再三檢視，確定沒有任何遺漏！
+    * [] 請務必審閱過所有的UI流程、API使用、input output都是符合好理解好懂的，且都能正常work使用沒有任何的bugs與潛在風險錯誤，使用者體驗與開發者體驗都很好。
 
 
 ---
