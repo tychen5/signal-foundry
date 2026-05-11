@@ -1113,16 +1113,37 @@ class TestAutoRouterSchemas:
         assert req.include_skills_hint == []
         assert req.exclude_skills_hint == []
 
-    def test_request_rejects_short_query(self):
-        from pydantic import ValidationError
-
+    def test_request_accepts_empty_query(self):
+        """NL query is now optional. Empty string is allowed — the auto-router
+        falls back to the hint-only or default-pair path."""
         from src.task1_cicd.schemas import AutoRouterRequest
 
-        with pytest.raises(ValidationError):
-            AutoRouterRequest(
-                repo_url="https://github.com/owner/repo",
-                natural_language_query="hi",
-            )
+        req = AutoRouterRequest(
+            repo_url="https://github.com/owner/repo",
+            natural_language_query="",
+            include_skills_hint=["security-scan"],
+        )
+        assert req.natural_language_query == ""
+
+    def test_request_accepts_missing_query(self):
+        """When omitted entirely, the query defaults to empty string."""
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/owner/repo",
+            include_skills_hint=["dependency-audit"],
+        )
+        assert req.natural_language_query == ""
+
+    def test_request_accepts_no_intent_at_all(self):
+        """Even with no query AND no hints, the schema still validates — the
+        auto-router falls through to the default health-check pair."""
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(repo_url="https://github.com/owner/repo")
+        assert req.natural_language_query == ""
+        assert req.include_skills_hint == []
+        assert req.exclude_skills_hint == []
 
     def test_request_caps_max_iterations(self):
         from pydantic import ValidationError
@@ -1536,19 +1557,37 @@ class TestAutoRouterAPI:
         return TestClient(app)
 
     def test_auto_run_validates_body(self, client):
-        """Missing required fields should return 422."""
+        """Missing the only truly required field (repo_url) should return 422."""
         resp = client.post("/api/v1/skills/auto/run", json={})
         assert resp.status_code == 422
 
-    def test_auto_run_validates_short_query(self, client):
-        resp = client.post(
-            "/api/v1/skills/auto/run",
-            json={
-                "repo_url": "https://github.com/o/r",
-                "natural_language_query": "x",
-            },
-        )
-        assert resp.status_code == 422
+    def test_auto_run_accepts_empty_query_with_hint(self, client):
+        """The NL query is now optional. A request that omits it but supplies
+        include_skills_hint should validate (server-side hint-only path)."""
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+
+        async def fake_engine(req, trace_id, progress_callback=None):
+            assert req.natural_language_query == ""
+            assert req.include_skills_hint == ["security-scan"]
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={"skill_executed": ["security-scan"], "skills_executed": ["security-scan"]},
+                cost_metadata={"cost_usd": 0.0},
+                latency_ms=1.0,
+            )
+
+        with patch("src.task1_cicd.auto_router.run_auto_router", AsyncMock(side_effect=fake_engine)):
+            resp = client.post(
+                "/api/v1/skills/auto/run",
+                json={
+                    "repo_url": "https://github.com/o/r",
+                    "include_skills_hint": ["security-scan"],
+                },
+            )
+        assert resp.status_code == 200
+        assert resp.json()["result"]["skill_executed"] == ["security-scan"]
 
     def test_auto_run_returns_execution_result_schema(self, client):
         from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
@@ -1586,3 +1625,270 @@ class TestAutoRouterAPI:
         assert body["status"] == "success"
         assert "skill_executed" in body["result"]
         assert body["result"]["skill_executed"] == ["dependency-audit"]
+
+
+class TestAutoRouterDerivedPlan:
+    """The chip-only path (empty NL query) — a pure cost win because it
+    skips the plan LLM call entirely. These tests lock down the derivation
+    rules so the FE preview and the server stay in lock-step."""
+
+    def test_include_hints_become_the_plan(self):
+        from src.task1_cicd.auto_router import _derive_default_plan
+
+        plan = _derive_default_plan(["security-scan", "dependency-audit"], [], 4, "")
+        assert plan == ["security-scan", "dependency-audit"]
+
+    def test_include_hints_preserve_order(self):
+        from src.task1_cicd.auto_router import _derive_default_plan
+
+        # Reversed order vs the canonical "cheap first" — user knows best.
+        plan = _derive_default_plan(["lint-and-test", "dependency-audit"], [], 4, "")
+        assert plan == ["lint-and-test", "dependency-audit"]
+
+    def test_include_hint_with_build_release_works_without_query(self):
+        """Ticking build-and-release in the chip UI is explicit consent;
+        the gate that normally requires release/ship in the NL query is bypassed."""
+        from src.task1_cicd.auto_router import _derive_default_plan
+
+        plan = _derive_default_plan(["build-and-release"], [], 4, "")
+        assert plan == ["build-and-release"]
+
+    def test_exclude_hint_filters_includes(self):
+        from src.task1_cicd.auto_router import _derive_default_plan
+
+        plan = _derive_default_plan(
+            ["security-scan", "dependency-audit", "lint-and-test"],
+            ["dependency-audit"],
+            4,
+            "",
+        )
+        assert plan == ["security-scan", "lint-and-test"]
+
+    def test_no_query_no_hints_defaults_to_safe_pair(self):
+        from src.task1_cicd.auto_router import _derive_default_plan
+
+        plan = _derive_default_plan([], [], 4, "")
+        assert plan == ["dependency-audit", "security-scan"]
+
+    def test_no_query_only_exclude_defaults_minus_excluded(self):
+        from src.task1_cicd.auto_router import _derive_default_plan
+
+        plan = _derive_default_plan([], ["security-scan"], 4, "")
+        assert plan == ["dependency-audit"]
+
+    def test_excluding_both_defaults_falls_through_to_lint(self):
+        from src.task1_cicd.auto_router import _derive_default_plan
+
+        plan = _derive_default_plan([], ["dependency-audit", "security-scan"], 4, "")
+        assert plan == ["lint-and-test"]
+
+    def test_excluding_everything_returns_empty_plan(self):
+        """A pathological exclude — the loop turns this into a structured failure."""
+        from src.task1_cicd.auto_router import _derive_default_plan
+
+        plan = _derive_default_plan(
+            [],
+            ["lint-and-test", "dependency-audit", "security-scan", "build-and-release"],
+            4,
+            "",
+        )
+        assert plan == []
+
+    def test_release_intent_explicit_via_chip(self):
+        from src.task1_cicd.auto_router import _is_release_intent_explicit
+
+        assert _is_release_intent_explicit("", ["build-and-release"]) is True
+        assert _is_release_intent_explicit("", []) is False
+        # Query alone is also sufficient
+        assert _is_release_intent_explicit("ship it now", []) is True
+
+
+class TestAutoRouterEmptyQueryLoop:
+    """End-to-end tests for the empty-query / hint-only loop.
+
+    Key invariants:
+      1. When query is empty, `_llm_plan` is NEVER called (saves ~$0.001/req).
+      2. The derived plan matches `_derive_default_plan` exactly.
+      3. Decide and synthesize still run as normal (they have a synthesized
+         intent string substituted for the missing user_query).
+      4. A request that excludes every skill returns a structured failure,
+         not a 500.
+    """
+
+    @pytest.mark.asyncio
+    async def test_empty_query_skips_llm_plan_call(self):
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/o/r",
+            natural_language_query="",  # explicit empty
+            include_skills_hint=["dependency-audit"],
+        )
+
+        plan_called = []
+
+        async def fake_plan(request, trace_id):
+            plan_called.append(1)  # ← this MUST NOT happen
+            return (["lint-and-test"], {}, "x", 1.0)
+
+        async def fake_decide(*args, **kwargs):
+            # Only one skill in the plan; after it runs remaining_plan is
+            # empty so this won't be called — but mock it anyway as defence
+            # against any future change that adds an exhaustion postmortem.
+            return ("stop", None, "plan complete", 1.0)
+
+        async def fake_synth(*args, **kwargs):
+            return "Hint-only run succeeded."
+
+        order = []
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            order.append(skill_request.skill_name)
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={"skill": skill_request.skill_name, "status": "clean", "summary": "ok"},
+                cost_metadata={},
+                latency_ms=5.0,
+            )
+
+        with patch.object(ar, "_llm_plan", fake_plan), \
+             patch.object(ar, "_llm_decide", fake_decide), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            result = await ar.run_auto_router(req, "trace-empty-1")
+
+        # Critical: the plan LLM call was skipped.
+        assert plan_called == []
+        # Plan came from the include hint, not the LLM.
+        assert order == ["dependency-audit"]
+        payload = result.result
+        assert payload["skill_executed"] == ["dependency-audit"]
+        assert payload["initial_plan"] == ["dependency-audit"]
+        # plan_confidence should be 1.0 in deterministic mode (no LLM ambiguity).
+        assert payload["plan_confidence"] == 1.0
+
+    @pytest.mark.asyncio
+    async def test_empty_query_no_hints_uses_default_pair(self):
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(repo_url="https://github.com/o/r")
+
+        async def fake_plan(request, trace_id):
+            raise AssertionError("LLM plan call should be skipped for empty-query mode")
+
+        async def fake_decide(*args, **kwargs):
+            executed = kwargs.get("executed_skills") or args[3]
+            return ("continue", None, "next", 0.9) if len(executed) < 2 else ("stop", None, "done", 0.9)
+
+        async def fake_synth(*args, **kwargs):
+            return "default pair done"
+
+        order = []
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            order.append(skill_request.skill_name)
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={"skill": skill_request.skill_name, "status": "clean", "summary": "ok"},
+                cost_metadata={},
+                latency_ms=5.0,
+            )
+
+        with patch.object(ar, "_llm_plan", fake_plan), \
+             patch.object(ar, "_llm_decide", fake_decide), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            result = await ar.run_auto_router(req, "trace-empty-default")
+
+        assert order == ["dependency-audit", "security-scan"]
+        assert result.result["skill_executed"] == ["dependency-audit", "security-scan"]
+
+    @pytest.mark.asyncio
+    async def test_empty_query_with_excluded_all_returns_failure(self):
+        """If the user excludes literally every skill, the router returns a
+        clean failure rather than calling any LLM stage."""
+        from src.shared.schemas import ExecutionStatus
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/o/r",
+            exclude_skills_hint=[
+                "lint-and-test",
+                "dependency-audit",
+                "security-scan",
+                "build-and-release",
+            ],
+        )
+
+        async def fake_plan(*args, **kwargs):
+            raise AssertionError("plan must not be called")
+
+        async def fake_synth(*args, **kwargs):
+            raise AssertionError("synthesize must not be called")
+
+        engine_called = []
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            engine_called.append(skill_request.skill_name)
+            raise AssertionError("engine must not be called")
+
+        with patch.object(ar, "_llm_plan", fake_plan), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            result = await ar.run_auto_router(req, "trace-empty-exclall")
+
+        assert result.status == ExecutionStatus.FAILED
+        assert engine_called == []
+        assert "exclude" in (result.error or "").lower()
+
+    @pytest.mark.asyncio
+    async def test_empty_query_with_build_release_chip_runs_it(self):
+        """Ticking the build-and-release chip with an empty query must be
+        treated as explicit release intent (the release-intent gate is bypassed
+        only by chip OR by query keywords, not by LLM whim)."""
+        from src.shared.schemas import ExecutionResult, ExecutionStatus, TaskType
+        from src.task1_cicd import auto_router as ar
+        from src.task1_cicd.schemas import AutoRouterRequest
+
+        req = AutoRouterRequest(
+            repo_url="https://github.com/o/r",
+            natural_language_query="",  # crucial — no release keyword
+            include_skills_hint=["build-and-release"],
+            dry_run=True,
+        )
+
+        async def fake_decide(*args, **kwargs):
+            return ("stop", None, "release ran", 1.0)
+
+        async def fake_synth(*args, **kwargs):
+            return "ok"
+
+        order = []
+
+        async def fake_engine(skill_request, trace_id, progress_callback=None):
+            order.append(skill_request.skill_name)
+            return ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                task=TaskType.CICD_SKILLS,
+                trace_id=trace_id,
+                result={"skill": skill_request.skill_name, "status": "success", "summary": "dry-run ok"},
+                cost_metadata={},
+                latency_ms=10.0,
+            )
+
+        with patch.object(ar, "_llm_decide", fake_decide), \
+             patch.object(ar, "_llm_synthesize", fake_synth), \
+             patch("src.task1_cicd.skill_engine.run_skill", fake_engine):
+            result = await ar.run_auto_router(req, "trace-chip-release")
+
+        assert order == ["build-and-release"]
+        assert result.result["skill_executed"] == ["build-and-release"]
