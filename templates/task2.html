@@ -80,7 +80,7 @@
                         <button class="example-btn" onclick="setTask('Open https://en.wikipedia.org/wiki/Tokyo and use the extract action to read the population row from the infobox sidebar (the structured fact-box, NOT below the fold). Report the population number you find there.', 'https://en.wikipedia.org/wiki/Tokyo')">📚 Wikipedia lookup (infobox)</button>
                         <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story and the comment count', 'https://news.ycombinator.com')">🟧 HN top story</button>
                         <button class="example-btn" onclick="setTask('Go to https://arxiv.org/abs/2509.13753 and report the paper title plus the first two authors', 'https://arxiv.org/abs/2509.13753')">🔬 arXiv paper</button>
-                        <button class="example-btn" onclick="setTask('前往鉅亨網並擷取台股加權指數最新點位', '')">💹 cnyes 加權指數 (TW)</button>
+                        <button class="example-btn" onclick="setTask('Go to https://tw.stock.yahoo.com/t/idx.php and find the TAIEX (加權指數) latest value and the change from the previous close.', 'https://tw.stock.yahoo.com/t/idx.php')">💹 TAIEX 加權指數 (TW)</button>
                         <button class="example-btn" onclick="setTask('Go to https://tw.stock.yahoo.com/quote/2330 and return TSMC current price', 'https://tw.stock.yahoo.com/quote/2330')">💰 TSMC quote (TW)</button>
                         <button class="example-btn" onclick="setTask('Go to https://www.linkedin.com/in/satyanadella/ and report Satya Nadella job title', 'https://www.linkedin.com/in/satyanadella/')">🛡️ LinkedIn login wall (anti-hallucination)</button>
                         <button class="example-btn" onclick="setTask('Go to https://example.com and find the email address for European trademark disputes. If not present, say so.', 'https://example.com')">🎯 example.com hallucination guard</button>
@@ -222,6 +222,22 @@
             }
         }
         hydrateSharedControls();
+
+        // Auto-toggle vision checkbox for OpenRouter (vision-capable) models
+        function syncVisionDefault() {
+            const modelId = (document.getElementById('model-select').value || '').trim();
+            const apiKey = (document.getElementById('user-api-key').value || '').trim();
+            const isOR = modelId.startsWith('openai/') || modelId.startsWith('anthropic/') || modelId.startsWith('google/');
+            const visionBox = document.getElementById('use-vision');
+            // Only auto-check — never auto-uncheck (respect user's explicit choice)
+            if (isOR && apiKey.length > 8 && !visionBox.checked) {
+                visionBox.checked = true;
+            }
+        }
+        document.getElementById('model-select').addEventListener('change', syncVisionDefault);
+        document.getElementById('model-select').addEventListener('input', syncVisionDefault);
+        document.getElementById('user-api-key').addEventListener('input', syncVisionDefault);
+        syncVisionDefault();
 
         function appendLiveEvent(event) {
             const list = document.getElementById('live-events');
