@@ -219,10 +219,12 @@
   6. [x] 針對網站task3 UI，如果使用者使用的是openrouter key/models則在task 3 UI頁面中的"Use vision for uncertain boundaries"功能應該要預設打勾開啟，並確保此功能都真的會在workflow/pipeline中正確時機起到作用來增加結果準確度的。
     * [x] 如果使用者給予openrouter key/選擇openrouter models的話，除了"Use vision for uncertain boundaries"功能應該要預設打勾開啟，"Force LLM refine"也要預設打勾開啟讓LLM可以更積極的介入幫忙，以增加結果準確度。但要提醒使用者開啟此功能雖然會提升結果的performance，但也將會增加latency與cost。
     * [x] Task3 UI now auto-unchecks `skip_llm` when OpenRouter high-accuracy mode is active, keeps `force_llm`/`use_vision` mutually coherent, and shows an explicit latency/cost hint. Backend already only consumes vision during Stage 2 LLM boundary refinement, so the flag fires at the intended pipeline point.
+    * [x] Task3 pipeline options now include a static tradeoff advisory below the checkboxes: "Force LLM refine + Use vision improve accuracy on edge-case filings but add ~30–120 s latency and ~$0.01–0.05 token cost. Uncheck both for rule-only pipeline at $0 in <5 s."
   7. [x] 目前task 2的 `💹 TAIEX 加權指數 (TW)`example demo會有問題: 如果我選擇使用gemini 3.1 pro，LLM的planning只會到一半輸出step 0就終止了✅ plan ready — 0 step(s)最後顯示not_found: Yahoo Finance returned 'Edge: Too Many Requests' ，且所給予的Start URL並沒有包含台灣加權指數；如果使用gpt5.5則會出現not_accessible: Yahoo Finance quote page is returning “Edge: Too Many Requests,” so the TAIEX latest value and change from previous close cannot be read from the page.的結果。請幫我將本來預設帶入Start URL (optional hint)留空，而Task Description (natural language)改成是中文query:"請幫我到雅虎股市去搜尋目前最新的台灣加權指數是多少?" 。
     * [x] Task2 TAIEX example now leaves Start URL empty and uses the requested Chinese task description. Planner fallback no longer returns a zero-step plan when the LLM emits `[]`; it produces an executable route instead.
     * [x] Browser planner/prompt strengthened for TAIEX: avoid throttled legacy `tw.stock.yahoo.com/t/idx.php`, prefer current Yahoo `%5ETWII` quote route, and actor prompt now treats Yahoo rate-limit / Google CAPTCHA as recoverable by trying a different public route once.
     * [x] Live `.env` OpenRouter runs verified: `openai/gpt-5.5` succeeded in 5 steps with Yahoo `%5ETWII`; `google/gemini-3.1-pro-preview` succeeded in 4 steps with Yahoo `%5ETWII`. Focused Task2 tests pass: 87/87.
+  8. [x] NVIDIA key expiration messaging: all 4 pages (index, task1, task2, task3) now explicitly warn that the server-bundled NVIDIA free-tier key may be expired or rate-limited and recommend users sign up at build.nvidia.com. Index BYOK text strengthened with bold "may be expired or rate-limited" warning. Each task page's NVIDIA key input shows "Server-bundled key may be expired/exhausted" hint.
 
 ---
 
@@ -243,11 +245,11 @@
 | Phase 8 | README enrichment + edge-case sweep | ✅ | +25 regression |
 | Phase 9 | LLM strengthening + JSON extractors + UX iteration | ✅ | +13 JSON extractor |
 | Phase 10 | Auto-router + API audit + UI/UX polish | ✅ | +62 validation/error |
-| **Total** | | | **351 unit + 7 opt-in live tests** |
+| **Total** | | | **354 unit + 7 opt-in live tests** |
 
 ### 🎯 Final Audit (2026-05-11)
 
-- **351 tests pass**, 7 skipped (gated live LLM tests), **0 lint errors**
+- **354 tests pass**, 7 skipped (gated live LLM tests), **0 lint errors**
 - **Eval coverage**: T1 8 cases, T2 46 cases, T3 35 cases = **89 total**
 - **Cost discipline**: T1 $0.007/5-case, T3 $0/35-case (rule-only), T2 $0.01-0.05/request
 - **Deployment**: `signal-foundry.zeabur.app` live, `/health` + `/metrics` + all 3 task APIs verified
