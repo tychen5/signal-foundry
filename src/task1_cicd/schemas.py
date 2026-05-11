@@ -199,13 +199,16 @@ class AutoRouterRequest(BaseModel):
     repo_url: str = Field(..., description="GitHub repository URL")
     branch: str = Field(default="main", description="Branch to analyze")
     natural_language_query: str = Field(
-        ...,
+        default="",
         description=(
-            "Free-form description of what the user wants checked. "
+            "Optional free-form description of what the user wants checked. "
             "Examples: 'check if there are any leaked secrets', "
-            "'audit my deps for CVEs', 'is this safe to ship?'"
+            "'audit my deps for CVEs', 'is this safe to ship?'. "
+            "When empty, the router falls back to running include_skills_hint "
+            "(if any) or the default health-check pair (dependency-audit + "
+            "security-scan), so the user can run the engine purely by ticking "
+            "skill chips."
         ),
-        min_length=3,
     )
     include_skills_hint: list[str] = Field(
         default_factory=list,

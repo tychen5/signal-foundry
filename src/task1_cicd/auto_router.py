@@ -81,6 +81,82 @@ def _looks_like_release_query(query: str) -> bool:
     return any(t in q for t in triggers)
 
 
+def _is_release_intent_explicit(query: str, include_hint: list[str]) -> bool:
+    """Has the user expressed clear intent to run the write-capable build-and-release skill?
+
+    Two equally-explicit signals count:
+      1. The NL query mentions release / ship / publish / tag / etc. (existing heuristic).
+      2. The user ticked the build-and-release chip in the include hint UI.
+
+    Either alone is enough — the include-hint override matters specifically
+    for the "no NL query, just chips" mode this user requested. Without it,
+    `_sanitise_plan` would silently drop build-and-release even when the user
+    explicitly asked for it.
+    """
+    if "build-and-release" in include_hint:
+        return True
+    return _looks_like_release_query(query)
+
+
+def _derive_default_plan(
+    include_hint: list[str],
+    exclude_hint: list[str],
+    max_skills: int,
+    query: str,
+) -> list[str]:
+    """Build a deterministic plan for the no-LLM-call path (empty query).
+
+    Rules (ordered):
+      1. If the user supplied include_hint chips, that IS the plan. Respect their
+         order, drop excludes, and gate build-and-release the same way the LLM
+         path does (the hint counts as explicit release intent — see
+         `_is_release_intent_explicit`).
+      2. Otherwise fall back to the safe default pair (dependency-audit +
+         security-scan), filtered by exclude_hint, capped at max_skills.
+      3. Final defence-in-depth: if everything got filtered out (e.g. user
+         excluded both default skills), return [dependency-audit] (or whatever
+         survives) so the request still does *something* reproducible rather
+         than failing opaquely.
+    """
+    release_explicit = _is_release_intent_explicit(query, include_hint)
+
+    if include_hint:
+        seen: set[str] = set()
+        out: list[str] = []
+        for s in include_hint:
+            if s not in VALID_SKILLS or s in exclude_hint or s in seen:
+                continue
+            if s in WRITE_CAPABLE_SKILLS and not release_explicit:
+                continue
+            out.append(s)
+            seen.add(s)
+            if len(out) >= max_skills:
+                break
+        if out:
+            return out
+        # include_hint was provided but every entry got filtered
+        # (e.g. user included only build-and-release with no release-intent
+        # signal AND a release-intent signal — mutually exclusive but possible
+        # if exclude also covers it). Fall through to the default path.
+
+    candidates = [s for s in ("dependency-audit", "security-scan") if s not in exclude_hint]
+    plan = candidates[: max(1, max_skills)]
+    if plan:
+        return plan
+
+    # Both default skills excluded — pick the cheapest survivor.
+    for fallback in ("lint-and-test", "build-and-release"):
+        if fallback in exclude_hint:
+            continue
+        if fallback in WRITE_CAPABLE_SKILLS and not release_explicit:
+            continue
+        return [fallback]
+
+    # User excluded literally everything. Honest signal back: empty plan,
+    # the loop will record terminated_reason="plan_exhausted".
+    return []
+
+
 def _compact_findings(skill: str, raw: dict[str, Any]) -> dict[str, Any]:
     """Boil a full skill result down to the few fields the router actually needs.
 
@@ -192,7 +268,13 @@ async def _llm_plan(
     data = extract_json_object(raw_text) or {}
 
     plan_raw = data.get("plan") or []
-    plan = _sanitise_plan(plan_raw, exclude_hint, request.max_skills, request.natural_language_query)
+    plan = _sanitise_plan(
+        plan_raw,
+        exclude_hint,
+        request.max_skills,
+        request.natural_language_query,
+        include_hint=include_hint,
+    )
 
     rationale = data.get("rationale_per_skill") or {}
     if not isinstance(rationale, dict):
@@ -220,8 +302,17 @@ def _sanitise_plan(
     exclude_hint: list[str],
     max_skills: int,
     user_query: str,
+    include_hint: Optional[list[str]] = None,
 ) -> list[str]:
-    """Coerce the LLM's plan to a valid de-duplicated, exclude-respecting skill list."""
+    """Coerce the LLM's plan to a valid de-duplicated, exclude-respecting skill list.
+
+    `include_hint` (when supplied) marks build-and-release as user-authorised
+    even if the NL query is silent on release intent — equivalent to ticking
+    the chip in the FE.
+    """
+    include_hint = include_hint or []
+    release_explicit = _is_release_intent_explicit(user_query, include_hint)
+
     seen: set[str] = set()
     out: list[str] = []
     for item in raw_plan:
@@ -230,11 +321,11 @@ def _sanitise_plan(
         s = item.strip().lower()
         if s not in VALID_SKILLS or s in exclude_hint or s in seen:
             continue
-        # Defence in depth: never auto-schedule build-and-release unless the
-        # user's query plausibly mentions a release/ship/version-bump. The
-        # planner prompt already enforces this; the heuristic catches a model
-        # that ignores instructions.
-        if s in WRITE_CAPABLE_SKILLS and not _looks_like_release_query(user_query):
+        # Defence in depth: never auto-schedule build-and-release unless
+        # release intent is explicit (NL query mentions release/ship/etc., OR
+        # user ticked the build-and-release chip). The planner prompt enforces
+        # the first half; this catches a model that ignores instructions.
+        if s in WRITE_CAPABLE_SKILLS and not release_explicit:
             continue
         out.append(s)
         seen.add(s)
@@ -260,6 +351,7 @@ async def _llm_decide(
     budget_cap: float,
     exclude_hint: list[str],
     trace_id: str,
+    include_hint: Optional[list[str]] = None,
 ) -> tuple[str, Optional[str], str, float]:
     """After each skill, decide: continue / add_skill / stop."""
     from src.llm_provider import get_llm
@@ -267,9 +359,15 @@ async def _llm_decide(
     template = _read_prompt("v1_auto_router_decide.txt")
     findings_compact = _compact_findings(last_step.skill_executed, last_step.raw_result or {})
 
+    # When the user gave no NL query, substitute the synthesized intent so the
+    # decide-LLM still has something coherent to read instead of a blank line.
+    query_for_prompt = request.natural_language_query.strip() or (
+        f"(no natural-language query provided) {overall_intent}".strip()
+    )
+
     prompt = (
         template
-        .replace("{user_query}", request.natural_language_query.strip())
+        .replace("{user_query}", query_for_prompt)
         .replace("{overall_intent}", overall_intent or "(not provided)")
         .replace("{repo_url}", request.repo_url)
         .replace("{branch}", request.branch)
@@ -313,6 +411,7 @@ async def _llm_decide(
         next_skill = None
 
     # Defence: scrub illegal next_skill choices.
+    include_hint_local = include_hint or []
     if next_skill is not None:
         if next_skill not in VALID_SKILLS:
             next_skill = None
@@ -320,7 +419,9 @@ async def _llm_decide(
             next_skill = None
         elif next_skill in exclude_hint:
             next_skill = None
-        elif next_skill in WRITE_CAPABLE_SKILLS and not _looks_like_release_query(request.natural_language_query):
+        elif next_skill in WRITE_CAPABLE_SKILLS and not _is_release_intent_explicit(
+            request.natural_language_query, include_hint_local
+        ):
             next_skill = None
 
     reasoning = (data.get("reasoning") or "").strip()
@@ -369,9 +470,21 @@ async def _llm_synthesize(
         )
     per_skill_summaries = "\n".join(per_skill_summaries_lines)
 
+    query_stripped = (request.natural_language_query or "").strip()
+    if query_stripped:
+        query_for_prompt = query_stripped
+    else:
+        # Empty-query mode — paraphrase what the user actually asked for via
+        # the chips so the synthesizer doesn't open with "your question was: ".
+        executed_names = ", ".join(s.skill_executed for s in steps) or "selected skills"
+        query_for_prompt = (
+            f"(no natural-language query was provided; the user requested a CI/CD "
+            f"check using {executed_names})"
+        )
+
     prompt = (
         template
-        .replace("{user_query}", request.natural_language_query.strip())
+        .replace("{user_query}", query_for_prompt)
         .replace("{repo_url}", request.repo_url)
         .replace("{branch}", request.branch)
         .replace("{executed_skills}", json.dumps([s.skill_executed for s in steps]))
@@ -400,9 +513,12 @@ async def _llm_synthesize(
         logger.warning("auto_router_synthesize_failed", error=str(e))
         # Deterministic fallback so the FE always has *something* to show.
         skills_done = ", ".join(s.skill_executed for s in steps)
+        if request.natural_language_query:
+            tail = f"for query '{request.natural_language_query[:120]}'."
+        else:
+            tail = "from the user-selected skill chips."
         return (
-            f"Auto-router executed {skills_done} for query "
-            f"'{request.natural_language_query[:120]}'. "
+            f"Auto-router executed {skills_done} {tail} "
             f"LLM synthesis unavailable — see per-skill summaries below."
         )
     latency_ms = (time.monotonic() - start) * 1000
@@ -467,12 +583,15 @@ async def run_auto_router(
 
     exclude_hint = _normalise_skill_list(request.exclude_skills_hint)
     include_hint = _normalise_skill_list(request.include_skills_hint)
+    query_stripped = (request.natural_language_query or "").strip()
+    has_query = bool(query_stripped)
 
     await _emit(
         "auto_router_start",
         repo=request.repo_url,
         branch=request.branch,
         query=request.natural_language_query,
+        has_query=has_query,
         include_hint=include_hint,
         exclude_hint=exclude_hint,
         max_iterations=request.max_iterations,
@@ -482,18 +601,57 @@ async def run_auto_router(
     )
 
     # ── PLAN ──────────────────────────────────────────────────────────────
-    try:
-        plan, rationale, overall_intent, plan_confidence = await _llm_plan(request, trace_id)
-    except Exception as e:
-        logger.error("auto_router_plan_failed", error=str(e), trace_id=trace_id, exc_info=True)
-        return _fail_result(f"Auto-router plan failed: {e}", trace_id, start_time)
+    # Two paths:
+    #   A. NL query provided → ask the LLM to plan (existing flow).
+    #   B. NL query empty → derive the plan deterministically from the user's
+    #      hint chips (or the safe default pair). Skips the plan LLM call
+    #      entirely — pure cost win when the user already decided.
+    if has_query:
+        try:
+            plan, rationale, overall_intent, plan_confidence = await _llm_plan(request, trace_id)
+        except Exception as e:
+            logger.error("auto_router_plan_failed", error=str(e), trace_id=trace_id, exc_info=True)
+            return _fail_result(f"Auto-router plan failed: {e}", trace_id, start_time)
+        plan_source = "llm"
 
-    # If user provided an include hint, push those to the front (preserving order)
-    # without disturbing the rest of the plan or duplicating skills.
-    if include_hint:
-        ordered: list[str] = [s for s in include_hint if s in plan]
-        ordered.extend(s for s in plan if s not in ordered)
-        plan = ordered[: request.max_skills]
+        # If user provided an include hint, push those to the front (preserving order)
+        # without disturbing the rest of the plan or duplicating skills.
+        if include_hint:
+            ordered: list[str] = [s for s in include_hint if s in plan]
+            ordered.extend(s for s in plan if s not in ordered)
+            plan = ordered[: request.max_skills]
+    else:
+        # Hint-only mode (no LLM plan call).
+        plan = _derive_default_plan(include_hint, exclude_hint, request.max_skills, query_stripped)
+        if include_hint:
+            rationale = {s: "user explicitly selected this skill via the include-hint chip" for s in plan}
+            overall_intent = (
+                f"User did not provide a free-form query; running the user-selected skill set: "
+                f"{', '.join(plan)}."
+            )
+        elif exclude_hint:
+            rationale = {s: "default health-check skill (user only specified what to skip)" for s in plan}
+            overall_intent = (
+                f"User did not provide a query and only excluded {', '.join(exclude_hint)}; "
+                f"running the default CI/CD health check on the remaining skills."
+            )
+        else:
+            rationale = {s: "default health-check skill (no query, no hints)" for s in plan}
+            overall_intent = (
+                "User did not provide a query or hints; running the default CI/CD health check "
+                "(dependency-audit + security-scan)."
+            )
+        plan_confidence = 1.0  # deterministic — no LLM ambiguity to discount
+        plan_source = "hint" if include_hint else "default"
+
+        if not plan:
+            # User excluded literally everything. Don't burn LLM calls — return
+            # a structured failure now.
+            return _fail_result(
+                "Auto-router has no skills to run: every available skill is in exclude_skills_hint.",
+                trace_id,
+                start_time,
+            )
 
     await _emit(
         "plan_done",
@@ -501,6 +659,7 @@ async def run_auto_router(
         rationale=rationale,
         overall_intent=overall_intent,
         confidence=plan_confidence,
+        plan_source=plan_source,
     )
 
     # ── EXECUTE + POSTMORTEM loop ────────────────────────────────────────
@@ -661,6 +820,7 @@ async def run_auto_router(
                 budget_cap=budget_cap or 0.30,
                 exclude_hint=exclude_hint,
                 trace_id=trace_id,
+                include_hint=include_hint,
             )
         except Exception as e:
             logger.warning("auto_router_decide_failed", error=str(e), trace_id=trace_id)
