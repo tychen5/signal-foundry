@@ -505,16 +505,22 @@
             const modelSelect = document.getElementById('model-select');
             const providerHint = document.getElementById('provider-hint');
             const apiKeyInput = document.getElementById('user-api-key');
+            const nvidiaKeyInput = document.getElementById('user-nvidia-key');
             const savedModel = sessionStorage.getItem('sf_model_id');
             const savedProvider = sessionStorage.getItem('sf_provider_hint');
             const savedKey = sessionStorage.getItem('sf_openrouter_key');
+            const savedNvidiaKey = sessionStorage.getItem('sf_nvidia_key');
             if (savedModel) modelSelect.value = savedModel;
             if (savedProvider && providerHint) providerHint.value = savedProvider;
             if (savedKey) apiKeyInput.value = savedKey;
+            if (savedNvidiaKey && nvidiaKeyInput) nvidiaKeyInput.value = savedNvidiaKey;
             modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
             modelSelect.addEventListener('input', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
             if (providerHint) providerHint.addEventListener('change', () => sessionStorage.setItem('sf_provider_hint', providerHint.value));
             apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
+            if (nvidiaKeyInput) {
+                nvidiaKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_nvidia_key', nvidiaKeyInput.value));
+            }
         }
 
         document.getElementById('dry-run').addEventListener('change', function() {
