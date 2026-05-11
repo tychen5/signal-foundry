@@ -254,10 +254,9 @@ async def extract_10k(
             # validation re-runs and stop accumulating spend; the items we
             # have are still returned with a failure_modes flag.
             from src.shared.cost_tracker import BudgetExceededError
+
             try:
-                cost_tracker.check_request_budget(
-                    trace_id, cap_usd=max_cost_usd, task="task3_sec"
-                )
+                cost_tracker.check_request_budget(trace_id, cap_usd=max_cost_usd, task="task3_sec")
             except BudgetExceededError as be:
                 logger.warning(
                     "budget_cap_hit_after_stage2",
@@ -274,6 +273,11 @@ async def extract_10k(
                 # Skip remaining LLM-driven stages
                 skip_llm = True
         except Exception as e:
+            from src.shared.llm_errors import LLMStageError
+
+            if isinstance(e, LLMStageError):
+                await _emit("stage2_failed", error=e.to_envelope())
+                raise
             logger.warning("stage2_failed", error=str(e))
             stages_used.append("llm_refine_failed")
             await _emit("stage2_failed", error=str(e)[:120])

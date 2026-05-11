@@ -11,11 +11,54 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.shared.llm_errors import LLMStageError, classify_with_stage
+from src.shared.llm_validation import (
+    validate_model_selection,
+    validation_error_to_envelope,
+)
 from src.shared.logger import generate_trace_id, get_logger
 from src.shared.schemas import ExecutionResult, ExecutionStatus, FailureType, ModelSelectionRequest, TaskType
 
 router = APIRouter()
 logger = get_logger("task3_router")
+
+
+def _validate_llm_model_or_400(model: object, *, requires_llm: bool) -> str:
+    """Validate the model block only when this request may call Stage 2 LLM."""
+    if not requires_llm:
+        return getattr(model, "provider", None) or ""
+    resolution = validate_model_selection(model)
+    if not resolution.valid:
+        raise HTTPException(
+            status_code=400,
+            detail=validation_error_to_envelope(resolution),
+        )
+    return resolution.provider or ""
+
+
+def _failed_llm_result(
+    exc: object,
+    *,
+    trace_id: str,
+    stage: str,
+    provider: str,
+    model_id: str,
+) -> ExecutionResult:
+    envelope = (
+        exc.to_envelope()
+        if isinstance(exc, LLMStageError)
+        else classify_with_stage(exc, stage=stage, provider=provider, model_id=model_id)
+    )
+    envelope["provider"] = envelope.get("provider") or provider
+    envelope["model_id"] = envelope.get("model_id") or model_id
+    return ExecutionResult(
+        status=ExecutionStatus.FAILED,
+        task=TaskType.SEC_EXTRACTION,
+        trace_id=trace_id,
+        error=envelope.get("user_message") or envelope.get("raw_error"),
+        failure_type=FailureType.LLM_ERROR,
+        cost_metadata={"llm_error": envelope},
+    )
 
 
 class SECExtractionRequest(BaseModel):
@@ -78,6 +121,7 @@ async def extract_10k(request: SECExtractionRequest):
     # request and a clone roundtrip on a clearly invalid string.
     if request.accession_number:
         from src.task3_sec.fetcher import is_valid_accession_shape
+
         if not is_valid_accession_shape(request.accession_number):
             raise HTTPException(
                 status_code=400,
@@ -97,8 +141,11 @@ async def extract_10k(request: SECExtractionRequest):
         trace_id=trace_id,
     )
 
+    requires_llm = request.force_llm or not request.skip_llm
+    provider = _validate_llm_model_or_400(request.model, requires_llm=requires_llm)
+    from src.llm_provider import clear_user_keys, set_user_keys
+
     try:
-        from src.llm_provider import set_user_keys
         from src.task3_sec.pipeline import extract_10k as run_pipeline
 
         # Per-request user keys — get_llm reads them from contextvars when its
@@ -106,6 +153,7 @@ async def extract_10k(request: SECExtractionRequest):
         set_user_keys(
             openrouter=request.model.user_openrouter_key,
             nvidia=request.model.user_nvidia_key,
+            provider_hint=provider or None,
         )
         result = await run_pipeline(
             cik=request.cik,
@@ -140,27 +188,37 @@ async def extract_10k(request: SECExtractionRequest):
             latency_ms=result.processing_metadata.total_latency_ms,
         )
 
+    except LLMStageError as e:
+        logger.warning("extraction_llm_error", error=str(e), trace_id=trace_id)
+        return _failed_llm_result(
+            e,
+            trace_id=trace_id,
+            stage=e.stage,
+            provider=provider,
+            model_id=request.model.model_id,
+        )
     except ValueError as e:
         logger.warning("extraction_validation_error", error=str(e), trace_id=trace_id)
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
         logger.error("extraction_failed", error=str(e), trace_id=trace_id)
-        from src.shared.llm_errors import classify_llm_error
-        info = classify_llm_error(e)
+        envelope = classify_with_stage(
+            e,
+            stage="sec_pipeline",
+            provider=provider,
+            model_id=request.model.model_id,
+        )
         return ExecutionResult(
             status=ExecutionStatus.FAILED,
             task=TaskType.SEC_EXTRACTION,
             trace_id=trace_id,
             error=str(e),
             failure_type=FailureType.PARSING_ERROR,
-            cost_metadata={
-                "error_category": info.category,
-                "user_message": info.user_message,
-                "suggested_action": info.suggested_action,
-                "retryable": info.retryable,
-            },
+            cost_metadata={"llm_error": envelope},
         )
+    finally:
+        clear_user_keys()
 
 
 @router.post("/stream")
@@ -202,6 +260,7 @@ async def stream_extract_10k(request: SECExtractionRequest):
         )
     if request.accession_number:
         from src.task3_sec.fetcher import is_valid_accession_shape
+
         if not is_valid_accession_shape(request.accession_number):
             raise HTTPException(
                 status_code=400,
@@ -211,6 +270,8 @@ async def stream_extract_10k(request: SECExtractionRequest):
                 ),
             )
 
+    requires_llm = request.force_llm or not request.skip_llm
+    provider = _validate_llm_model_or_400(request.model, requires_llm=requires_llm)
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
 
     async def progress_callback(event: dict) -> None:
@@ -223,12 +284,13 @@ async def stream_extract_10k(request: SECExtractionRequest):
 
     async def run_pipeline() -> None:
         try:
-            from src.llm_provider import set_user_keys
+            from src.llm_provider import clear_user_keys, set_user_keys
             from src.task3_sec.pipeline import extract_10k as run
 
             set_user_keys(
                 openrouter=request.model.user_openrouter_key,
                 nvidia=request.model.user_nvidia_key,
+                provider_hint=provider or None,
             )
             result = await run(
                 cik=request.cik,
@@ -254,11 +316,24 @@ async def stream_extract_10k(request: SECExtractionRequest):
                     "result": result.model_dump(mode="json"),
                 }
             )
+        except LLMStageError as e:
+            err = e.to_envelope()
+            err["provider"] = err.get("provider") or provider
+            err["model_id"] = err.get("model_id") or request.model.model_id
+            err["trace_id"] = trace_id
+            await queue.put({"event": "error", **err})
         except Exception as e:
             err = to_dict(classify_llm_error(e))
+            err["stage"] = "sec_pipeline"
+            err["provider"] = provider
+            err["model_id"] = request.model.model_id
             err["trace_id"] = trace_id
             await queue.put({"event": "error", **err})
         finally:
+            try:
+                clear_user_keys()
+            except Exception:
+                pass
             await queue.put({"event": "stream_end", "trace_id": trace_id})
 
     runner = asyncio.create_task(run_pipeline())

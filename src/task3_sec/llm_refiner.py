@@ -142,7 +142,26 @@ async def refine_boundaries(
         )
     except TypeError:
         # Older get_llm signature without json_mode — graceful fallback
-        llm = get_llm(model_name=refine_model, user_openrouter_key=user_api_key, temperature=0.0)
+        try:
+            llm = get_llm(model_name=refine_model, user_openrouter_key=user_api_key, temperature=0.0)
+        except Exception as e:
+            from src.shared.llm_errors import LLMStageError
+
+            raise LLMStageError(
+                "SEC boundary-refiner LLM initialization failed",
+                stage="stage2.boundary_refine",
+                model_id=refine_model,
+                original=e,
+            ) from e
+    except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        raise LLMStageError(
+            "SEC boundary-refiner LLM initialization failed",
+            stage="stage2.boundary_refine",
+            model_id=refine_model,
+            original=e,
+        ) from e
 
     refined_boundaries = list(parse_result.boundaries)  # Copy
 
@@ -192,6 +211,10 @@ async def refine_boundaries(
                         break
             consecutive_429 = 0
         except Exception as e:
+            from src.shared.llm_errors import LLMStageError
+
+            if isinstance(e, LLMStageError):
+                raise
             err_str = str(e)
             logger.warning(
                 "refinement_failed",
@@ -290,7 +313,17 @@ async def _refine_single_boundary(
         user_msg,
     ]
 
-    response = await llm.ainvoke(messages)
+    try:
+        response = await llm.ainvoke(messages)
+    except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        raise LLMStageError(
+            "SEC boundary-refine LLM call failed",
+            stage=f"stage2.boundary_refine.item_{boundary.item_number}",
+            model_id=model_name,
+            original=e,
+        ) from e
     latency_ms = (time.time() - start_time) * 1000
 
     response_text = coerce_message_text(getattr(response, "content", response))
@@ -384,7 +417,17 @@ async def _detect_missing_items(
 
                 start_time = time.time()
                 messages = [HumanMessage(content=prompt)]
-                response = await llm.ainvoke(messages)
+                try:
+                    response = await llm.ainvoke(messages)
+                except Exception as e:
+                    from src.shared.llm_errors import LLMStageError
+
+                    raise LLMStageError(
+                        "SEC missing-item LLM call failed",
+                        stage="stage2.missing_item_detect",
+                        model_id=model_name,
+                        original=e,
+                    ) from e
                 latency_ms = (time.time() - start_time) * 1000
 
                 response_text = coerce_message_text(getattr(response, "content", response))
@@ -412,4 +455,8 @@ async def _detect_missing_items(
                         )
                         boundaries.append(new_boundary)
             except Exception as e:
+                from src.shared.llm_errors import LLMStageError
+
+                if isinstance(e, LLMStageError):
+                    raise
                 logger.warning("missing_detect_failed", error=str(e))

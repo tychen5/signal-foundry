@@ -52,26 +52,65 @@ _EXACT_MAP: dict[str, str] = {
 # Trigger phrases per skill for fuzzy matching
 _TRIGGER_PHRASES: dict[str, list[str]] = {
     "lint-and-test": [
-        "test this", "run tests", "check code quality", "lint", "run ci",
-        "verify code", "check tests", "does it pass", "code quality", "run checks",
-        "pytest", "ruff", "eslint", "jest",
+        "test this",
+        "run tests",
+        "check code quality",
+        "lint",
+        "run ci",
+        "verify code",
+        "check tests",
+        "does it pass",
+        "code quality",
+        "run checks",
+        "pytest",
+        "ruff",
+        "eslint",
+        "jest",
     ],
     "build-and-release": [
-        "release", "ship it", "deploy", "publish", "create release",
-        "make a new version", "cut a release", "tag and release", "bump version",
-        "new version", "changelog", "tag release",
+        "release",
+        "ship it",
+        "deploy",
+        "publish",
+        "create release",
+        "make a new version",
+        "cut a release",
+        "tag and release",
+        "bump version",
+        "new version",
+        "changelog",
+        "tag release",
     ],
     "dependency-audit": [
-        "audit deps", "check vulnerabilities", "update packages", "cve check",
-        "scan dependencies", "find outdated", "check for security issues in dependencies",
-        "vulnerable packages", "outdated packages", "dependency vulnerabilities",
-        "pip audit", "npm audit", "osv",
+        "audit deps",
+        "check vulnerabilities",
+        "update packages",
+        "cve check",
+        "scan dependencies",
+        "find outdated",
+        "check for security issues in dependencies",
+        "vulnerable packages",
+        "outdated packages",
+        "dependency vulnerabilities",
+        "pip audit",
+        "npm audit",
+        "osv",
     ],
     "security-scan": [
-        "scan for secrets", "sast", "check cves in code", "find leaked keys",
-        "detect hardcoded passwords", "security audit", "check for sensitive data",
-        "leaked tokens", "hardcoded secrets", "api keys in code",
-        "bandit", "secret detection", "find passwords", "leaked credentials",
+        "scan for secrets",
+        "sast",
+        "check cves in code",
+        "find leaked keys",
+        "detect hardcoded passwords",
+        "security audit",
+        "check for sensitive data",
+        "leaked tokens",
+        "hardcoded secrets",
+        "api keys in code",
+        "bandit",
+        "secret detection",
+        "find passwords",
+        "leaked credentials",
     ],
 }
 
@@ -182,15 +221,25 @@ async def _llm_match(
     prompt = prompt_template.replace("{user_input}", raw)
 
     resolved_model = model_name or "moonshotai/kimi-k2.6"
-    llm = get_llm(
-        model_name=resolved_model,
-        user_openrouter_key=user_api_key,
-        temperature=0.0,
-        max_tokens=500,
-    )
+    try:
+        llm = get_llm(
+            model_name=resolved_model,
+            user_openrouter_key=user_api_key,
+            temperature=0.0,
+            max_tokens=500,
+        )
 
-    start = time.monotonic()
-    response = await llm.ainvoke(prompt)
+        start = time.monotonic()
+        response = await llm.ainvoke(prompt)
+    except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        raise LLMStageError(
+            "Skill match LLM call failed",
+            stage="skill_match",
+            model_id=resolved_model,
+            original=e,
+        ) from e
     latency_ms = (time.monotonic() - start) * 1000
 
     response_text = _coerce_message_text(getattr(response, "content", response))
@@ -259,28 +308,31 @@ async def llm_summarize(
         trimmed = {k: v for k, v in result.items() if k != "content_text"}
         result_str = json.dumps(trimmed, default=str)[:3000]
 
-    prompt = (
-        prompt_template
-        .replace("{skill_name}", skill_name)
-        .replace("{result_json}", result_str)
-    )
+    prompt = prompt_template.replace("{skill_name}", skill_name).replace("{result_json}", result_str)
 
     resolved_model = model_name or "moonshotai/kimi-k2.6"
-    llm = get_llm(
-        model_name=resolved_model,
-        user_openrouter_key=user_api_key,
-        temperature=0.3,
-        max_tokens=400,
-    )
-
-    start = time.monotonic()
     try:
+        llm = get_llm(
+            model_name=resolved_model,
+            user_openrouter_key=user_api_key,
+            temperature=0.3,
+            max_tokens=400,
+        )
+
+        start = time.monotonic()
         response = await llm.ainvoke(prompt)
         latency_ms = (time.monotonic() - start) * 1000
         summary = _coerce_message_text(getattr(response, "content", response))
     except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
         logger.warning("llm_summarize_failed", error=str(e))
-        return f"Skill '{skill_name}' completed. Check the result JSON for details."
+        raise LLMStageError(
+            "Skill result-summary LLM call failed",
+            stage="result_summary",
+            model_id=resolved_model,
+            original=e,
+        ) from e
 
     if not summary:
         # Thinking-mode model returned only reasoning_content with no answer

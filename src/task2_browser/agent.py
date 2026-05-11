@@ -153,10 +153,7 @@ def _detect_stuck_loop(action_history: list, step_results: list) -> bool:
     recent_actions = action_history[-3:]
     if not (recent_actions[0] == recent_actions[1] == recent_actions[2]):
         return False
-    recent_urls = [
-        (s.after_state.url if s.after_state else "")
-        for s in step_results[-3:]
-    ]
+    recent_urls = [(s.after_state.url if s.after_state else "") for s in step_results[-3:]]
     return len(set(recent_urls)) == 1
 
 
@@ -395,8 +392,7 @@ class BrowserAgent:
                     phase="plan",
                     plan_steps=len(plan.steps),
                     plan_summary=[
-                        {"action": s.action_type.value, "target": s.target_description[:80]}
-                        for s in plan.steps[:8]
+                        {"action": s.action_type.value, "target": s.target_description[:80]} for s in plan.steps[:8]
                     ],
                 )
 
@@ -435,10 +431,7 @@ class BrowserAgent:
                         url=step_result.after_state.url if step_result.after_state else "",
                         healer=step_result.healer_activated,
                         diagnosis=step_result.healer_diagnosis or "",
-                        confidence=(
-                            step_result.verification.confidence
-                            if step_result.verification else None
-                        ),
+                        confidence=(step_result.verification.confidence if step_result.verification else None),
                         error=step_result.error or "",
                     )
 
@@ -567,10 +560,7 @@ class BrowserAgent:
                         )
                         result.failure_modes.append("stuck_loop")
                         result.status = "partial"
-                        last_url = (
-                            result.steps[-1].after_state.url
-                            if result.steps[-1].after_state else ""
-                        )
+                        last_url = result.steps[-1].after_state.url if result.steps[-1].after_state else ""
                         result.final_answer = (
                             f"Stuck repeating the same action 3x without "
                             f"page change: {completed_step_descriptions[-1][:200]}. "
@@ -585,6 +575,10 @@ class BrowserAgent:
                     result.final_answer = f"Reached max steps ({max_steps}). Last page: {current_state.url}"
 
             except Exception as e:
+                from src.shared.llm_errors import LLMStageError
+
+                if isinstance(e, LLMStageError):
+                    raise
                 logger.error("agent_execution_error", error=str(e), trace_id=trace_id)
                 result.status = "failed"
                 result.final_answer = f"Agent error: {str(e)}"
@@ -729,8 +723,12 @@ class BrowserAgent:
         # EXTRACT actions return success=True with extracted data in the
         # `error` slot using a `extract_*:` prefix (executor.py). Pull that
         # out into the structured field so reactive steps can use it.
-        if success and error and any(
-            error.startswith(p) for p in ("extract_infobox:", "extract_table:", "extract_kv:", "extract_no_match")
+        if (
+            success
+            and error
+            and any(
+                error.startswith(p) for p in ("extract_infobox:", "extract_table:", "extract_kv:", "extract_no_match")
+            )
         ):
             step_result.extracted_data = error
             error = None  # don't surface as an error

@@ -288,6 +288,15 @@ async def diagnose_with_llm(
         return _parse_llm_diagnosis(text, error_message, action)
 
     except Exception as e:
+        from src.shared.llm_errors import LLMStageError, is_provider_error
+
+        if is_provider_error(e):
+            raise LLMStageError(
+                "Browser healer LLM call failed",
+                stage="browser_heal",
+                model_id=model_name or "deepseek-ai/deepseek-v4-pro",
+                original=e,
+            ) from e
         logger.warning("llm_diagnosis_failed", error=str(e))
         return diagnose_deterministic(error_message, page_state, action)
 
@@ -411,6 +420,7 @@ def _extract_target_from_recovery(
     text = recovery_strategy.strip()
     # Pattern 1: [role] "name"
     import re as _re
+
     m = _re.search(r"\[(\w+)\]\s*['\"]([^'\"]+)['\"]", text)
     if m:
         return f"{m.group(1)} {m.group(2)}"
@@ -419,7 +429,11 @@ def _extract_target_from_recovery(
     if m:
         return f"{m.group(1)} {m.group(2)}"
     # Pattern 3: explicit "the X 'Y'" or "X labelled 'Y'"
-    m = _re.search(r"(button|link|textbox|searchbox|field|input|tab|menuitem)\s+(?:labelled|named|with text)?\s*['\"]([^'\"]+)['\"]", text, _re.IGNORECASE)
+    m = _re.search(
+        r"(button|link|textbox|searchbox|field|input|tab|menuitem)\s+(?:labelled|named|with text)?\s*['\"]([^'\"]+)['\"]",
+        text,
+        _re.IGNORECASE,
+    )
     if m:
         return f"{m.group(1).lower()} {m.group(2)}"
     # If recovery describes a different target without quotes (e.g. "Click the Submit button"),

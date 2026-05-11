@@ -8,6 +8,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
+from src.shared.llm_errors import LLMStageError, classify_with_stage
+from src.shared.llm_validation import (
+    validate_model_selection,
+    validation_error_to_envelope,
+)
 from src.shared.logger import generate_trace_id, get_logger
 from src.shared.schemas import ExecutionResult, ExecutionStatus, FailureType, TaskType
 from src.task1_cicd.schemas import (
@@ -18,6 +23,45 @@ from src.task1_cicd.schemas import (
 
 router = APIRouter()
 logger = get_logger("task1_router")
+
+
+def _validate_llm_model_or_400(model: object) -> str:
+    """Validate LLM model/key fields before launching long CI/CD work."""
+    resolution = validate_model_selection(model)
+    if not resolution.valid:
+        raise HTTPException(
+            status_code=400,
+            detail=validation_error_to_envelope(resolution),
+        )
+    return resolution.provider or ""
+
+
+def _llm_failure_result(
+    *,
+    exc: object,
+    trace_id: str,
+    stage: str,
+    provider: str,
+    model_id: str,
+    prefix: str = "LLM error",
+) -> ExecutionResult:
+    """Build a failed ExecutionResult with a stage-attributed LLM envelope."""
+    envelope = (
+        exc.to_envelope()
+        if isinstance(exc, LLMStageError)
+        else classify_with_stage(exc, stage=stage, provider=provider, model_id=model_id)
+    )
+    envelope["provider"] = envelope.get("provider") or provider
+    envelope["model_id"] = envelope.get("model_id") or model_id
+    return ExecutionResult(
+        status=ExecutionStatus.FAILED,
+        task=TaskType.CICD_SKILLS,
+        trace_id=trace_id,
+        error=f"{prefix}: {envelope.get('user_message') or envelope.get('raw_error')}",
+        failure_type=FailureType.LLM_ERROR,
+        cost_metadata={"llm_error": envelope},
+    )
+
 
 _SKILL_CATALOG = [
     {
@@ -78,39 +122,56 @@ async def run_skill(request: SkillRunRequest):
         trace_id=trace_id,
     )
 
+    provider = _validate_llm_model_or_400(request.model)
+    from src.llm_provider import clear_user_keys, set_user_keys
+
     try:
-        from src.llm_provider import set_user_keys
         set_user_keys(
             openrouter=request.model.user_openrouter_key,
             nvidia=request.model.user_nvidia_key,
+            provider_hint=provider,
         )
         result = await engine_run_skill(request, trace_id)
         # Skill-name mismatch is a client error — surface as 400 for clear HTTP semantics
         if result.status == ExecutionStatus.FAILED and result.failure_type == FailureType.SKILL_MISMATCH:
             raise HTTPException(status_code=400, detail=result.error or "Unknown skill")
         from src.shared.tracing import trace_url
+
         result.langsmith_trace_url = trace_url(trace_id)
         return result
     except HTTPException:
         raise
+    except LLMStageError as e:
+        logger.warning("skill_run_llm_error", error=str(e), trace_id=trace_id)
+        return _llm_failure_result(
+            exc=e,
+            trace_id=trace_id,
+            stage=e.stage,
+            provider=provider,
+            model_id=request.model.model_id,
+            prefix="Skill LLM error",
+        )
     except FastFailError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("skill_run_unhandled_error", error=str(e), trace_id=trace_id)
-        from src.shared.llm_errors import classify_llm_error
-        info = classify_llm_error(e)
+        envelope = classify_with_stage(
+            e,
+            stage="skill_run",
+            provider=provider,
+            model_id=request.model.model_id,
+        )
         return ExecutionResult(
             status=ExecutionStatus.FAILED,
             task=TaskType.CICD_SKILLS,
             trace_id=trace_id,
             error=f"Internal error: {e}",
             cost_metadata={
-                "error_category": info.category,
-                "user_message": info.user_message,
-                "suggested_action": info.suggested_action,
-                "retryable": info.retryable,
+                "llm_error": envelope,
             },
         )
+    finally:
+        clear_user_keys()
 
 
 @router.post("/stream")
@@ -137,6 +198,7 @@ async def stream_run_skill(request: SkillRunRequest):
 
     trace_id = generate_trace_id()
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+    provider = _validate_llm_model_or_400(request.model)
 
     async def progress_callback(event: dict) -> None:
         # Non-blocking put: if the consumer disconnected (e.g. user closed
@@ -151,11 +213,13 @@ async def stream_run_skill(request: SkillRunRequest):
 
     async def run_engine() -> None:
         try:
-            from src.llm_provider import set_user_keys
+            from src.llm_provider import clear_user_keys, set_user_keys
             from src.shared.tracing import trace_url
+
             set_user_keys(
                 openrouter=request.model.user_openrouter_key,
                 nvidia=request.model.user_nvidia_key,
+                provider_hint=provider,
             )
             result = await engine_run_skill(request, trace_id, progress_callback=progress_callback)
             # Emit final result as a single SSE event so the FE doesn't have
@@ -171,6 +235,12 @@ async def stream_run_skill(request: SkillRunRequest):
                     "result": result.model_dump(mode="json"),
                 }
             )
+        except LLMStageError as e:
+            err = e.to_envelope()
+            err["provider"] = err.get("provider") or provider
+            err["model_id"] = err.get("model_id") or request.model.model_id
+            err["trace_id"] = trace_id
+            await queue.put({"event": "error", **err})
         except FastFailError as e:
             await queue.put(
                 {
@@ -185,9 +255,16 @@ async def stream_run_skill(request: SkillRunRequest):
             )
         except Exception as e:
             err = to_dict(classify_llm_error(e))
+            err["stage"] = "skill_run"
+            err["provider"] = provider
+            err["model_id"] = request.model.model_id
             err["trace_id"] = trace_id
             await queue.put({"event": "error", **err})
         finally:
+            try:
+                clear_user_keys()
+            except Exception:
+                pass
             await queue.put({"event": "stream_end", "trace_id": trace_id})
 
     runner = asyncio.create_task(run_engine())
@@ -251,35 +328,50 @@ async def run_auto_router(request: AutoRouterRequest):
         trace_id=trace_id,
     )
 
+    provider = _validate_llm_model_or_400(request.model)
+    from src.llm_provider import clear_user_keys, set_user_keys
+
     try:
-        from src.llm_provider import set_user_keys
         set_user_keys(
             openrouter=request.model.user_openrouter_key,
             nvidia=request.model.user_nvidia_key,
+            provider_hint=provider,
         )
         result = await engine_run_auto(request, trace_id)
         from src.shared.tracing import trace_url
+
         result.langsmith_trace_url = trace_url(trace_id)
         return result
     except HTTPException:
         raise
+    except LLMStageError as e:
+        logger.warning("auto_router_llm_error", error=str(e), trace_id=trace_id)
+        return _llm_failure_result(
+            exc=e,
+            trace_id=trace_id,
+            stage=e.stage,
+            provider=provider,
+            model_id=request.model.model_id,
+            prefix="Auto-router LLM error",
+        )
     except Exception as e:
         logger.error("auto_router_unhandled", error=str(e), trace_id=trace_id, exc_info=True)
-        from src.shared.llm_errors import classify_llm_error
-        info = classify_llm_error(e)
+        envelope = classify_with_stage(
+            e,
+            stage="auto_router",
+            provider=provider,
+            model_id=request.model.model_id,
+        )
         return ExecutionResult(
             status=ExecutionStatus.FAILED,
             task=TaskType.CICD_SKILLS,
             trace_id=trace_id,
             error=f"Auto-router error: {e}",
             failure_type=FailureType.LLM_ERROR,
-            cost_metadata={
-                "error_category": info.category,
-                "user_message": info.user_message,
-                "suggested_action": info.suggested_action,
-                "retryable": info.retryable,
-            },
+            cost_metadata={"llm_error": envelope},
         )
+    finally:
+        clear_user_keys()
 
 
 @router.post("/auto/stream")
@@ -302,6 +394,7 @@ async def stream_auto_router(request: AutoRouterRequest):
 
     trace_id = generate_trace_id()
     queue: asyncio.Queue = asyncio.Queue(maxsize=400)
+    provider = _validate_llm_model_or_400(request.model)
 
     async def progress_callback(event: dict) -> None:
         try:
@@ -311,11 +404,13 @@ async def stream_auto_router(request: AutoRouterRequest):
 
     async def run_engine() -> None:
         try:
-            from src.llm_provider import set_user_keys
+            from src.llm_provider import clear_user_keys, set_user_keys
             from src.shared.tracing import trace_url
+
             set_user_keys(
                 openrouter=request.model.user_openrouter_key,
                 nvidia=request.model.user_nvidia_key,
+                provider_hint=provider,
             )
             result = await engine_run_auto(request, trace_id, progress_callback=progress_callback)
             try:
@@ -329,11 +424,24 @@ async def stream_auto_router(request: AutoRouterRequest):
                     "result": result.model_dump(mode="json"),
                 }
             )
+        except LLMStageError as e:
+            err = e.to_envelope()
+            err["provider"] = err.get("provider") or provider
+            err["model_id"] = err.get("model_id") or request.model.model_id
+            err["trace_id"] = trace_id
+            await queue.put({"event": "error", **err})
         except Exception as e:
             err = to_dict(classify_llm_error(e))
+            err["stage"] = "auto_router"
+            err["provider"] = provider
+            err["model_id"] = request.model.model_id
             err["trace_id"] = trace_id
             await queue.put({"event": "error", **err})
         finally:
+            try:
+                clear_user_keys()
+            except Exception:
+                pass
             await queue.put({"event": "stream_end", "trace_id": trace_id})
 
     runner = asyncio.create_task(run_engine())

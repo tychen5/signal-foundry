@@ -12,6 +12,11 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.shared.llm_errors import LLMStageError, classify_with_stage
+from src.shared.llm_validation import (
+    validate_model_selection,
+    validation_error_to_envelope,
+)
 from src.shared.logger import generate_trace_id, get_logger
 from src.shared.schemas import (
     ExecutionResult,
@@ -23,6 +28,42 @@ from src.shared.schemas import (
 
 router = APIRouter()
 logger = get_logger("task2_router")
+
+
+def _validate_llm_model_or_400(model: object) -> str:
+    """Validate model_id/provider/key before starting Chromium."""
+    resolution = validate_model_selection(model)
+    if not resolution.valid:
+        raise HTTPException(
+            status_code=400,
+            detail=validation_error_to_envelope(resolution),
+        )
+    return resolution.provider or ""
+
+
+def _failed_llm_result(
+    exc: object,
+    *,
+    trace_id: str,
+    stage: str,
+    provider: str,
+    model_id: str,
+) -> ExecutionResult:
+    envelope = (
+        exc.to_envelope()
+        if isinstance(exc, LLMStageError)
+        else classify_with_stage(exc, stage=stage, provider=provider, model_id=model_id)
+    )
+    envelope["provider"] = envelope.get("provider") or provider
+    envelope["model_id"] = envelope.get("model_id") or model_id
+    return ExecutionResult(
+        status=ExecutionStatus.FAILED,
+        task=TaskType.BROWSER_AGENT,
+        trace_id=trace_id,
+        error=envelope.get("user_message") or envelope.get("raw_error"),
+        failure_type=FailureType.LLM_ERROR,
+        cost_metadata={"llm_error": envelope},
+    )
 
 
 class BrowserTaskRequest(BaseModel):
@@ -67,8 +108,10 @@ async def execute_browser_task(request: BrowserTaskRequest):
         trace_id=trace_id,
     )
 
+    provider = _validate_llm_model_or_400(request.model)
+    from src.llm_provider import clear_user_keys, set_user_keys
+
     try:
-        from src.llm_provider import set_user_keys
         from src.task2_browser.agent import BrowserAgent
 
         # Per-request user keys (NVIDIA + OpenRouter) — get_llm reads them from
@@ -78,6 +121,7 @@ async def execute_browser_task(request: BrowserTaskRequest):
         set_user_keys(
             openrouter=request.model.user_openrouter_key,
             nvidia=request.model.user_nvidia_key,
+            provider_hint=provider,
         )
 
         agent = BrowserAgent(
@@ -96,6 +140,7 @@ async def execute_browser_task(request: BrowserTaskRequest):
         )
 
         from src.shared.tracing import trace_url
+
         return ExecutionResult(
             status=ExecutionStatus.SUCCESS
             if result.status == "success"
@@ -118,23 +163,33 @@ async def execute_browser_task(request: BrowserTaskRequest):
             latency_ms=result.total_duration_ms,
         )
 
+    except LLMStageError as e:
+        logger.warning("browser_task_llm_error", error=str(e), trace_id=trace_id)
+        return _failed_llm_result(
+            e,
+            trace_id=trace_id,
+            stage=e.stage,
+            provider=provider,
+            model_id=request.model.model_id,
+        )
     except Exception as e:
         logger.error("browser_task_failed", error=str(e), trace_id=trace_id)
-        from src.shared.llm_errors import classify_llm_error
-        info = classify_llm_error(e)
+        envelope = classify_with_stage(
+            e,
+            stage="browser_agent",
+            provider=provider,
+            model_id=request.model.model_id,
+        )
         return ExecutionResult(
             status=ExecutionStatus.FAILED,
             task=TaskType.BROWSER_AGENT,
             trace_id=trace_id,
             error=str(e),
             failure_type=FailureType.TOOL_ERROR,
-            cost_metadata={
-                "error_category": info.category,
-                "user_message": info.user_message,
-                "suggested_action": info.suggested_action,
-                "retryable": info.retryable,
-            },
+            cost_metadata={"llm_error": envelope},
         )
+    finally:
+        clear_user_keys()
 
 
 @router.post("/stream")
@@ -165,6 +220,7 @@ async def stream_browser_task(request: BrowserTaskRequest):
     if not request.task_description.strip():
         raise HTTPException(status_code=400, detail="task_description is required")
 
+    provider = _validate_llm_model_or_400(request.model)
     queue: asyncio.Queue = asyncio.Queue(maxsize=200)
 
     async def progress_callback(event: dict) -> None:
@@ -177,12 +233,13 @@ async def stream_browser_task(request: BrowserTaskRequest):
 
     async def run_agent() -> None:
         try:
-            from src.llm_provider import set_user_keys
+            from src.llm_provider import clear_user_keys, set_user_keys
             from src.task2_browser.agent import BrowserAgent
 
             set_user_keys(
                 openrouter=request.model.user_openrouter_key,
                 nvidia=request.model.user_nvidia_key,
+                provider_hint=provider,
             )
             agent = BrowserAgent(
                 model_name=request.model.model_id,
@@ -198,11 +255,24 @@ async def stream_browser_task(request: BrowserTaskRequest):
                 max_steps=request.max_steps,
                 trace_id=trace_id,
             )
+        except LLMStageError as e:
+            err_info = e.to_envelope()
+            err_info["provider"] = err_info.get("provider") or provider
+            err_info["model_id"] = err_info.get("model_id") or request.model.model_id
+            err_info["trace_id"] = trace_id
+            await queue.put({"event": "error", **err_info})
         except Exception as e:
             err_info = to_dict(classify_llm_error(e))
+            err_info["stage"] = "browser_agent"
+            err_info["provider"] = provider
+            err_info["model_id"] = request.model.model_id
             err_info["trace_id"] = trace_id
             await queue.put({"event": "error", **err_info})
         finally:
+            try:
+                clear_user_keys()
+            except Exception:
+                pass
             await queue.put({"event": "stream_end", "trace_id": trace_id})
 
     runner_task = asyncio.create_task(run_agent())

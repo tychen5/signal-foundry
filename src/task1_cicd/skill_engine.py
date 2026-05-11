@@ -76,6 +76,7 @@ async def run_skill(
             skill_run_start/done, summarize_start/done, skill_complete).
             Used by the SSE streaming endpoint.
     """
+
     async def _emit(event: str, **payload) -> None:
         if not progress_callback:
             return
@@ -84,14 +85,16 @@ async def run_skill(
         except Exception as e:
             logger.warning("t1_progress_callback_failed", error=str(e)[:120])
 
-    attach_metadata({
-        "trace_id": trace_id,
-        "skill_name": request.skill_name,
-        "repo_url": request.repo_url,
-        "branch": request.branch,
-        "dry_run": request.dry_run,
-        "model_name": request.model.model_id if request.model else "default",
-    })
+    attach_metadata(
+        {
+            "trace_id": trace_id,
+            "skill_name": request.skill_name,
+            "repo_url": request.repo_url,
+            "branch": request.branch,
+            "dry_run": request.dry_run,
+            "model_name": request.model.model_id if request.model else "default",
+        }
+    )
     await _emit(
         "skill_start",
         repo=request.repo_url,
@@ -170,9 +173,7 @@ async def run_skill(
         logger.info("cloning_repo", owner=owner, repo=repo, branch=branch, trace_id=trace_id)
         await _emit("clone_start", owner=owner, repo=repo, branch=branch)
         try:
-            actual_sha = await github_client.clone_repo(
-                request.repo_url, branch, temp_dir, token, timeout_seconds=120
-            )
+            actual_sha = await github_client.clone_repo(request.repo_url, branch, temp_dir, token, timeout_seconds=120)
             # Use actual SHA from clone (may differ from API SHA by milliseconds)
             commit_sha = actual_sha or commit_sha
         except FastFailError as e:
@@ -209,7 +210,9 @@ async def run_skill(
             "skill_run_done",
             skill=skill_name,
             status=raw_result.get("status", ""),
-            preview=str({k: v for k, v in list(raw_result.items())[:3] if not isinstance(v, list) and k != "summary"})[:240],
+            preview=str({k: v for k, v in list(raw_result.items())[:3] if not isinstance(v, list) and k != "summary"})[
+                :240
+            ],
         )
 
         # [10] LLM summarize
@@ -276,6 +279,10 @@ async def run_skill(
         )
 
     except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        if isinstance(e, LLMStageError):
+            raise
         logger.error("skill_engine_error", error=str(e), trace_id=trace_id, exc_info=True)
         return _fail_result(f"Unexpected error: {e}", FailureType.SANDBOX_ERROR, trace_id, start_time)
 
@@ -295,18 +302,22 @@ async def _dispatch(
     """Route to the correct skill module and return a serializable result dict."""
     if skill_name == "lint-and-test":
         from src.task1_cicd.skills import lint_and_test
+
         result = await lint_and_test.run(ctx, sandbox_cfg)
 
     elif skill_name == "dependency-audit":
         from src.task1_cicd.skills import dependency_audit
+
         result = await dependency_audit.run(ctx)
 
     elif skill_name == "security-scan":
         from src.task1_cicd.skills import security_scan
+
         result = await security_scan.run(ctx, sandbox_cfg)
 
     elif skill_name == "build-and-release":
         from src.task1_cicd.skills import build_and_release
+
         result = await build_and_release.run(ctx, dry_run, token)
 
     else:
@@ -338,8 +349,10 @@ def _get_github_token() -> Optional[str]:
     """Get GitHub token from configuration."""
     try:
         from src.config import get_settings
+
         settings = get_settings()
         return getattr(settings, "github_token", None)
     except Exception:
         import os
+
         return os.environ.get("GITHUB_TOKEN")

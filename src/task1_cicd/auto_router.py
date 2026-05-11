@@ -242,8 +242,7 @@ async def _llm_plan(
     exclude_hint = _normalise_skill_list(request.exclude_skills_hint)
 
     prompt = (
-        template
-        .replace("{user_query}", request.natural_language_query.strip())
+        template.replace("{user_query}", request.natural_language_query.strip())
         .replace("{repo_url}", request.repo_url)
         .replace("{branch}", request.branch)
         .replace("{dry_run}", "true" if request.dry_run else "false")
@@ -253,16 +252,26 @@ async def _llm_plan(
     )
 
     model = request.model.model_id or DEFAULT_ROUTER_MODEL
-    llm = get_llm(
-        model_name=model,
-        user_openrouter_key=request.model.user_openrouter_key,
-        user_nvidia_key=request.model.user_nvidia_key,
-        temperature=0.0,
-        max_tokens=600,
-    )
+    try:
+        llm = get_llm(
+            model_name=model,
+            user_openrouter_key=request.model.user_openrouter_key,
+            user_nvidia_key=request.model.user_nvidia_key,
+            temperature=0.0,
+            max_tokens=600,
+        )
 
-    start = time.monotonic()
-    response = await llm.ainvoke(prompt)
+        start = time.monotonic()
+        response = await llm.ainvoke(prompt)
+    except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        raise LLMStageError(
+            "Auto-router plan LLM call failed",
+            stage="auto_router_plan",
+            model_id=model,
+            original=e,
+        ) from e
     latency_ms = (time.monotonic() - start) * 1000
     raw_text = coerce_message_text(getattr(response, "content", response))
     data = extract_json_object(raw_text) or {}
@@ -366,8 +375,7 @@ async def _llm_decide(
     )
 
     prompt = (
-        template
-        .replace("{user_query}", query_for_prompt)
+        template.replace("{user_query}", query_for_prompt)
         .replace("{overall_intent}", overall_intent or "(not provided)")
         .replace("{repo_url}", request.repo_url)
         .replace("{branch}", request.branch)
@@ -386,16 +394,26 @@ async def _llm_decide(
     )
 
     model = request.model.model_id or DEFAULT_ROUTER_MODEL
-    llm = get_llm(
-        model_name=model,
-        user_openrouter_key=request.model.user_openrouter_key,
-        user_nvidia_key=request.model.user_nvidia_key,
-        temperature=0.0,
-        max_tokens=300,
-    )
+    try:
+        llm = get_llm(
+            model_name=model,
+            user_openrouter_key=request.model.user_openrouter_key,
+            user_nvidia_key=request.model.user_nvidia_key,
+            temperature=0.0,
+            max_tokens=300,
+        )
 
-    start = time.monotonic()
-    response = await llm.ainvoke(prompt)
+        start = time.monotonic()
+        response = await llm.ainvoke(prompt)
+    except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        raise LLMStageError(
+            "Auto-router decision LLM call failed",
+            stage="auto_router_decide",
+            model_id=model,
+            original=e,
+        ) from e
     latency_ms = (time.monotonic() - start) * 1000
     raw_text = coerce_message_text(getattr(response, "content", response))
     data = extract_json_object(raw_text) or {}
@@ -478,13 +496,11 @@ async def _llm_synthesize(
         # the chips so the synthesizer doesn't open with "your question was: ".
         executed_names = ", ".join(s.skill_executed for s in steps) or "selected skills"
         query_for_prompt = (
-            f"(no natural-language query was provided; the user requested a CI/CD "
-            f"check using {executed_names})"
+            f"(no natural-language query was provided; the user requested a CI/CD check using {executed_names})"
         )
 
     prompt = (
-        template
-        .replace("{user_query}", query_for_prompt)
+        template.replace("{user_query}", query_for_prompt)
         .replace("{repo_url}", request.repo_url)
         .replace("{branch}", request.branch)
         .replace("{executed_skills}", json.dumps([s.skill_executed for s in steps]))
@@ -498,29 +514,27 @@ async def _llm_synthesize(
     )
 
     model = request.model.model_id or DEFAULT_ROUTER_MODEL
-    llm = get_llm(
-        model_name=model,
-        user_openrouter_key=request.model.user_openrouter_key,
-        user_nvidia_key=request.model.user_nvidia_key,
-        temperature=0.3,
-        max_tokens=500,
-    )
-
-    start = time.monotonic()
     try:
+        llm = get_llm(
+            model_name=model,
+            user_openrouter_key=request.model.user_openrouter_key,
+            user_nvidia_key=request.model.user_nvidia_key,
+            temperature=0.3,
+            max_tokens=500,
+        )
+
+        start = time.monotonic()
         response = await llm.ainvoke(prompt)
     except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
         logger.warning("auto_router_synthesize_failed", error=str(e))
-        # Deterministic fallback so the FE always has *something* to show.
-        skills_done = ", ".join(s.skill_executed for s in steps)
-        if request.natural_language_query:
-            tail = f"for query '{request.natural_language_query[:120]}'."
-        else:
-            tail = "from the user-selected skill chips."
-        return (
-            f"Auto-router executed {skills_done} {tail} "
-            f"LLM synthesis unavailable — see per-skill summaries below."
-        )
+        raise LLMStageError(
+            "Auto-router synthesis LLM call failed",
+            stage="auto_router_synthesize",
+            model_id=model,
+            original=e,
+        ) from e
     latency_ms = (time.monotonic() - start) * 1000
     text = coerce_message_text(getattr(response, "content", response)).strip()
 
@@ -537,10 +551,7 @@ async def _llm_synthesize(
 
     if not text:
         # Thinking-mode model returned only reasoning_content, no answer body.
-        return (
-            f"Auto-router executed {len(steps)} skill(s); LLM synthesis empty. "
-            f"See per-skill summaries below."
-        )
+        return f"Auto-router executed {len(steps)} skill(s); LLM synthesis empty. See per-skill summaries below."
     # Strip stray code fences if the model defied "no markdown".
     text = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", text).strip()
     return text
@@ -569,13 +580,15 @@ async def run_auto_router(
         except Exception as e:
             logger.warning("auto_router_emit_failed", error=str(e)[:120])
 
-    attach_metadata({
-        "trace_id": trace_id,
-        "task": "task1_auto_router",
-        "repo_url": request.repo_url,
-        "branch": request.branch,
-        "model_name": request.model.model_id if request.model else "default",
-    })
+    attach_metadata(
+        {
+            "trace_id": trace_id,
+            "task": "task1_auto_router",
+            "repo_url": request.repo_url,
+            "branch": request.branch,
+            "model_name": request.model.model_id if request.model else "default",
+        }
+    )
 
     start_time = time.monotonic()
     tracker = get_cost_tracker()
@@ -610,6 +623,10 @@ async def run_auto_router(
         try:
             plan, rationale, overall_intent, plan_confidence = await _llm_plan(request, trace_id)
         except Exception as e:
+            from src.shared.llm_errors import LLMStageError
+
+            if isinstance(e, LLMStageError):
+                raise
             logger.error("auto_router_plan_failed", error=str(e), trace_id=trace_id, exc_info=True)
             return _fail_result(f"Auto-router plan failed: {e}", trace_id, start_time)
         plan_source = "llm"
@@ -626,8 +643,7 @@ async def run_auto_router(
         if include_hint:
             rationale = {s: "user explicitly selected this skill via the include-hint chip" for s in plan}
             overall_intent = (
-                f"User did not provide a free-form query; running the user-selected skill set: "
-                f"{', '.join(plan)}."
+                f"User did not provide a free-form query; running the user-selected skill set: {', '.join(plan)}."
             )
         elif exclude_hint:
             rationale = {s: "default health-check skill (user only specified what to skip)" for s in plan}
@@ -721,6 +737,10 @@ async def run_auto_router(
         try:
             execution = await engine_run_skill(skill_request, trace_id, progress_callback=_inner_progress)
         except Exception as e:
+            from src.shared.llm_errors import LLMStageError
+
+            if isinstance(e, LLMStageError):
+                raise
             logger.error("auto_router_skill_crash", skill=next_skill, error=str(e), trace_id=trace_id, exc_info=True)
             execution = ExecutionResult(
                 status=ExecutionStatus.FAILED,
@@ -823,6 +843,10 @@ async def run_auto_router(
                 include_hint=include_hint,
             )
         except Exception as e:
+            from src.shared.llm_errors import LLMStageError
+
+            if isinstance(e, LLMStageError):
+                raise
             logger.warning("auto_router_decide_failed", error=str(e), trace_id=trace_id)
             action, next_choice, reasoning_str, decision_conf = ("stop", None, f"decide step error: {e}", 0.0)
 
@@ -859,10 +883,12 @@ async def run_auto_router(
     try:
         synthesis = await _llm_synthesize(request, steps, trace_id)
     except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        if isinstance(e, LLMStageError):
+            raise
         logger.warning("auto_router_synthesis_outer_failed", error=str(e), trace_id=trace_id)
-        synthesis = (
-            f"Synthesis failed ({e.__class__.__name__}); see per-skill summaries below."
-        )
+        synthesis = f"Synthesis failed ({e.__class__.__name__}); see per-skill summaries below."
     await _emit("synthesize_done", synthesis_preview=synthesis[:240])
 
     elapsed = (time.monotonic() - start_time) * 1000

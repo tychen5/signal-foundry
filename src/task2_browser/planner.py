@@ -92,12 +92,22 @@ async def plan_task(
     Returns:
         TaskPlan with ordered steps
     """
-    llm = get_llm(
-        model_name=model_name,
-        user_openrouter_key=user_api_key,
-        temperature=0.0,
-        max_tokens=2000,
-    )
+    try:
+        llm = get_llm(
+            model_name=model_name,
+            user_openrouter_key=user_api_key,
+            temperature=0.0,
+            max_tokens=2000,
+        )
+    except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        raise LLMStageError(
+            "Browser planner LLM initialization failed",
+            stage="browser_plan",
+            model_id=model_name,
+            original=e,
+        ) from e
 
     context = f"Task: {task_description}\n"
     if target_url:
@@ -107,8 +117,15 @@ async def plan_task(
     # Gemini 3.1 Pro thinking-mode is the worst offender — first call can
     # time out while the second succeeds because the cold-start tax is paid.
     transient_markers = (
-        "timeout", "Connection", "ReadError", "ConnectError",
-        "503", "502", "504", "429", "Internal Server Error",
+        "timeout",
+        "Connection",
+        "ReadError",
+        "ConnectError",
+        "503",
+        "502",
+        "504",
+        "429",
+        "Internal Server Error",
     )
     for attempt in range(2):
         try:
@@ -139,7 +156,14 @@ async def plan_task(
                 await asyncio.sleep(2.0)
                 continue
             logger.warning("planning_failed", error=err_str[:200])
-            return _create_fallback_plan(task_description, target_url)
+            from src.shared.llm_errors import LLMStageError
+
+            raise LLMStageError(
+                "Browser planner LLM call failed",
+                stage="browser_plan",
+                model_id=model_name,
+                original=e,
+            ) from e
     return _create_fallback_plan(task_description, target_url)
 
 
@@ -180,12 +204,22 @@ async def decide_next_action(
         make_multimodal_message_history,
     )
 
-    llm = get_llm(
-        model_name=model_name,
-        user_openrouter_key=user_api_key,
-        temperature=0.0,
-        max_tokens=800,
-    )
+    try:
+        llm = get_llm(
+            model_name=model_name,
+            user_openrouter_key=user_api_key,
+            temperature=0.0,
+            max_tokens=800,
+        )
+    except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        raise LLMStageError(
+            "Browser actor LLM initialization failed",
+            stage="browser_decide_action",
+            model_id=model_name,
+            original=e,
+        ) from e
 
     steps_summary = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(completed_steps[-5:]))
 
@@ -216,8 +250,15 @@ async def decide_next_action(
     # token) and OpenRouter under load. We DON'T retry on auth/permission
     # errors since they're not transient.
     transient_markers = (
-        "timeout", "Connection", "ReadError", "ConnectError",
-        "503", "502", "504", "429", "Internal Server Error",
+        "timeout",
+        "Connection",
+        "ReadError",
+        "ConnectError",
+        "503",
+        "502",
+        "504",
+        "429",
+        "Internal Server Error",
     )
     last_err: Optional[Exception] = None
     for attempt in range(2):
@@ -255,10 +296,14 @@ async def decide_next_action(
                 await asyncio.sleep(2.0)
                 continue
             logger.warning("action_decision_failed", error=err_str[:200])
-            return BrowserAction(
-                action_type=ActionType.DONE,
-                reasoning=f"Decision failed: {err_str[:120]}",
-            )
+            from src.shared.llm_errors import LLMStageError
+
+            raise LLMStageError(
+                "Browser actor LLM call failed",
+                stage="browser_decide_action",
+                model_id=model_name,
+                original=e,
+            ) from e
     # Unreachable in practice, defensive return
     return BrowserAction(
         action_type=ActionType.DONE,
@@ -298,12 +343,22 @@ async def verify_with_llm(
         make_multimodal_message_history,
     )
 
-    llm = get_llm(
-        model_name=model_name,
-        user_openrouter_key=user_api_key,
-        temperature=0.0,
-        max_tokens=500,
-    )
+    try:
+        llm = get_llm(
+            model_name=model_name,
+            user_openrouter_key=user_api_key,
+            temperature=0.0,
+            max_tokens=500,
+        )
+    except Exception as e:
+        from src.shared.llm_errors import LLMStageError
+
+        raise LLMStageError(
+            "Browser verifier LLM initialization failed",
+            stage="browser_verify",
+            model_id=model_name,
+            original=e,
+        ) from e
 
     steps_summary = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(completed_steps))
 
@@ -327,8 +382,15 @@ async def verify_with_llm(
         user_msg = HumanMessage(content=context)
 
     transient_markers = (
-        "timeout", "Connection", "ReadError", "ConnectError",
-        "503", "502", "504", "429", "Internal Server Error",
+        "timeout",
+        "Connection",
+        "ReadError",
+        "ConnectError",
+        "503",
+        "502",
+        "504",
+        "429",
+        "Internal Server Error",
     )
     for attempt in range(2):
         try:
@@ -359,7 +421,14 @@ async def verify_with_llm(
                 await asyncio.sleep(2.0)
                 continue
             logger.warning("verification_failed", error=err_str[:200])
-            return False, "", 0.3
+            from src.shared.llm_errors import LLMStageError
+
+            raise LLMStageError(
+                "Browser verifier LLM call failed",
+                stage="browser_verify",
+                model_id=model_name,
+                original=e,
+            ) from e
     return False, "", 0.3
 
 
@@ -531,12 +600,8 @@ def _parse_verification(llm_response: str) -> tuple[bool, str, float]:
     # false-firing as 'complete'. Check the first 100 chars (most LLMs front-
     # load the verdict).
     head = response_lower[:100]
-    has_negation = bool(
-        re.search(r"\b(?:not\s+(?:yet\s+)?complete|incomplete|no(?:,|\s+the\s+task))\b", head)
-    )
-    has_positive = bool(
-        re.search(r"\b(?:yes|task\s+is\s+complete|task\s+complete|completed\s+successfully)\b", head)
-    )
+    has_negation = bool(re.search(r"\b(?:not\s+(?:yet\s+)?complete|incomplete|no(?:,|\s+the\s+task))\b", head))
+    has_positive = bool(re.search(r"\b(?:yes|task\s+is\s+complete|task\s+complete|completed\s+successfully)\b", head))
     is_complete = has_positive and not has_negation
     confidence = 0.7 if is_complete else 0.3
     return is_complete, llm_response.strip(), confidence
