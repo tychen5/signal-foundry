@@ -110,16 +110,16 @@
                 <div class="form-group">
                     <label>LLM Model</label>
                     <select id="model-preset">
-                        <option value="moonshotai/kimi-k2.6" data-provider="nvidia">NVIDIA default — Kimi K2.6</option>
-                        <option value="z-ai/glm-5.1" data-provider="nvidia">NVIDIA — GLM 5.1</option>
-                        <option value="deepseek-ai/deepseek-v4-pro" data-provider="nvidia">NVIDIA — DeepSeek V4 Pro</option>
-                        <option value="minimaxai/minimax-m2.7" data-provider="nvidia">NVIDIA — MiniMax M2.7</option>
                         <option value="openai/gpt-5.5" data-provider="openrouter">OpenRouter default — GPT-5.5</option>
                         <option value="anthropic/claude-opus-4.7" data-provider="openrouter">OpenRouter — Claude Opus 4.7</option>
                         <option value="google/gemini-3.1-pro-preview" data-provider="openrouter">OpenRouter — Gemini 3.1 Pro Preview</option>
+                        <option value="moonshotai/kimi-k2.6" data-provider="nvidia">NVIDIA free — Kimi K2.6</option>
+                        <option value="z-ai/glm-5.1" data-provider="nvidia">NVIDIA — GLM 5.1</option>
+                        <option value="deepseek-ai/deepseek-v4-pro" data-provider="nvidia">NVIDIA — DeepSeek V4 Pro</option>
+                        <option value="minimaxai/minimax-m2.7" data-provider="nvidia">NVIDIA — MiniMax M2.7</option>
                         <option value="custom">Custom model id...</option>
                     </select>
-                    <input type="text" id="model-select" value="moonshotai/kimi-k2.6" placeholder="publisher/model-name" style="margin-top:0.35rem">
+                    <input type="text" id="model-select" value="openai/gpt-5.5" placeholder="publisher/model-name" style="margin-top:0.35rem">
                     <small style="color:#888">Choose a preset or type any model id. Use provider hint below for ambiguous prefixes.</small>
                 </div>
                 <div class="form-group">

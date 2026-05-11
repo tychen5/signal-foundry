@@ -68,3 +68,46 @@ python -m pytest tests/ -q：354 passed, 7 skipped。
 - **NVIDIA key expiration messaging**: 在全部 4 個頁面 (index, task1, task2, task3) 強化 NVIDIA key 提醒文字，明確指出「server-bundled key may be expired or rate-limited」，建議使用者自行至 build.nvidia.com 申請免費 key。
 - **Hero stat**: 354 unit tests (from 351)。
 - **progress_notes.md**: Phase 10 所有 items (1–8) 全部 `[x]`。
+
+本次調整
+
+
+把全域預設模型改為 openai/gpt-5.5
+
+檔案: config.py
+
+
+
+首頁在沒有既有 session 設定時，會強制預設選到 openai/gpt-5.5，並寫入 sf_model_id
+
+檔案: index.html
+
+
+
+Task1/Task2/Task3 的 model preset 與輸入框預設都改為 openai/gpt-5.5，NVIDIA 模型改成 fallback（NVIDIA free — Kimi K2.6）
+
+檔案: task1.html
+
+檔案: task2.html
+
+檔案: task3.html
+
+
+
+行為驗證（實測）
+
+用本機啟動服務後，以 Playwright 做端到端驗證，結果如下：
+
+首頁預設模型: openai/gpt-5.5
+首頁未填 key 時提示: 會顯示 OpenRouter key 必填，並提示可改用 NVIDIA 模型
+填入 OpenRouter key 後進 Task2:
+
+model-select = openai/gpt-5.5，Use vision (multi-modal) = checked
+填入 OpenRouter key 後進 Task3:
+
+model-select = openai/gpt-5.5，Force LLM refine = checked，Use vision for uncertain boundaries = checked
+
+檢查
+
+
+ruff check src/config.py 通過

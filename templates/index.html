@@ -166,7 +166,12 @@
         const savedKey = sessionStorage.getItem('sf_openrouter_key');
         const savedNvidia = sessionStorage.getItem('sf_nvidia_key');
         const savedLangsmith = sessionStorage.getItem('sf_langsmith_key');
-        if (savedModel) modelSelect.value = savedModel;
+        if (savedModel) {
+            modelSelect.value = savedModel;
+        } else if (modelSelect.querySelector('option[value="openai/gpt-5.5"]')) {
+            modelSelect.value = 'openai/gpt-5.5';
+            sessionStorage.setItem('sf_model_id', 'openai/gpt-5.5');
+        }
         if (savedKey) apiKeyInput.value = savedKey;
         if (savedNvidia) nvidiaKeyInput.value = savedNvidia;
         if (savedLangsmith) langsmithKeyInput.value = savedLangsmith;
