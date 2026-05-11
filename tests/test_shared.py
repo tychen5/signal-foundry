@@ -66,12 +66,8 @@ class TestCostTracker:
         from src.shared.cost_tracker import CostTracker
 
         tracker = CostTracker()
-        tracker.record_call(
-            "openai/gpt-5.5", 1000, 500, 100, "task3_sec", "extract", trace_id="t1"
-        )
-        tracker.record_call(
-            "openai/gpt-5.5", 1000, 500, 100, "task3_sec", "extract", trace_id="t2"
-        )
+        tracker.record_call("openai/gpt-5.5", 1000, 500, 100, "task3_sec", "extract", trace_id="t1")
+        tracker.record_call("openai/gpt-5.5", 1000, 500, 100, "task3_sec", "extract", trace_id="t2")
         c1 = tracker.request_cost_so_far("t1")
         c2 = tracker.request_cost_so_far("t2")
         assert c1 > 0 and c2 > 0
@@ -82,9 +78,7 @@ class TestCostTracker:
         from src.shared.cost_tracker import CostTracker
 
         tracker = CostTracker()
-        tracker.record_call(
-            "z-ai/glm-5.1", 100, 50, 100, "task3_sec", "extract", trace_id="t1"
-        )
+        tracker.record_call("z-ai/glm-5.1", 100, 50, 100, "task3_sec", "extract", trace_id="t1")
         # GLM 5.1 cost for 150 tokens is ~$0.00025 — well under default 0.50
         tracker.check_request_budget("t1", task="task3_sec")  # no raise
 
@@ -105,9 +99,7 @@ class TestCostTracker:
             trace_id="big_trace",
         )
         with pytest.raises(BudgetExceededError) as exc:
-            tracker.check_request_budget(
-                "big_trace", cap_usd=0.50, task="task3_sec"
-            )
+            tracker.check_request_budget("big_trace", cap_usd=0.50, task="task3_sec")
         err = exc.value
         assert err.trace_id == "big_trace"
         assert err.cost_so_far > err.cap_usd
@@ -254,14 +246,102 @@ class TestUserKeyContextvars:
         clear_user_keys()
         set_user_keys(nvidia="nvapi-from-ctx")
         try:
-            llm = get_llm(
-                "moonshotai/kimi-k2.6", user_nvidia_key="nvapi-from-explicit-arg"
-            )
+            llm = get_llm("moonshotai/kimi-k2.6", user_nvidia_key="nvapi-from-explicit-arg")
             assert isinstance(llm, ChatOpenAI)
             # The api_key on the wrapper is a SecretStr — coerce to string and check
             assert "from-explicit-arg" in str(llm.openai_api_key.get_secret_value())
         finally:
             clear_user_keys()
+
+    def test_provider_hint_context_routes_free_text_model(self):
+        """Unknown free-text model IDs can be routed by per-request provider hint."""
+        from langchain_openai import ChatOpenAI
+
+        from src.llm_provider import clear_user_keys, get_llm, set_user_keys
+
+        clear_user_keys()
+        set_user_keys(openrouter="sk-or-v1-test", provider_hint="openrouter")
+        try:
+            llm = get_llm("newvendor/new-model")
+            assert isinstance(llm, ChatOpenAI)
+            assert llm.model_name == "newvendor/new-model"
+        finally:
+            clear_user_keys()
+
+
+class TestLLMValidation:
+    """Model-id and key validation for public task APIs."""
+
+    def test_bad_model_shape_requires_slash(self):
+        from src.shared.llm_validation import validate_model_id_shape
+
+        err = validate_model_id_shape("gpt-5.5")
+        assert err is not None
+        assert "provider/model-name" in err
+
+    def test_qwen_free_text_infers_nvidia(self):
+        from src.shared.llm_validation import resolve_model_and_keys
+
+        result = resolve_model_and_keys(
+            model_id="qwen/qwen3-next-80b-a3b-instruct",
+            provider_hint=None,
+            user_openrouter_key=None,
+            user_nvidia_key="nvapi-test",
+            server_openrouter_key="",
+            server_nvidia_key="",
+        )
+        assert result.valid is True
+        assert result.provider == "nvidia"
+
+    def test_unknown_prefix_requires_provider_hint(self):
+        from src.shared.llm_validation import resolve_model_and_keys
+
+        result = resolve_model_and_keys(
+            model_id="newvendor/new-model",
+            provider_hint=None,
+            user_openrouter_key="sk-or-v1-test",
+            user_nvidia_key=None,
+            server_openrouter_key="",
+            server_nvidia_key="",
+        )
+        assert result.valid is False
+        assert result.error_category == "ambiguous_provider"
+        assert result.error_field == "model.provider"
+
+    def test_provider_hint_allows_unknown_prefix(self):
+        from src.shared.llm_validation import resolve_model_and_keys
+
+        result = resolve_model_and_keys(
+            model_id="newvendor/new-model",
+            provider_hint="openrouter",
+            user_openrouter_key="sk-or-v1-test",
+            user_nvidia_key=None,
+            server_openrouter_key="",
+            server_nvidia_key="",
+        )
+        assert result.valid is True
+        assert result.provider == "openrouter"
+
+    def test_missing_key_points_to_exact_field(self):
+        from src.shared.llm_validation import resolve_model_and_keys
+
+        result = resolve_model_and_keys(
+            model_id="anthropic/claude-opus-4.7",
+            provider_hint=None,
+            user_openrouter_key=None,
+            user_nvidia_key=None,
+            server_openrouter_key="",
+            server_nvidia_key="",
+        )
+        assert result.valid is False
+        assert result.error_category == "missing_key"
+        assert result.error_field == "model.user_openrouter_key"
+
+    def test_get_llm_does_not_fallback_for_bad_shape(self):
+        from src.llm_provider import get_llm
+
+        with pytest.raises(ValueError, match="provider/model-name"):
+            get_llm("gpt-5.5", user_openrouter_key="sk-or-v1-test")
 
 
 class TestJSONExtractor:
@@ -275,21 +355,25 @@ class TestJSONExtractor:
 
     def test_plain_json_object(self):
         from src.shared.llm_utils import extract_json_object
+
         result = extract_json_object('{"action": "click", "target": "button"}')
         assert result == {"action": "click", "target": "button"}
 
     def test_markdown_fenced_json(self):
         from src.shared.llm_utils import extract_json_object
+
         result = extract_json_object('```json\n{"a": 1, "b": 2}\n```')
         assert result == {"a": 1, "b": 2}
 
     def test_markdown_fenced_no_lang(self):
         from src.shared.llm_utils import extract_json_object
+
         result = extract_json_object('```\n{"a": 1}\n```')
         assert result == {"a": 1}
 
     def test_leading_prose(self):
         from src.shared.llm_utils import extract_json_object
+
         # The original "first { ... last }" regex would fail on this if there
         # were stray braces in the prose. The balanced extractor handles it.
         result = extract_json_object('Here is the JSON: {"action": "done", "value": "result"}')
@@ -297,46 +381,55 @@ class TestJSONExtractor:
 
     def test_trailing_prose(self):
         from src.shared.llm_utils import extract_json_object
+
         result = extract_json_object('{"a": 1}\n\nThis represents the next action.')
         assert result == {"a": 1}
 
     def test_smart_quotes(self):
         from src.shared.llm_utils import extract_json_object
+
         # Some models leak smart quotes — extract_json_object normalises them
-        result = extract_json_object('{“action”: “navigate”}')
+        result = extract_json_object("{“action”: “navigate”}")
         assert result == {"action": "navigate"}
 
     def test_nested_braces(self):
         from src.shared.llm_utils import extract_json_object
+
         result = extract_json_object('{"meta": {"nested": true}, "x": 1}')
         assert result == {"meta": {"nested": True}, "x": 1}
 
     def test_braces_in_string(self):
         from src.shared.llm_utils import extract_json_object
+
         result = extract_json_object('{"reasoning": "use { and } as quotes", "ok": true}')
         assert result == {"reasoning": "use { and } as quotes", "ok": True}
 
     def test_returns_none_on_garbage(self):
         from src.shared.llm_utils import extract_json_object
+
         assert extract_json_object("just some prose, no json here") is None
 
     def test_returns_none_on_empty(self):
         from src.shared.llm_utils import extract_json_object
+
         assert extract_json_object("") is None
         assert extract_json_object("   \n  ") is None
 
     def test_returns_none_on_array_when_object_expected(self):
         from src.shared.llm_utils import extract_json_object
+
         # extract_json_object only returns objects, not arrays
         assert extract_json_object("[1, 2, 3]") is None
 
     def test_array_extractor(self):
         from src.shared.llm_utils import extract_json_array
+
         result = extract_json_array('```json\n[{"a": 1}, {"b": 2}]\n```')
         assert result == [{"a": 1}, {"b": 2}]
 
     def test_array_with_leading_prose(self):
         from src.shared.llm_utils import extract_json_array
+
         result = extract_json_array('Found these items: [{"x": 1}]')
         assert result == [{"x": 1}]
 
@@ -350,41 +443,45 @@ class TestLLMProviderJSONMode:
 
     def test_json_mode_enabled_for_kimi(self):
         from src.llm_provider import get_llm
+
         llm = get_llm("moonshotai/kimi-k2.6", user_nvidia_key="nvapi-fake", json_mode=True)
         assert (llm.model_kwargs or {}).get("response_format") == {"type": "json_object"}
 
     def test_json_mode_skipped_for_glm_thinking(self):
         from src.llm_provider import get_llm
+
         # GLM 5.1 has extra_body for thinking-mode toggles; json_mode must skip
         llm = get_llm("z-ai/glm-5.1", user_nvidia_key="nvapi-fake", json_mode=True)
         assert "response_format" not in (llm.model_kwargs or {})
 
     def test_json_mode_skipped_for_deepseek_thinking(self):
         from src.llm_provider import get_llm
-        llm = get_llm(
-            "deepseek-ai/deepseek-v4-pro", user_nvidia_key="nvapi-fake", json_mode=True
-        )
+
+        llm = get_llm("deepseek-ai/deepseek-v4-pro", user_nvidia_key="nvapi-fake", json_mode=True)
         assert "response_format" not in (llm.model_kwargs or {})
 
     def test_json_mode_default_is_off(self):
         from src.llm_provider import get_llm
+
         llm = get_llm("moonshotai/kimi-k2.6", user_nvidia_key="nvapi-fake")
         assert "response_format" not in (llm.model_kwargs or {})
 
     def test_json_mode_enabled_for_openrouter_models(self):
         from src.llm_provider import get_llm
+
         for model_id in (
             "google/gemini-3.1-pro-preview",
             "anthropic/claude-opus-4.7",
             "openai/gpt-5.5",
         ):
             llm = get_llm(model_id, user_openrouter_key="sk-or-fake", json_mode=True)
-            assert (llm.model_kwargs or {}).get("response_format") == {
-                "type": "json_object"
-            }, f"json_mode should fire for {model_id}"
+            assert (llm.model_kwargs or {}).get("response_format") == {"type": "json_object"}, (
+                f"json_mode should fire for {model_id}"
+            )
 
     def test_request_timeout_configured(self):
         from src.llm_provider import get_llm
+
         llm = get_llm("moonshotai/kimi-k2.6", user_nvidia_key="nvapi-fake")
         # Default 180 s; surfaced as request_timeout on the underlying ChatOpenAI
         assert llm.request_timeout == 180.0

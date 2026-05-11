@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from src.shared.llm_errors import classify_llm_error, maybe_classify
+from src.shared.llm_errors import (
+    classify_llm_error,
+    classify_with_stage,
+    extract_http_status,
+    maybe_classify,
+)
 
 
 class TestErrorClassification:
@@ -25,6 +30,7 @@ class TestErrorClassification:
         assert info.category == "rate_limit"
         assert info.retryable is True
         assert "rate" in info.user_message.lower()
+        assert extract_http_status("Error code: 429 - Too Many Requests") == 429
 
     def test_insufficient_credit(self):
         info = classify_llm_error("Insufficient credits to complete this request")
@@ -64,6 +70,8 @@ class TestErrorClassification:
         assert d is not None
         assert d["category"] == "rate_limit"
         assert d["retryable"] is True
+        assert d["status_code"] == 429
+        assert d["status_label"] == "429 Rate Limit Exceeded"
 
     def test_raw_error_truncated(self):
         # Very long error must not blow up the response payload
@@ -73,8 +81,7 @@ class TestErrorClassification:
 
     def test_context_length_exceeded_openai_form(self):
         info = classify_llm_error(
-            "This model's maximum context length is 128000 tokens. "
-            "However, your messages resulted in 145000 tokens."
+            "This model's maximum context length is 128000 tokens. However, your messages resulted in 145000 tokens."
         )
         assert info.category == "context_length"
         assert info.retryable is False
@@ -90,15 +97,11 @@ class TestErrorClassification:
         assert info.retryable is False
 
     def test_model_deprecated(self):
-        info = classify_llm_error(
-            "The model 'gpt-3.5-turbo-0301' has been deprecated."
-        )
+        info = classify_llm_error("The model 'gpt-3.5-turbo-0301' has been deprecated.")
         assert info.category == "model_not_found"
 
     def test_content_filter_blocked(self):
-        info = classify_llm_error(
-            "Your request was flagged by our content policy and has been blocked."
-        )
+        info = classify_llm_error("Your request was flagged by our content policy and has been blocked.")
         assert info.category == "content_filter"
         assert info.retryable is False
         assert "filter" in info.user_message.lower() or "polic" in info.user_message.lower()
@@ -106,3 +109,17 @@ class TestErrorClassification:
     def test_content_filter_safety(self):
         info = classify_llm_error("Response blocked due to safety policy violation.")
         assert info.category == "content_filter"
+
+    def test_classify_with_stage_includes_status_and_model(self):
+        d = classify_with_stage(
+            "HTTP 404 model not found",
+            stage="browser_plan",
+            provider="openrouter",
+            model_id="unknown/model",
+        )
+        assert d["stage"] == "browser_plan"
+        assert d["provider"] == "openrouter"
+        assert d["model_id"] == "unknown/model"
+        assert d["status_code"] == 404
+        assert d["status_label"] == "404 Not Found"
+        assert d["category"] == "model_not_found"

@@ -90,6 +90,10 @@ class TestTask1Routes:
             json={
                 "repo_url": "https://github.com/tychen5/signal-foundry",
                 "skill_name": "lint-and-test",
+                "model": {
+                    "model_id": "moonshotai/kimi-k2.6",
+                    "user_nvidia_key": "nvapi-test",
+                },
             },
         )
         assert response.status_code == 200
@@ -102,6 +106,10 @@ class TestTask1Routes:
             json={
                 "repo_url": "https://github.com/test/repo",
                 "skill_name": "invalid-skill",
+                "model": {
+                    "model_id": "moonshotai/kimi-k2.6",
+                    "user_nvidia_key": "nvapi-test",
+                },
             },
         )
         assert response.status_code == 400
@@ -131,12 +139,62 @@ class TestTask2Routes:
             json={
                 "task_description": "Search Wikipedia for AI",
                 "target_url": "https://www.wikipedia.org",
+                "model": {
+                    "model_id": "moonshotai/kimi-k2.6",
+                    "user_nvidia_key": "nvapi-test",
+                },
             },
         )
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success"
         assert data["result"]["total_steps"] == 3
+
+    async def test_execute_rejects_bad_model_shape(self, client):
+        response = await client.post(
+            "/api/v1/browser/execute",
+            json={
+                "task_description": "Open example.com",
+                "model": {"model_id": "gpt-5.5"},
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["stage"] == "input_validation"
+        assert detail["category"] == "bad_model_id_shape"
+        assert detail["error_field"] == "model.model_id"
+
+    async def test_execute_returns_stage_attributed_llm_error(self, client, monkeypatch):
+        from src.shared.llm_errors import LLMStageError
+
+        async def fake_run(self, **kwargs):
+            raise LLMStageError(
+                "provider rejected key",
+                stage="browser_plan",
+                provider="nvidia",
+                model_id="moonshotai/kimi-k2.6",
+                original=RuntimeError("Error code: 401 - Invalid API key"),
+            )
+
+        monkeypatch.setattr("src.task2_browser.agent.BrowserAgent.run", fake_run)
+
+        response = await client.post(
+            "/api/v1/browser/execute",
+            json={
+                "task_description": "Open example.com",
+                "model": {
+                    "model_id": "moonshotai/kimi-k2.6",
+                    "user_nvidia_key": "nvapi-test",
+                },
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "failed"
+        err = data["cost_metadata"]["llm_error"]
+        assert err["stage"] == "browser_plan"
+        assert err["status_code"] == 401
+        assert err["status_label"] == "401 Unauthorized"
 
     async def test_stream_task_emits_sse_events(self, client, monkeypatch):
         """SSE stream endpoint emits stream_start, milestone events, and stream_end."""
@@ -150,8 +208,29 @@ class TestTask2Routes:
                 await cb({"event": "phase_start", "phase": "plan", "model": "test"})
                 await cb({"event": "phase_done", "phase": "plan", "plan_steps": 2})
                 await cb({"event": "step_start", "step": 1, "action": "navigate", "target": "wiki"})
-                await cb({"event": "step_done", "step": 1, "url": "https://wiki/", "healer": False, "diagnosis": "", "confidence": 0.95, "error": ""})
-                await cb({"event": "agent_complete", "status": "success", "steps": 1, "self_corrections": 0, "cost_usd": 0.0, "duration_ms": 100, "answer": "ok", "failure_modes": []})
+                await cb(
+                    {
+                        "event": "step_done",
+                        "step": 1,
+                        "url": "https://wiki/",
+                        "healer": False,
+                        "diagnosis": "",
+                        "confidence": 0.95,
+                        "error": "",
+                    }
+                )
+                await cb(
+                    {
+                        "event": "agent_complete",
+                        "status": "success",
+                        "steps": 1,
+                        "self_corrections": 0,
+                        "cost_usd": 0.0,
+                        "duration_ms": 100,
+                        "answer": "ok",
+                        "failure_modes": [],
+                    }
+                )
             return AgentResult(
                 trace_id="test-stream",
                 task_description="test",
@@ -166,7 +245,14 @@ class TestTask2Routes:
         async with client.stream(
             "POST",
             "/api/v1/browser/stream",
-            json={"task_description": "test", "max_steps": 5},
+            json={
+                "task_description": "test",
+                "max_steps": 5,
+                "model": {
+                    "model_id": "moonshotai/kimi-k2.6",
+                    "user_nvidia_key": "nvapi-test",
+                },
+            },
         ) as resp:
             assert resp.status_code == 200
             assert "text/event-stream" in resp.headers.get("content-type", "")
@@ -221,6 +307,10 @@ class TestTask3Routes:
             json={
                 "cik": "0000320193",
                 "accession_number": "0000320193-23-000106",
+                "model": {
+                    "model_id": "moonshotai/kimi-k2.6",
+                    "user_nvidia_key": "nvapi-test",
+                },
             },
         )
         assert response.status_code == 200
@@ -251,15 +341,17 @@ class TestTask3Routes:
                 await cb({"event": "stage2_skipped", "reason": "rule_parser_confident"})
                 await cb({"event": "stage3_start", "stage": "validation"})
                 await cb({"event": "stage3_done", "overall_valid": True})
-                await cb({
-                    "event": "pipeline_complete",
-                    "items": 23,
-                    "rule_only": 23,
-                    "llm_refined": 0,
-                    "cost_usd": 0.0,
-                    "stages": ["rule_based", "validation"],
-                    "status_counts": {"extracted": 14, "incorporated_by_reference": 6, "not_applicable": 3},
-                })
+                await cb(
+                    {
+                        "event": "pipeline_complete",
+                        "items": 23,
+                        "rule_only": 23,
+                        "llm_refined": 0,
+                        "cost_usd": 0.0,
+                        "stages": ["rule_based", "validation"],
+                        "status_counts": {"extracted": 14, "incorporated_by_reference": 6, "not_applicable": 3},
+                    }
+                )
             # Return value isn't used by the stream consumer
             return ExtractionResult(
                 filing_metadata=FilingMetadata(
@@ -275,7 +367,14 @@ class TestTask3Routes:
         async with client.stream(
             "POST",
             "/api/v1/sec/extract" + "/" if False else "/api/v1/sec/stream",
-            json={"cik": "0000320193", "accession_number": "0000320193-23-000106"},
+            json={
+                "cik": "0000320193",
+                "accession_number": "0000320193-23-000106",
+                "model": {
+                    "model_id": "moonshotai/kimi-k2.6",
+                    "user_nvidia_key": "nvapi-test",
+                },
+            },
         ) as resp:
             assert resp.status_code == 200
             assert "text/event-stream" in resp.headers.get("content-type", "")

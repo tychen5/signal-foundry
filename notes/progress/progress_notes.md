@@ -192,6 +192,49 @@
   13. [x] Default `max_steps` 10 → 20 in UI; new "40 steps (complex multi-page flows)" option. Backend `BrowserAgent.run()` default 15 → 20 to match.
   14. [x] Observer context windows widened: a11y 4000 → 8000 chars, visible_text 2000 → 6000 chars. Planner forwards 5000 a11y / 3500 visible_text to the actor (was 2500 / 800) — gives the LLM enough page state to spot infobox content directly.
 
+10. [] Phase 10 further improvements:
+  1. [] 針對task 1 請幫我確認我所多增加一個feature已經正常可以work可以optional讓使用者透過使用自然語言query來自動讓LLM決定要調用哪些skills來完成任務的功能，也就是說可以不需要預先決定要用甚麼skill，而是LLM自主決定如何觸發。所以不管是backend、frontend、skills、还是harness functions等等，都已經有做好相關的連動調整，也就是說如果使用者預設不選擇要用哪一個skill(或是空的)，例如選擇auto: 先預設先調用一個Router LLM，然後他會自己看目前的任務內容，然後自主決定要調用哪些skills，並透過harness function來執行，在執行調用完skills後，harness function會將結果回傳給router LLM，router LLM再根據結果決定是否還要調用哪些skills，直到任務完成。而原本skill的調用模式、skills的json、task engine的prompt、UI的介面、輸入輸出等等，都已經有依照最合適的方式來調整以利運作；只是把原本由使用者手動選擇要調用哪一個skill的功能多一個auto，如果使用者沒指定的話就是變成由LLM自主決定。 也請同步將目前的frontend做的比較簡陋的地方可以進行更進一步優化設計實作一番。 如果還有認為有更佳的結構方式來讓 router llm 能夠更理解與調用 skills (如: 拆分 into smaller skills, 或重新設計 skill output) ，也可以提出你的看法與做出相應的設計變更。 並且也確認已經有將這部分功能實際在 https://signal-foundry.zeabur.app/task1 上做一些examples自然語言query讓LLM自主決定要調用哪些skills並完成任務的demo給reviwer檢查(例如 highlight LLM系統成功辨識並執行了 dependency-audit 與 security-scan skills(查看 skill_executed 欄位等等))。 
+    * [] 我希望在pipeline, API endpoint,UIUX當中，Natural-language query並不應該要是必填的欄位，而是使用者也可以只選擇要使用的skills/不使用的skills就可以去RUN (Auto LLM rotes的Natural-language query也要是可以optional)，請幫我驗證我是否已經有做好以下所有tasks並解決potential issues:
+      * [] relax the schema
+      * [] branch the auto-router for empty query and let include_hint override the release-intent gate (helper functions, update _sanitise_plan to use the unified _is_release_intent_explicit (so include_hint counts as explicit intent at LLM-plan-time too), update _llm_plan to pass include_hint to the sanitiser, update _llm_decide post-filter for the same release-intent-explicit logic, branching the orchestration loop on empty query, pass include_hint into the _llm_decide call inside the loop, and decide what to do in the empty-query case for postmortem + synthesize. The decide and synthesize prompts both take {user_query}, should substitute a sensible string there too, Looking at the prompts, they handle "user_query" reasonably with a placeholder;  pass overall_intent as the proxy when query is empty, the _llm_decide and _llm_synthesize prompt-prep code currently injects request.natural_language_query.strip(). When that's empty, the LLM will see User query:  blank — which makes overall_intent the only signal. make the prompts work cleanly when query is empty by substituting overall_intent as the user_query stand-in, also update the auto_result.query field to keep raw user input but make it transparent when empty, so downstream UIs render correctly, check the _llm_synthesize signature — it still tries to detect empty steps)
+      * [] corner cases handling, deal with various of edge cases may happen to increase UX
+    * [] 請檢察前端的系統、functions、pipeline、end-to-end、API endpoints等等BE都已經有優化改進，前端UIUX也要多一個input box讓使用者可以直接輸入自然語言query(例如手動輸入一段模糊的自然語言，例如："please check if there are any vulnerable dependencies or CVEs" 或是 "scan for leaked keys"。)；而這個輸入框可以去guide LLM的一些behavior，預設skills會是auto(但使用者依然可以決定要去勾選建議哪些skills是要給LLM參照的，其餘哪些skills是建議排除的)，LLM可以自主選擇多個skills來參照然後去CICD檢查repo如同 @notes/_briefs/_TaskDescription.md Task 1題目1所述的一樣。
+    * [] 並思考看看還可以再補充哪些skills讓LLM可以去調用。
+    * [] 最後請也記得更新README說明。
+  2. [] 請幫我驗證目前repo的中的task 1, task 2, task 3所有可以給使用者去調用使用的主要使用/功能APIs是否都已經有依照題目需求可以完美滿足所需之目標目的input output了(@notes/_briefs/_TaskDescription.md)，並且要確認所有APIs如果要使用到LLM的時候，都有去驗證要求使用者需要提供openrouter key或是nvidia nim key，並且使用者也有輸入要使用的LLM model id(free text但要驗證input有沒有斜線例如:moonshotai/kimi-k2.6, anthropic/claude-sonnet-4.6, anthropic/claude-opus-4.7, deepseek/deepseek-v4-flash, google/gemini-3-flash-preview, tencent/hy3-preview, nvidia/nemotron-3-super-120b-a12b, openai/gpt-oss-120b, meta/llama-3.1-8b-instruct, qwen/qwen3-next-80b-a3b-instruct, z-ai/glm-5.1, mistralai/mistral-small-4-119b-2603, ...等等，以利使用者可以根據他的key去呼叫任意他想要使用的model id，這應該要是可以在後端呼叫API時所提供的彈性可以支援的，且在輸入有誤時，有清楚的錯誤訊息例如: 401 Unauthorized, 404 Model Not Found, 429 Rate Limit Exceeded, 500 Internal Server Error, 502 Bad Gateway, 503 Service Unavailable, key invalid, model id invalid 等等原始model provider所回傳的錯誤訊息，並同時告知使用者是哪個部分出錯)，並且如果使用者所輸入的key或是model id有問題呼叫失敗時，也要回傳呼叫api所得到的錯誤資訊給使用者知道錯誤訊息是什麼、卡在哪一步等等，以方便使用者好debug或是修正key/model id。
+    * [] 並也請再次從頭到尾審閱仔細思考看看API的設計使用上、與前後端介面串接整合、與任務本身的各個pipeline的整合上、UX跟DX是否還有甚麼可以再進一步優化的地方，也可以同步對應優化強化與前後端UIUX介面串接整合與體驗等等。
+    * [] 請確保所有可能的潛在風險或errors都已經可以完美被handle，並解決所有的bugs。
+    * [] 請確保所有的前端UI都可以和後端API去做好串接配合、無縫完美整合，且都沒有任何issue或是error。如果有看到任何bugs請務必順手修復。
+    * [] 最後也請update README中API Reference到最新的狀態與input output範例等。
+    * []  Please audit all task APIs against spec, check LLM key/model-id validation + error propagation end-to-end, identify gaps, implement improvements, then update the README.
+    * []  Issues may include but not limit to: 
+      1. Config silently falls back to default model when user passes an unknown ID — defeats free-text purpose
+      2. No upfront model_id shape validation (slash requirement)       
+      3. No upfront key-presence check — fails late, deep inside the LLM call
+      4. Error envelope lacks stage attribution — user can't tell which pipeline step failed
+      5. No HTTP status code extraction from provider error strings
+      6. MODEL_REGISTRY is a hard whitelist — can't bring qwen/qwen3-next-80b-a3b-instruct etc.
+    * [] Tasks:
+      1. Survey all task API endpoints + I/O shapes
+      2. Audit LLM key + model id validation
+      3. Implement gaps: free-text model_id + better error attribution
+      4. Wire frontend to surface stage-attributed errors
+      5. Add unit tests for model_id validation + error envelope
+      6. Update README API Reference section
+    * [] Steps:
+      Step 1 — new validation helper
+      Step 2 — extend llm_errors.py with stage attribution + HTTP status extraction
+        * add a classify_with_stage function + extend to_dict
+        * make get_model_info no longer silently fall back, and make get_llm honor a provider hint for free-text model IDs
+        * update ModelSelectionRequest to accept the optional provider hint
+        ...etc
+      Step 3...
+      ...etc
+  3. [] 請幫我再次從頭到尾檢查一次，確定目前 repo 所實作的 github CICD pipeline 的總流程、task1、task2、task3、shared engine的程式邏輯與設計、後端 API 的設計、前後端整合、UX/UI (包括@task1, @task2, @task3, home, health, metrics, model-selector, api-reference 等所有頁面)、Error Reporting、Error Handling、Error Recovery，以及所有相關README說明都已經有完美實作到位，解決所有題目的問題與需求細節(@notes/_briefs/_TaskDescription.md)。
+    * [] 確認FE/UI按鈕沒有令人confuse的duplicate按鈕或是操作behavior出現
+    * [] 審閱過所有的UI流程、API使用、input output都是符合好理解好懂的，且都能正常work使用沒有任何的bugs與潛在風險錯誤，使用者體驗與開發者體驗都很好
+
+
 ---
 
 ## 🔄 當前狀態 (2026-05-10, 全部 Phases 0–9 完成)

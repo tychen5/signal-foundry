@@ -85,3 +85,118 @@
   4. Defaults — leave everything empty. Runs dependency-audit + security-scan as a safe baseline.                                                                                                                                                                                                                                            
                                                                                                                                                                                                                                                                                                                                                
   In every mode the response still surfaces a top-level skill_executed field for one-glance reviewer verification.   
+
+  ---
+
+目前重點變更如下：
+
+
+
+已盤點並強化主要 user-facing APIs：
+
+
+Task 1: /api/v1/skills/run, /stream, /auto/run, /auto/stream
+
+Task 2: /api/v1/browser/execute, /stream
+
+Task 3: /api/v1/sec/extract, /stream
+
+Task 3 aux APIs /filings/{cik}、/company/{cik} 不用 LLM，所以不套 LLM key/model validation。
+
+
+
+
+
+新增共用 LLM validation：
+
+
+src/shared/llm_validation.py (line 93)
+
+驗證 model_id 必須是 publisher/model-name
+
+支援 free-text model IDs，不再被 MODEL_REGISTRY whitelist 擋住
+
+支援 model.provider = "openrouter" | "nvidia" hint
+
+upfront 檢查 OpenRouter/NVIDIA key 是否存在，缺 key 回 HTTP 400 且指出欄位
+
+
+
+
+
+修正 provider routing：
+
+
+src/config.py (line 163)
+
+src/llm_provider.py (line 44)
+
+get_llm() 現在吃 provider_hint / contextvar，不會未知 model 就 fallback default model。
+
+
+
+
+
+強化 provider error propagation：
+
+
+src/shared/llm_errors.py (line 57)
+
+會抽出 401 Unauthorized, 404 Not Found, 429 Rate Limit Exceeded, 502 Bad Gateway, 503 Service Unavailable 等 status label
+
+新增 stage-attributed envelope，例如 browser_plan, auto_router_synthesize, stage2.boundary_refine.item_7
+
+non-stream API 放在 cost_metadata.llm_error
+
+stream API 以 SSE error event 回傳
+
+
+
+
+
+前端三個 task UI 已改成可輸入 free-text model ID，並新增 provider hint：
+
+
+templates/task1.html (line 268)
+
+templates/task2.html (line 112)
+
+templates/task3.html (line 127)
+
+UI 現在會顯示 stage / provider / model / upstream status / raw error。
+
+
+
+
+
+README API Reference 已更新：
+
+
+README.md (line 162)
+
+補上 shared model block、validation error shape、provider failure envelope、stream endpoints、auth notes。
+
+
+
+
+
+新增測試：
+
+
+tests/test_shared.py (line 256)
+
+tests/test_llm_errors.py (line 113)
+
+tests/test_api.py (line 153)
+
+
+
+
+
+Verification:
+
+
+ruff check src/ tests/ passed
+
+python -m pytest tests/ -q passed: 351 passed, 7 skipped
+
