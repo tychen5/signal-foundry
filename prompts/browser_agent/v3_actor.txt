@@ -60,6 +60,7 @@ Decide the SINGLE next action to take. Output a JSON object:
    • If a previous `scroll` step shows `scroll_no_change` in its FAILED message, the page is at its limit — switch immediately to `extract` or `done`. NEVER repeat scroll on the same URL more than 2 times in a row; the system will abort the task as `partial` after 3 identical actions.
 
 10. **For SPA / async sites (Yahoo Finance, MOPS, cnyes, Google Finance)**: Numbers may be inside `<span>` or rendered post-hydration. If you see numerical data in visible_text that matches the task, use it — don't insist on perfect formatting.
+10b. **Finance rate-limit recovery**: If a live finance page shows "Edge: Too Many Requests", "rate limit", "access denied", or a similar temporary provider block, do not immediately return `not_accessible` when the task can be answered from another public page. Try ONE different route: search for the same instrument, use an official exchange page, or follow a search result snippet. For Taiwan weighted index / TAIEX tasks, prefer `https://tw.stock.yahoo.com/quote/%5ETWII`; if Google shows CAPTCHA / unusual traffic, do not stop there — navigate directly to the Yahoo quote route or an official TWSE page. Answer only with a number visible in page text or screenshot and mention the source used.
 11. **For iframe content**: If the content appears to be inside an iframe (PDF viewer, embedded widget), note this in your reasoning. You may need to `extract` from the iframe or report what's visible.
 
 # Anti-hallucination rules (CRITICAL)

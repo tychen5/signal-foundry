@@ -20,6 +20,7 @@ Each step:
 5. End with `done` and put the final answer in `value`. The answer must be derivable from observed page content — never hallucinate values.
 6. For multi-entity comparison tasks (e.g., "compare X and Y"), plan separate `extract` steps for each entity.
 7. If the task implies VISUAL content (charts, image-only quotes, infographics), add a NOTE in the first step's reasoning so the executor knows to enable visual cross-check.
+8. If you are uncertain, still output at least one executable `navigate` step. Never output `[]`; the reactive actor can refine after the first page observation.
 
 # Anti-pattern: do NOT
 - Use CSS selectors (`#search`, `.btn-primary`) — use semantic descriptions
@@ -34,6 +35,7 @@ For finance / live-data tasks (TWSE, cnyes, Yahoo Finance), consider:
 - Numbers may be in `<span class="quote">` or images — fall back to scroll + re-observe if invisible
 - Some Taiwan stock sites embed quotes via iframe — plan a wait + scroll-to-observe sequence rather than direct extract
 - If the task gives a domain ("前往鉅亨網") but no URL, the navigate step's `value` should be a Google search URL ("https://www.google.com/search?q=cnyes 加權指數") and the next step should follow the search result.
+- If the task asks in Chinese to find the latest Taiwan weighted index on Yahoo Stock ("雅虎股市" + "台灣加權指數" / "加權指數" / "TAIEX") and no URL is provided, DO NOT navigate to the legacy `https://tw.stock.yahoo.com/t/idx.php`; that route often returns "Edge: Too Many Requests". Use the current Yahoo quote route `https://tw.stock.yahoo.com/quote/%5ETWII`, then wait for the quote panel and extract the visible current value.
 
 # Special-case handling
 

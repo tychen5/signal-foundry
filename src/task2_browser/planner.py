@@ -10,17 +10,17 @@ Uses versioned prompts from prompts/browser_agent/.
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import re
 import time
 from typing import Optional
+from urllib.parse import quote_plus
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.llm_provider import get_llm
 from src.shared.cost_tracker import get_cost_tracker
-from src.shared.llm_utils import coerce_message_text, extract_json_object
+from src.shared.llm_utils import coerce_message_text, extract_json_array, extract_json_object
 from src.shared.logger import get_logger
 from src.task2_browser.schemas import (
     ActionType,
@@ -436,24 +436,26 @@ def _parse_plan(llm_response: str, task: str, target_url: Optional[str]) -> Task
     """Parse LLM plan response into TaskPlan model."""
     steps: list[BrowserAction] = []
 
-    # Try JSON parsing first
-    try:
-        json_match = re.search(r"\[.*\]", llm_response, re.DOTALL)
-        if json_match:
-            raw_steps = json.loads(json_match.group())
-            for raw in raw_steps:
-                action_type = _map_action_type(raw.get("action", raw.get("action_type", "click")))
-                steps.append(
-                    BrowserAction(
-                        action_type=action_type,
-                        target_description=raw.get("target", raw.get("target_description", "")),
-                        value=raw.get("value", ""),
-                        reasoning=raw.get("reasoning", ""),
-                        success_criteria=raw.get("success_criteria", ""),
-                    )
+    raw_steps = extract_json_array(llm_response)
+    if raw_steps is None:
+        raw_object = extract_json_object(llm_response)
+        if isinstance(raw_object, dict) and isinstance(raw_object.get("steps"), list):
+            raw_steps = raw_object["steps"]
+
+    if raw_steps:
+        for raw in raw_steps:
+            if not isinstance(raw, dict):
+                continue
+            action_type = _map_action_type(raw.get("action", raw.get("action_type", "click")))
+            steps.append(
+                BrowserAction(
+                    action_type=action_type,
+                    target_description=raw.get("target", raw.get("target_description", "")),
+                    value=raw.get("value", ""),
+                    reasoning=raw.get("reasoning", ""),
+                    success_criteria=raw.get("success_criteria", ""),
                 )
-    except (json.JSONDecodeError, TypeError):
-        pass
+            )
 
     # Fallback: parse numbered steps
     if not steps:
@@ -494,25 +496,63 @@ def _parse_plan(llm_response: str, task: str, target_url: Optional[str]) -> Task
 
 
 def _create_fallback_plan(task: str, target_url: Optional[str]) -> TaskPlan:
-    """Create a basic fallback plan when LLM planning fails."""
+    """Create a basic executable fallback plan when LLM planning fails."""
     steps: list[BrowserAction] = []
+    start_url = target_url or _extract_url_from_task(task)
 
-    if target_url:
+    if start_url:
         steps.append(
             BrowserAction(
                 action_type=ActionType.NAVIGATE,
-                target_description=f"Navigate to {target_url}",
-                value=target_url,
+                target_description=f"Navigate to {start_url}",
+                value=start_url,
                 reasoning="Navigate to starting URL",
+                success_criteria="Page loads successfully",
             )
         )
+    else:
+        search_url = _search_url_for_task(task)
+        steps.extend(
+            [
+                BrowserAction(
+                    action_type=ActionType.NAVIGATE,
+                    target_description="Search the web for the requested page/data",
+                    value=search_url,
+                    reasoning="No starting URL was provided and planning failed; use search to find a relevant public source.",
+                    success_criteria="Search results loaded",
+                ),
+                BrowserAction(
+                    action_type=ActionType.WAIT,
+                    target_description="Search results",
+                    value="1200",
+                    reasoning="Allow search results and snippets to render before the reactive actor chooses the next action.",
+                    success_criteria="Search page is stable enough to observe",
+                ),
+            ]
+        )
 
-    # The reactive actor loop will handle the rest
     return TaskPlan(
         original_task=task,
         steps=steps,
         estimated_complexity="unknown",
     )
+
+
+def _extract_url_from_task(task: str) -> Optional[str]:
+    """Return the first explicit URL embedded in the task text, if any."""
+    match = re.search(r"https?://[^\s\"'<>]+", task)
+    if not match:
+        return None
+    return match.group(0).rstrip(").,;")
+
+
+def _search_url_for_task(task: str) -> str:
+    """Build a deterministic search URL for no-target fallback planning."""
+    lowered = task.lower()
+    if any(token in task for token in ("雅虎股市", "台灣加權", "加權指數")) or "taiex" in lowered:
+        return "https://tw.stock.yahoo.com/quote/%5ETWII"
+    query = task.strip() or "browser automation task"
+    return f"https://www.bing.com/search?q={quote_plus(query)}"
 
 
 def _parse_action(llm_response: str) -> BrowserAction:
