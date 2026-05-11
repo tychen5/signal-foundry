@@ -32,14 +32,37 @@ class LLMProvider(str, Enum):
 # downstream task in this repo expects.
 MODEL_REGISTRY: dict[str, dict] = {
     # ==================================================================
-    # NVIDIA NIM (free tier — DEFAULT for reviewers without their own key)
+    # OpenRouter (paid tier — DEFAULT for best quality + vision support)
     # ==================================================================
-    # kimi-k2.6 is first because it's the recommended default: free,
-    # fast (no thinking-mode latency tax), reliable structured output.
+    # GPT-5.5 is the recommended default: high-quality, fast, vision-capable.
+    # Reviewers need an OpenRouter API key (openrouter.ai/credits).
+    "openai/gpt-5.5": {
+        "provider": LLMProvider.OPENROUTER,
+        "model_name": "openai/gpt-5.5",
+        "display_name": "GPT-5.5 (OpenRouter, paid) — DEFAULT",
+        "max_tokens": 16384,
+    },
+    "anthropic/claude-opus-4.7": {
+        "provider": LLMProvider.OPENROUTER,
+        "model_name": "anthropic/claude-opus-4.7",
+        "display_name": "Claude Opus 4.7 (OpenRouter, paid, premium)",
+        "max_tokens": 16384,
+    },
+    "google/gemini-3.1-pro-preview": {
+        "provider": LLMProvider.OPENROUTER,
+        "model_name": "google/gemini-3.1-pro-preview",
+        "display_name": "Gemini 3.1 Pro (OpenRouter, paid)",
+        "max_tokens": 16384,
+    },
+    # ==================================================================
+    # NVIDIA NIM (free tier — fallback for reviewers without OpenRouter key)
+    # ==================================================================
+    # Free signup at build.nvidia.com (~4 req/min rate limit).
+    # Server-bundled key may be expired — users should bring their own.
     "moonshotai/kimi-k2.6": {
         "provider": LLMProvider.NVIDIA,
         "model_name": "moonshotai/kimi-k2.6",
-        "display_name": "Kimi K2.6 (NVIDIA, free) — DEFAULT",
+        "display_name": "Kimi K2.6 (NVIDIA, free)",
         "max_tokens": 16384,
     },
     "z-ai/glm-5.1": {
@@ -77,29 +100,6 @@ MODEL_REGISTRY: dict[str, dict] = {
         "display_name": "MiniMax M2.7 (NVIDIA, free)",
         "max_tokens": 8192,
     },
-    # ==================================================================
-    # OpenRouter (paid tier — reviewers should supply their own key)
-    # ==================================================================
-    # Gemini 3.1 Pro Preview is first because it's the recommended paid
-    # fallback: cheap ($0.00125/1K in, $0.005/1K out), high-quality, fast.
-    "google/gemini-3.1-pro-preview": {
-        "provider": LLMProvider.OPENROUTER,
-        "model_name": "google/gemini-3.1-pro-preview",
-        "display_name": "Gemini 3.1 Pro (OpenRouter, paid)",
-        "max_tokens": 16384,
-    },
-    "anthropic/claude-opus-4.7": {
-        "provider": LLMProvider.OPENROUTER,
-        "model_name": "anthropic/claude-opus-4.7",
-        "display_name": "Claude Opus 4.7 (OpenRouter, paid, premium)",
-        "max_tokens": 16384,
-    },
-    "openai/gpt-5.5": {
-        "provider": LLMProvider.OPENROUTER,
-        "model_name": "openai/gpt-5.5",
-        "display_name": "GPT-5.5 (OpenRouter, paid)",
-        "max_tokens": 16384,
-    },
 }
 
 
@@ -109,7 +109,7 @@ class Settings(BaseSettings):
     # LLM Providers
     openrouter_api_key: str = Field(default="", description="OpenRouter API key")
     nvidia_api_key: str = Field(default="", description="NVIDIA AI Endpoints API key")
-    default_model: str = Field(default="moonshotai/kimi-k2.6", description="Default LLM model")
+    default_model: str = Field(default="openai/gpt-5.5", description="Default LLM model")
 
     # GitHub (Task 1)
     github_token: str = Field(default="", description="GitHub Personal Access Token")
