@@ -80,7 +80,7 @@
                         <button class="example-btn" onclick="setTask('Open https://en.wikipedia.org/wiki/Tokyo and use the extract action to read the population row from the infobox sidebar (the structured fact-box, NOT below the fold). Report the population number you find there.', 'https://en.wikipedia.org/wiki/Tokyo')">📚 Wikipedia lookup (infobox)</button>
                         <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story and the comment count', 'https://news.ycombinator.com')">🟧 HN top story</button>
                         <button class="example-btn" onclick="setTask('Go to https://arxiv.org/abs/2509.13753 and report the paper title plus the first two authors', 'https://arxiv.org/abs/2509.13753')">🔬 arXiv paper</button>
-                        <button class="example-btn" onclick="setTask('Go to https://tw.stock.yahoo.com/t/idx.php and find the TAIEX (加權指數) latest value and the change from the previous close.', 'https://tw.stock.yahoo.com/t/idx.php')">💹 TAIEX 加權指數 (TW)</button>
+                        <button class="example-btn" onclick="setTask('請幫我到雅虎股市去搜尋目前最新的台灣加權指數是多少?', '')">💹 TAIEX 加權指數 (TW)</button>
                         <button class="example-btn" onclick="setTask('Go to https://tw.stock.yahoo.com/quote/2330 and return TSMC current price', 'https://tw.stock.yahoo.com/quote/2330')">💰 TSMC quote (TW)</button>
                         <button class="example-btn" onclick="setTask('Go to https://www.linkedin.com/in/satyanadella/ and report Satya Nadella job title', 'https://www.linkedin.com/in/satyanadella/')">🛡️ LinkedIn login wall (anti-hallucination)</button>
                         <button class="example-btn" onclick="setTask('Go to https://example.com and find the email address for European trademark disputes. If not present, say so.', 'https://example.com')">🎯 example.com hallucination guard</button>
@@ -109,13 +109,18 @@
             <div class="form-row">
                 <div class="form-group">
                     <label>LLM Model</label>
-                    <input type="text" id="model-select" list="model-options" value="{% if models %}{{ models[0].id }}{% else %}moonshotai/kimi-k2.6{% endif %}" placeholder="publisher/model-name">
-                    <datalist id="model-options">
-                        {% for model in models %}
-                        <option value="{{ model.id }}">{{ model.display_name }}</option>
-                        {% endfor %}
-                    </datalist>
-                    <small style="color:#888">Free-text accepted. Use provider hint below for ambiguous prefixes.</small>
+                    <select id="model-preset">
+                        <option value="moonshotai/kimi-k2.6" data-provider="nvidia">NVIDIA default — Kimi K2.6</option>
+                        <option value="z-ai/glm-5.1" data-provider="nvidia">NVIDIA — GLM 5.1</option>
+                        <option value="deepseek-ai/deepseek-v4-pro" data-provider="nvidia">NVIDIA — DeepSeek V4 Pro</option>
+                        <option value="minimaxai/minimax-m2.7" data-provider="nvidia">NVIDIA — MiniMax M2.7</option>
+                        <option value="openai/gpt-5.5" data-provider="openrouter">OpenRouter default — GPT-5.5</option>
+                        <option value="anthropic/claude-opus-4.7" data-provider="openrouter">OpenRouter — Claude Opus 4.7</option>
+                        <option value="google/gemini-3.1-pro-preview" data-provider="openrouter">OpenRouter — Gemini 3.1 Pro Preview</option>
+                        <option value="custom">Custom model id...</option>
+                    </select>
+                    <input type="text" id="model-select" value="moonshotai/kimi-k2.6" placeholder="publisher/model-name" style="margin-top:0.35rem">
+                    <small style="color:#888">Choose a preset or type any model id. Use provider hint below for ambiguous prefixes.</small>
                 </div>
                 <div class="form-group">
                     <label>OpenRouter API Key (only required if you select an OpenRouter model)</label>
@@ -202,6 +207,7 @@
 
         function hydrateSharedControls() {
             const modelSelect = document.getElementById('model-select');
+            const modelPreset = document.getElementById('model-preset');
             const providerHint = document.getElementById('provider-hint');
             const apiKeyInput = document.getElementById('user-api-key');
             const nvidiaKeyInput = document.getElementById('user-nvidia-key');
@@ -213,13 +219,36 @@
             if (savedProvider && providerHint) providerHint.value = savedProvider;
             if (savedKey) apiKeyInput.value = savedKey;
             if (savedNvidiaKey && nvidiaKeyInput) nvidiaKeyInput.value = savedNvidiaKey;
-            modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
-            modelSelect.addEventListener('input', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+            syncModelPresetFromInput();
+            modelPreset.addEventListener('change', () => { applyModelPreset(); syncVisionDefault(); });
+            modelSelect.addEventListener('change', () => { sessionStorage.setItem('sf_model_id', modelSelect.value); syncModelPresetFromInput(); syncVisionDefault(); });
+            modelSelect.addEventListener('input', () => { sessionStorage.setItem('sf_model_id', modelSelect.value); syncModelPresetFromInput(); syncVisionDefault(); });
             if (providerHint) providerHint.addEventListener('change', () => sessionStorage.setItem('sf_provider_hint', providerHint.value));
             apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
             if (nvidiaKeyInput) {
                 nvidiaKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_nvidia_key', nvidiaKeyInput.value));
             }
+        }
+
+        function applyModelPreset() {
+            const preset = document.getElementById('model-preset');
+            const modelSelect = document.getElementById('model-select');
+            const providerHint = document.getElementById('provider-hint');
+            const selected = preset.selectedOptions[0];
+            if (!selected || preset.value === 'custom') return;
+            modelSelect.value = preset.value;
+            sessionStorage.setItem('sf_model_id', modelSelect.value);
+            if (providerHint && selected.dataset.provider) {
+                providerHint.value = selected.dataset.provider;
+                sessionStorage.setItem('sf_provider_hint', providerHint.value);
+            }
+        }
+
+        function syncModelPresetFromInput() {
+            const preset = document.getElementById('model-preset');
+            const modelId = (document.getElementById('model-select').value || '').trim();
+            const match = Array.from(preset.options).find(opt => opt.value === modelId);
+            preset.value = match ? match.value : 'custom';
         }
         hydrateSharedControls();
 
