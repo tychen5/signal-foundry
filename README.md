@@ -28,6 +28,7 @@ Every section of this README is paired with the *deliberate engineering decision
 
 - **Task 1 Auto-Router** — natural-language CI/CD orchestration. The user types a free-form query ("are there any leaked secrets and vulnerable deps?") and a router LLM autonomously plans an ordered set of skills, executes them via the existing 13-step engine, **reflects after every result** (continue / pivot to a different skill / stop), and synthesizes a single answer tying everything back to the original question. New endpoints: `POST /api/v1/skills/auto/run` + `POST /api/v1/skills/auto/stream` (SSE). The demo response surfaces a top-level `skill_executed` field so a reviewer can confirm at a glance which skills the LLM picked. See [Task 1 — Auto-Router](#task-1--auto-router-llm-driven-skill-orchestration).
 - The frontend at [`/task1`](https://signal-foundry.zeabur.app/task1) was rebuilt around an **Auto / Manual** mode toggle. Auto mode adds a NL query box, include/exclude skill hint chips, an iteration timeline that shows the router's plan → per-step decision → final synthesis, and an SSE live-trace.
+- **NL query is fully optional** — the user can run the engine purely by ticking include/exclude chips (or by leaving everything blank for a default health check). When the query is empty, the auto-router skips the plan-stage LLM call entirely and uses the chips (or the safe default pair `dependency-audit + security-scan`) as the plan — a pure cost win because the user has already decided. Ticking the `build-and-release` chip counts as explicit release intent, so the write-skill gate that normally requires "release"/"ship"/"publish" in the query is honored by the chip too. See the [Auto-Router routing modes table](#auto-router-routing-modes).
 
 ### What's new in the latest sweep (Phase 8 + Phase 9)
 
@@ -450,6 +451,23 @@ The four skills above are precise instruments. The **Auto-Router** is the conduc
 
 The router LLM does **three** kinds of LLM calls per request: one Plan, one Postmortem per executed skill, one Synthesize. Plus the per-skill summary the existing engine writes. So a 2-skill auto-router run is typically ~5 LLM calls totalling **$0.005–$0.015** depending on model, well under the per-request `task1_cicd` budget cap of $0.30.
 
+#### Auto-Router routing modes
+
+Both the NL query AND the skill hints are optional — supply whichever combination matches how decided you already are. The router resolves the four corner cases as follows:
+
+| NL query | Include hints | Exclude hints | What the router does | Plan LLM call? |
+|---|---|---|---|---|
+| ✓ provided | empty | any | LLM plans the order from the query | Yes |
+| ✓ provided | provided | any | LLM plans, then user's include hints get pinned to the front of the plan | Yes |
+| empty | provided | any | Hint chips ARE the plan (in user-given order, with excludes filtered out) | **No** — pure cost win |
+| empty | empty | any | Default health-check pair `[dependency-audit, security-scan]` minus excludes | **No** |
+| empty | empty | every skill | Structured failure: nothing left to run; the API returns 400-shaped `ExecutionStatus.FAILED` instead of throwing | **No** |
+
+Two behaviour notes that the FE preview surfaces live as the user types/clicks chips:
+
+- **`build-and-release` release-intent gate** — the only write-capable skill. The router refuses to schedule it unless **either** the NL query mentions release-style intent (`release`, `ship`, `publish`, `tag`, `cut a version`, etc.) **or** the user explicitly ticks the `build-and-release` include chip. The chip-only path treats the click as explicit consent so the user can still run the release flow from the chip UI alone.
+- **Postmortem still runs even when planning is skipped.** The decide-LLM and synthesize-LLM stages execute in every mode — they're the part that handles "should we pivot mid-loop" and "tie the per-skill summaries back to the asked question." When the query is empty, those stages receive a synthesized intent string (e.g. *"User did not provide a free-form query; running the user-selected skill set: security-scan."*) so the prompts stay coherent.
+
 **Defensive layers — *agentic* doesn't mean *unsafe*:**
 
 | Layer | Guarantee | Where enforced |
@@ -514,7 +532,7 @@ The router LLM does **three** kinds of LLM calls per request: one Plan, one Post
 **Try it via the live demo:**
 
 ```bash
-# Auto-router: LLM picks the skills from a fuzzy NL query
+# Mode 1 — LLM-routed: NL query alone, no chips.
 curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
   -H "Content-Type: application/json" \
   -d '{
@@ -525,7 +543,7 @@ curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
   }' | jq '.result.skill_executed'
 # => ["dependency-audit", "security-scan"]
 
-# Same idea but with hint chips: include security-scan, exclude lint-and-test
+# Mode 2 — Hybrid: NL query + chip hints. LLM plans, include chips pin to front.
 curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
   -H "Content-Type: application/json" \
   -d '{
@@ -534,6 +552,23 @@ curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
     "include_skills_hint": ["security-scan"],
     "exclude_skills_hint": ["lint-and-test"]
   }' | jq '.result.skill_executed, .result.terminated_reason'
+
+# Mode 3 — Hint-only (no NL query). Skips the plan LLM call entirely.
+# Use this when you've already decided which skills to run.
+curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repo_url": "https://github.com/tychen5/signal-foundry",
+    "include_skills_hint": ["dependency-audit", "security-scan"]
+  }' | jq '.result.skill_executed, .result.initial_plan'
+# => ["dependency-audit", "security-scan"]  (no LLM plan call — pure cost win)
+
+# Mode 4 — No query, no hints. Runs the default health-check pair.
+curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
+  -H "Content-Type: application/json" \
+  -d '{"repo_url": "https://github.com/tychen5/signal-foundry"}' \
+  | jq '.result.skill_executed'
+# => ["dependency-audit", "security-scan"]
 ```
 
 Or open [`/task1`](https://signal-foundry.zeabur.app/task1) in a browser, leave the mode toggle on **🤖 Auto (LLM routes)**, type a NL query, and watch the SSE-driven iteration timeline render plan → decision → final synthesis live.
