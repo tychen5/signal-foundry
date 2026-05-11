@@ -144,6 +144,12 @@
         .manual-only { display: none; }
         body.manual-mode .auto-only { display: none; }
         body.manual-mode .manual-only { display: block; }
+
+        /* Live "what will run" preview (auto mode, empty-query path) */
+        .run-preview { font-size: 0.8rem; color: #94a3b8; line-height: 1.5; padding: 0.6rem 0.85rem; background: rgba(99,102,241,0.06); border: 1px dashed rgba(99,102,241,0.35); border-radius: 8px; display: none; }
+        .run-preview.visible { display: block; }
+        .run-preview strong { color: #c7d2fe; }
+        .run-preview code { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.3); padding: 1px 6px; border-radius: 3px; color: #c7d2fe; font-size: 0.76rem; }
         .cve-link { color: #60a5fa; text-decoration: none; font-size: 0.78rem; }
         .cve-link:hover { text-decoration: underline; }
         .no-issues { color: #22c55e; font-size: 0.85rem; padding: 0.4rem 0; }
@@ -188,9 +194,9 @@
             <div class="auto-only">
                 <div class="form-row">
                     <div class="form-group full">
-                        <label>Natural-language query <span class="mode-tag">LLM routes</span></label>
-                        <textarea id="nl-query" rows="2" placeholder="e.g. please check if there are any vulnerable dependencies or leaked API keys"></textarea>
-                        <small class="hint-text">The router LLM reads this query, plans an ordered set of skills, runs them, and writes a single answer that ties results back to your question.</small>
+                        <label>Natural-language query <span class="mode-tag">optional · LLM routes</span></label>
+                        <textarea id="nl-query" rows="2" placeholder="(optional) e.g. please check if there are any vulnerable dependencies or leaked API keys. Leave empty to use only the skill chips below."></textarea>
+                        <small class="hint-text">Either type a free-form query, or tick the skill chips below — at least one form of intent is enough. With a query, the router LLM plans + chains skills. Without one, the router runs the included chips (or the default <code>dependency-audit + security-scan</code> pair) and skips the planning LLM call entirely (pure cost win).</small>
                         <div class="nl-examples">
                             <span class="nl-example" onclick="setQuery('please check if there are any vulnerable dependencies or CVEs and any leaked credentials in the source code')">vulns + leaked creds</span>
                             <span class="nl-example" onclick="setQuery('scan for leaked api keys, hardcoded secrets, or anything sensitive committed to the repo')">leaked secrets</span>
@@ -198,22 +204,24 @@
                             <span class="nl-example" onclick="setQuery('is this repo safe to ship to production right now?')">ship-readiness</span>
                             <span class="nl-example" onclick="setQuery('do a full CI/CD health check on this repo')">full health check</span>
                             <span class="nl-example" onclick="setQuery('run the test suite and lint and report the failures')">tests + lint</span>
+                            <span class="nl-example" onclick="setQuery('')" title="Clear the query — useful when you want to run only via the chips">⊘ clear query</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group full">
-                        <label>Skill hints <small class="hint-text" style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:0.5rem;">— optional. Click a skill to mark it as include (👍) or exclude (🚫). Empty = full LLM autonomy.</small></label>
+                        <label>Skill hints <small class="hint-text" style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:0.5rem;">— optional with a query, sufficient on their own without one. Click to toggle include (👍) or exclude (🚫); the two columns are mutually exclusive per skill.</small></label>
                         <div class="hint-grid">
                             <div class="hint-section">
-                                <h5>👍 Include hints (suggest these)</h5>
+                                <h5>👍 Include hints (run these)</h5>
                                 <div class="hint-chips" id="include-chips">
                                     <span class="hint-chip" data-skill="lint-and-test">lint-and-test</span>
                                     <span class="hint-chip" data-skill="dependency-audit">dependency-audit</span>
                                     <span class="hint-chip" data-skill="security-scan">security-scan</span>
                                     <span class="hint-chip" data-skill="build-and-release">build-and-release</span>
                                 </div>
+                                <small class="hint-text" style="margin-top:0.45rem">When the query is empty, the included chips become the plan directly — no LLM plan call. Including <code>build-and-release</code> counts as explicit release intent.</small>
                             </div>
                             <div class="hint-section">
                                 <h5>🚫 Exclude hints (skip these)</h5>
@@ -223,8 +231,10 @@
                                     <span class="hint-chip" data-skill="security-scan">security-scan</span>
                                     <span class="hint-chip" data-skill="build-and-release">build-and-release</span>
                                 </div>
+                                <small class="hint-text" style="margin-top:0.45rem">Hard block — the router will refuse to schedule these even mid-loop.</small>
                             </div>
                         </div>
+                        <div class="run-preview" id="run-preview" style="margin-top:0.7rem"></div>
                     </div>
                 </div>
             </div>
@@ -364,16 +374,19 @@
             const btnAuto = document.getElementById('mode-auto');
             const btnManual = document.getElementById('mode-manual');
             const runBtn = document.getElementById('run-btn');
+            const previewEl = document.getElementById('run-preview');
             if (mode === 'auto') {
                 document.body.classList.remove('manual-mode');
                 btnAuto.classList.add('active');
                 btnManual.classList.remove('active');
-                runBtn.textContent = '🚀 Run Auto-Router';
+                if (previewEl) previewEl.classList.add('visible');
+                updateRunPreview();  // recompute label for the current state
             } else {
                 document.body.classList.add('manual-mode');
                 btnAuto.classList.remove('active');
                 btnManual.classList.add('active');
                 runBtn.textContent = '🚀 Run Single Skill';
+                if (previewEl) previewEl.classList.remove('visible');
                 // Show dry-run row only for build-and-release in manual mode
                 updateDryRunVisibility();
             }
@@ -422,10 +435,57 @@
                     if (otherChip) otherChip.classList.remove('active', kind === 'include' ? 'exclude' : 'include');
                 }
             }
+            updateRunPreview();
         }
 
         function setQuery(text) {
             document.getElementById('nl-query').value = text;
+            updateRunPreview();
+        }
+
+        // Live "what will the router do?" hint. Mirrors the server-side branching
+        // in `auto_router.run_auto_router`:
+        //   - query present  → LLM plans (skills unknown until run-time)
+        //   - query empty + include hints → those chips ARE the plan
+        //   - query empty + no include → default pair (minus excludes)
+        //   - everything excluded → blocked
+        function updateRunPreview() {
+            if (_mode !== 'auto') return;
+            const previewEl = document.getElementById('run-preview');
+            const queryEl = document.getElementById('nl-query');
+            if (!previewEl || !queryEl) return;
+            const query = (queryEl.value || '').trim();
+            const inc = [..._includeHints];
+            const exc = [..._excludeHints];
+
+            let msg = '';
+            if (query && inc.length) {
+                msg = `<strong>LLM-routed</strong> from your query, with <code>${inc.join('</code> + <code>')}</code> pinned to the front of the plan.`;
+            } else if (query) {
+                msg = `<strong>LLM-routed</strong> — the router picks the skill order from your query.${exc.length ? ` Hard-excluded: <code>${exc.join('</code> <code>')}</code>.` : ''}`;
+            } else if (inc.length) {
+                // Hint-only mode — server skips the plan LLM call entirely.
+                const filtered = inc.filter(s => !exc.includes(s));
+                msg = `<strong>Hint-only run</strong> (no LLM plan call): <code>${filtered.join('</code> → <code>')}</code>.${exc.length ? ` Excluded: <code>${exc.filter(s=>!filtered.includes(s)).join('</code> <code>')}</code>.` : ''}`;
+            } else {
+                // No query AND no include hints. Server falls back to the safe default pair.
+                const defaults = ['dependency-audit', 'security-scan'].filter(s => !exc.includes(s));
+                if (defaults.length) {
+                    msg = `<strong>Default run</strong> (no query, no chips): <code>${defaults.join('</code> + <code>')}</code>${exc.length ? `, with <code>${exc.join('</code> <code>')}</code> excluded` : ''}.`;
+                } else {
+                    msg = `<strong>⚠ Nothing to run</strong> — every skill is excluded. Untick a chip or add an include / query.`;
+                }
+            }
+            previewEl.innerHTML = msg;
+            previewEl.classList.add('visible');
+
+            // Reflect the chosen mode in the run button label.
+            const runBtn = document.getElementById('run-btn');
+            if (runBtn && !runBtn.disabled) {
+                runBtn.textContent = query
+                    ? '🚀 Run Auto-Router'
+                    : (inc.length ? '🚀 Run selected skills' : '🚀 Run default health check');
+            }
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -449,7 +509,9 @@
 
         setupChipBindings();
         hydrateSharedControls();
+        document.getElementById('nl-query').addEventListener('input', updateRunPreview);
         setMode('auto');
+        updateRunPreview();
 
         // ────────────────────────────────────────────────────────────────
         // Run dispatch
@@ -476,11 +538,21 @@
                 if (_mode === 'auto') {
                     const branch = document.getElementById('branch').value.trim() || 'main';
                     const query = document.getElementById('nl-query').value.trim();
-                    if (!query) { alert('Please enter a natural-language query.'); btn.disabled = false; btn.textContent = '🚀 Run Auto-Router'; return; }
+                    // No NL query AND no include hint AND every skill excluded ⇒ nothing to run.
+                    // Anything else is valid: pure-query mode, pure-chip mode, hint-only with
+                    // some chips excluded, or even "no query and no hints" (defaults to the
+                    // safe dep-audit + security-scan pair).
+                    const hasExcludedEverything = _excludeHints.size >= 4;
+                    if (!query && _includeHints.size === 0 && hasExcludedEverything) {
+                        alert("Every skill is excluded — there's nothing left for the router to run. Untick at least one exclude chip or add an include / query.");
+                        btn.disabled = false;
+                        btn.textContent = '🚀 Run Auto-Router';
+                        return;
+                    }
                     const payload = {
                         repo_url: repoUrl,
                         branch,
-                        natural_language_query: query,
+                        natural_language_query: query,  // may be empty — server treats as hint-only mode
                         include_skills_hint: [..._includeHints],
                         exclude_skills_hint: [..._excludeHints],
                         dry_run: dryRun,
