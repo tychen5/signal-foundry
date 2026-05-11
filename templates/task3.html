@@ -142,6 +142,7 @@
                     <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
                     <small style="color:#888"><a href="https://openrouter.ai/credits" target="_blank">openrouter.ai/credits</a> · NVIDIA NIM key:</small>
                     <input type="text" id="user-nvidia-key" placeholder="nvapi-... (optional override)" style="margin-top:0.35rem">
+                    <small style="color:#888">Server-bundled key may be expired — free signup at <a href="https://build.nvidia.com" target="_blank">build.nvidia.com</a></small>
                 </div>
             </div>
             <div class="form-row">
@@ -178,6 +179,10 @@
                     </div>
                     <div class="hint" id="llm-cost-hint" style="display:none;color:#fbbf24;margin-top:0.65rem;">
                         OpenRouter LLM refinement is enabled. This improves uncertain boundary handling, but increases latency and token cost.
+                    </div>
+                    <div class="hint" style="color:#64748b;margin-top:0.55rem;font-size:0.78rem;line-height:1.55;">
+                        💡 <strong style="color:#94a3b8">Tradeoff note:</strong> <em>Force LLM refine</em> + <em>Use vision</em> improve accuracy on edge-case filings (pre-HTML, plain-text, complex IBR), but add latency (~30–120 s) and token cost (~$0.01–0.05).
+                        If you prioritise speed and cost over accuracy, uncheck both options — the rule-only pipeline handles modern HTML filings at $0 cost in &lt;5 s.
                     </div>
                 </div>
             </div>
