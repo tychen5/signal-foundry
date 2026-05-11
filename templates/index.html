@@ -18,7 +18,7 @@
                 <div class="hero-stat"><strong>3</strong> tasks</div>
                 <div class="hero-stat" title="Task 1: 8 GitHub repos · Task 2: 46 browser scenarios · Task 3: 35 SEC filings"><strong>89</strong> committed eval cases</div>
                 <div class="hero-stat"><strong>7</strong> LLM models</div>
-                <div class="hero-stat"><strong>289</strong> unit tests</div>
+                <div class="hero-stat"><strong>351</strong> unit tests</div>
                 <div class="hero-stat" id="live-cost-stat"><strong>—</strong> live cost</div>
                 <div class="hero-stat" id="live-calls-stat"><strong>—</strong> LLM calls</div>
             </div>
@@ -90,23 +90,58 @@
             </a>
         </div>
 
-        <!-- View Skills (Task 1 only) -->
+        <!-- Quick Actions — rich mini-cards with descriptions -->
         <div class="quick-actions" style="margin-top:1.5rem">
-            <h3 style="margin-bottom:0.75rem;color:#aaa;font-size:0.95rem">Quick launchpad</h3>
-            <a href="/task2" class="action-link">🌐 Run Browser Agent</a>
-            <a href="/task3" class="action-link">📊 Extract SEC Filing</a>
-            <a href="/api/v1/skills/list" class="action-link">📋 List CI/CD Skills</a>
-            <a href="/api/v1/sec/filings/0000320193?filing_type=10-K&limit=5" class="action-link">📁 List Apple 10-Ks</a>
-            <a href="/api/v1/sec/company/0000320193" class="action-link">🏢 Apple Company Info</a>
-            <a href="/metrics" class="action-link">💵 Live Metrics</a>
-            <a href="/api/v1/models" class="action-link">🤖 Model Registry</a>
+            <h3 style="margin-bottom:0.85rem;color:#aaa;font-size:0.95rem">Quick launchpad</h3>
+            <div class="quick-grid">
+                <a href="/api/v1/skills/list" class="quick-card">
+                    <span class="quick-icon">📋</span>
+                    <div class="quick-body">
+                        <strong>Skill Registry</strong>
+                        <span class="quick-desc">Browse all CI/CD skills — 4 skills with match tiers and sandbox configs</span>
+                    </div>
+                </a>
+                <a href="/api/v1/sec/filings/0000320193?filing_type=10-K&limit=5" class="quick-card">
+                    <span class="quick-icon">📁</span>
+                    <div class="quick-body">
+                        <strong>Apple 10-K Filings</strong>
+                        <span class="quick-desc">Live SEC EDGAR query — 5 most recent Apple annual reports with accession numbers</span>
+                    </div>
+                </a>
+                <a href="/api/v1/sec/company/0000320193" class="quick-card">
+                    <span class="quick-icon">🏢</span>
+                    <div class="quick-body">
+                        <strong>Company Info</strong>
+                        <span class="quick-desc">Apple Inc. — CIK, SIC code, filing history from SEC EDGAR full-text search</span>
+                    </div>
+                </a>
+                <a href="/metrics" class="quick-card">
+                    <span class="quick-icon">💵</span>
+                    <div class="quick-body">
+                        <strong>Live Metrics</strong>
+                        <span class="quick-desc">Per-task LLM cost, token counts, call frequency — real-time from cost_tracker</span>
+                    </div>
+                </a>
+                <a href="/api/v1/models" class="quick-card">
+                    <span class="quick-icon">🤖</span>
+                    <div class="quick-body">
+                        <strong>Model Registry</strong>
+                        <span class="quick-desc">7 models — NVIDIA NIM (free) + OpenRouter (paid) with provider/capability info</span>
+                    </div>
+                </a>
+                <a href="/docs" class="quick-card">
+                    <span class="quick-icon">📖</span>
+                    <div class="quick-body">
+                        <strong>API Docs</strong>
+                        <span class="quick-desc">Interactive Swagger UI — try all endpoints with request/response schemas</span>
+                    </div>
+                </a>
+            </div>
         </div>
 
         <!-- System Links -->
         <footer class="footer">
             <a href="/health">Health</a>
-            <a href="/metrics">Metrics</a>
-            <a href="/api/v1/models">Models</a>
             <a href="/docs">API Docs</a>
         </footer>
     </div>
