@@ -302,6 +302,22 @@ Response (success):
 
 `use_vision=true` attaches bounded viewport JPEG history to the actor and verifier, but only for the three OpenRouter vision-language models (`google/gemini-3.1-pro-preview`, `anthropic/claude-opus-4.7`, `openai/gpt-5.5`). NVIDIA models accept the flag and fall back to text-only AOM context.
 
+No-start-URL tasks are supported. The TAIEX demo now leaves `target_url` empty and lets the planner choose the current Yahoo quote route instead of the throttled legacy page:
+
+```json
+{
+  "task_description": "請幫我到雅虎股市去搜尋目前最新的台灣加權指數是多少?",
+  "target_url": "",
+  "max_steps": 20,
+  "use_vision": true,
+  "model": {
+    "model_id": "openai/gpt-5.5",
+    "provider": "openrouter",
+    "user_openrouter_key": "sk-or-v1-..."
+  }
+}
+```
+
 ### POST `/api/v1/sec/extract` — Task 3: SEC 10-K item-level extraction
 
 Request body (CIK + accession):
@@ -329,6 +345,24 @@ Or directly by URL:
 ```
 
 `skip_llm=true` runs Task 3 in rule-only mode and does not require an LLM key. Otherwise, the request validates the `model` block up front because Stage 2 may be needed after the rule parser sees the filing. `use_vision=true` is only consulted if Stage 2 LLM boundary refinement actually runs. High-confidence modern HTML filings stay rule-only, so the flag has no cost or quality effect on the normal path. For user demos that need to visibly compare text-only vs multimodal boundary refinement, set `force_llm=true` with an OpenRouter vision model.
+
+The Task 3 UI automatically enables `force_llm=true` and `use_vision=true` when the user selects an OpenRouter model and supplies an OpenRouter key, and it unchecks `skip_llm`. API callers can use the same high-accuracy mode explicitly:
+
+```json
+{
+  "cik": "0001024401",
+  "accession_number": "0001024401-01-500010",
+  "skip_llm": false,
+  "skip_xbrl": false,
+  "force_llm": true,
+  "use_vision": true,
+  "model": {
+    "model_id": "google/gemini-3.1-pro-preview",
+    "provider": "openrouter",
+    "user_openrouter_key": "sk-or-v1-..."
+  }
+}
+```
 
 Response (success):
 ```json

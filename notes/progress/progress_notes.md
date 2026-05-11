@@ -214,7 +214,15 @@
   4. [x] Full UI/UX audit complete — all pages (index, task1, task2, task3, health, metrics, models, API docs) verified working.
     * [x] Quick launchpad redesigned: flat link buttons → rich mini-cards with icon, title, description. 6 cards (Skill Registry, Apple 10-Ks, Company Info, Live Metrics, Model Registry, API Docs). Footer deduplicated to just Health + API Docs (no longer repeats Metrics/Models). Hero stats updated to 351 unit tests.
     * [x] All UI flows audited: model/key/provider persistence via sessionStorage across all 3 task pages (including nvidia-key fix for task1 + task3), SSE streaming, error banners, result rendering, raw JSON toggle. No bugs found.
-
+  5. [x] 針對網站中UI介面的每一個task頁面，LLM Model 下拉選單應該要是可以讓使用者於task1,task2,task3子頁面中皆可以直接去做下拉式選單選擇(和首頁一樣for openrouter model就是要可以有個模板自動帶入選擇gpt-5.5 (default for openrouter model), claude opus 4.7, gemini 3.1 pro；for nvidia model就也預設下拉式選單可以挑 kimi k2.6 (default for nvidia model), glm 5.1, deepseek v4 pro )，或是也可以直接輸入文字model id。使用者不需要每次都得到首頁去設定好重新輸入key值以及model後再跑回到task1,task2,task3頁面使用測試比較結果。
+    * [x] task1/task2/task3 all now expose preset dropdown + editable `publisher/model-name` input, persist model/provider/key values via sessionStorage, and include OpenRouter (`openai/gpt-5.5`, `anthropic/claude-opus-4.7`, `google/gemini-3.1-pro-preview`) plus NVIDIA (`moonshotai/kimi-k2.6`, `z-ai/glm-5.1`, `deepseek-ai/deepseek-v4-pro`) presets.
+  6. [x] 針對網站task3 UI，如果使用者使用的是openrouter key/models則在task 3 UI頁面中的"Use vision for uncertain boundaries"功能應該要預設打勾開啟，並確保此功能都真的會在workflow/pipeline中正確時機起到作用來增加結果準確度的。
+    * [x] 如果使用者給予openrouter key/選擇openrouter models的話，除了"Use vision for uncertain boundaries"功能應該要預設打勾開啟，"Force LLM refine"也要預設打勾開啟讓LLM可以更積極的介入幫忙，以增加結果準確度。但要提醒使用者開啟此功能雖然會提升結果的performance，但也將會增加latency與cost。
+    * [x] Task3 UI now auto-unchecks `skip_llm` when OpenRouter high-accuracy mode is active, keeps `force_llm`/`use_vision` mutually coherent, and shows an explicit latency/cost hint. Backend already only consumes vision during Stage 2 LLM boundary refinement, so the flag fires at the intended pipeline point.
+  7. [x] 目前task 2的 `💹 TAIEX 加權指數 (TW)`example demo會有問題: 如果我選擇使用gemini 3.1 pro，LLM的planning只會到一半輸出step 0就終止了✅ plan ready — 0 step(s)最後顯示not_found: Yahoo Finance returned 'Edge: Too Many Requests' ，且所給予的Start URL並沒有包含台灣加權指數；如果使用gpt5.5則會出現not_accessible: Yahoo Finance quote page is returning “Edge: Too Many Requests,” so the TAIEX latest value and change from previous close cannot be read from the page.的結果。請幫我將本來預設帶入Start URL (optional hint)留空，而Task Description (natural language)改成是中文query:"請幫我到雅虎股市去搜尋目前最新的台灣加權指數是多少?" 。
+    * [x] Task2 TAIEX example now leaves Start URL empty and uses the requested Chinese task description. Planner fallback no longer returns a zero-step plan when the LLM emits `[]`; it produces an executable route instead.
+    * [x] Browser planner/prompt strengthened for TAIEX: avoid throttled legacy `tw.stock.yahoo.com/t/idx.php`, prefer current Yahoo `%5ETWII` quote route, and actor prompt now treats Yahoo rate-limit / Google CAPTCHA as recoverable by trying a different public route once.
+    * [x] Live `.env` OpenRouter runs verified: `openai/gpt-5.5` succeeded in 5 steps with Yahoo `%5ETWII`; `google/gemini-3.1-pro-preview` succeeded in 4 steps with Yahoo `%5ETWII`. Focused Task2 tests pass: 87/87.
 
 ---
 
@@ -520,4 +528,3 @@ independently. Test-count growth: 245 → 270 (+25 regressions pinned).
 - `ruff check src/ tests/` → ✅ All checks passed
 - `python3 evals/task3/run_eval.py --skip-xbrl` → ✅ 30/30 pass · $0 · 1.7s avg
 - T1 idempotent replay live-verified (cache_hit on run 2)
-

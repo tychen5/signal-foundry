@@ -1039,6 +1039,38 @@ class TestPlanner:
         assert plan.steps[0].action_type == ActionType.NAVIGATE
         assert plan.steps[0].value == "https://example.com"
 
+    def test_parse_plan_from_object_steps(self) -> None:
+        """Plan parser accepts object envelopes with a steps array."""
+        from src.task2_browser.planner import _parse_plan
+
+        response = '{"steps":[{"action":"navigate","target":"Search","value":"https://example.com","reasoning":"start"}]}'
+        plan = _parse_plan(response, "Search something", None)
+
+        assert len(plan.steps) == 1
+        assert plan.steps[0].action_type == ActionType.NAVIGATE
+        assert plan.steps[0].value == "https://example.com"
+
+    def test_create_fallback_plan_without_url_uses_yahoo_quote(self) -> None:
+        """TAIEX fallback uses the current Yahoo quote route, not the legacy throttled URL."""
+        from src.task2_browser.planner import _create_fallback_plan
+
+        plan = _create_fallback_plan("請幫我到雅虎股市去搜尋目前最新的台灣加權指數是多少?", None)
+
+        assert len(plan.steps) == 2
+        assert plan.steps[0].action_type == ActionType.NAVIGATE
+        assert plan.steps[0].value == "https://tw.stock.yahoo.com/quote/%5ETWII"
+        assert plan.steps[1].action_type == ActionType.WAIT
+
+    def test_parse_empty_plan_without_url_falls_back_to_executable_route(self) -> None:
+        """An empty LLM plan should not produce a zero-step browser run."""
+        from src.task2_browser.planner import _parse_plan
+
+        plan = _parse_plan("[]", "請幫我到雅虎股市去搜尋目前最新的台灣加權指數是多少?", None)
+
+        assert plan.steps
+        assert plan.steps[0].action_type == ActionType.NAVIGATE
+        assert plan.steps[0].value == "https://tw.stock.yahoo.com/quote/%5ETWII"
+
     def test_parse_action_done_detection(self) -> None:
         """Action parser detects task completion."""
         from src.task2_browser.planner import _parse_action
