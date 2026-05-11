@@ -265,12 +265,22 @@
                 </div>
                 <div class="form-group">
                     <label>Router LLM</label>
-                    <select id="model-select">
+                    <input type="text" id="model-select" list="model-options" value="{% if models %}{{ models[0].id }}{% else %}moonshotai/kimi-k2.6{% endif %}" placeholder="publisher/model-name">
+                    <datalist id="model-options">
                         {% for model in models %}
                         <option value="{{ model.id }}">{{ model.display_name }}</option>
                         {% endfor %}
+                    </datalist>
+                    <small class="hint-text">Free-text accepted, e.g. <code>qwen/qwen3-next-80b-a3b-instruct</code>.</small>
+                </div>
+                <div class="form-group">
+                    <label>Provider hint <small class="hint-text" style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(optional)</small></label>
+                    <select id="provider-hint">
+                        <option value="">Auto infer</option>
+                        <option value="nvidia">NVIDIA NIM</option>
+                        <option value="openrouter">OpenRouter</option>
                     </select>
-                    <small class="hint-text">NVIDIA = free w/ rate limits · OpenRouter = paid (BYO key)</small>
+                    <small class="hint-text">Set this when a free-text model prefix is ambiguous.</small>
                 </div>
             </div>
 
@@ -493,12 +503,17 @@
         // ────────────────────────────────────────────────────────────────
         function hydrateSharedControls() {
             const modelSelect = document.getElementById('model-select');
+            const providerHint = document.getElementById('provider-hint');
             const apiKeyInput = document.getElementById('user-api-key');
             const savedModel = sessionStorage.getItem('sf_model_id');
+            const savedProvider = sessionStorage.getItem('sf_provider_hint');
             const savedKey = sessionStorage.getItem('sf_openrouter_key');
             if (savedModel) modelSelect.value = savedModel;
+            if (savedProvider && providerHint) providerHint.value = savedProvider;
             if (savedKey) apiKeyInput.value = savedKey;
             modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+            modelSelect.addEventListener('input', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+            if (providerHint) providerHint.addEventListener('change', () => sessionStorage.setItem('sf_provider_hint', providerHint.value));
             apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
         }
 
@@ -519,7 +534,8 @@
         async function runRequest() {
             const btn = document.getElementById('run-btn');
             const repoUrl = document.getElementById('repo-url').value.trim();
-            const modelId = document.getElementById('model-select').value;
+            const modelId = document.getElementById('model-select').value.trim();
+            const providerHint = (document.getElementById('provider-hint') || {}).value || '';
             const apiKey = document.getElementById('user-api-key').value.trim();
             const nvidiaKey = (document.getElementById('user-nvidia-key') || {}).value || '';
             const dryRun = document.getElementById('dry-run').checked;
@@ -527,6 +543,7 @@
             if (!repoUrl) { alert('Please enter a GitHub repository URL.'); return; }
 
             const model = { model_id: modelId };
+            if (providerHint) model.provider = providerHint;
             if (apiKey) model.user_openrouter_key = apiKey;
             if (nvidiaKey.trim()) model.user_nvidia_key = nvidiaKey.trim();
 
@@ -572,7 +589,7 @@
                     await streamManual(payload);
                 }
             } catch (err) {
-                renderError(String(err));
+                renderError(err);
             } finally {
                 btn.disabled = false;
                 btn.textContent = (_mode === 'auto') ? '🚀 Run Auto-Router' : '🚀 Run Single Skill';
@@ -614,8 +631,7 @@
                 body: JSON.stringify(payload),
             });
             if (!resp.ok || !resp.body) {
-                const text = await resp.text();
-                renderError(text || ('HTTP ' + resp.status));
+                renderError(await parseHttpError(resp));
                 return;
             }
             const reader = resp.body.getReader();
@@ -642,7 +658,7 @@
                 _lastResult = finalData;
                 renderAutoFinal(finalData);
             } else if (finalErr) {
-                renderError(finalErr.user_message || finalErr.raw_error || 'Unknown error');
+                renderError(finalErr);
             }
         }
 
@@ -816,8 +832,7 @@
                 body: JSON.stringify(payload),
             });
             if (!resp.ok || !resp.body) {
-                const text = await resp.text();
-                renderError(text || ('HTTP ' + resp.status));
+                renderError(await parseHttpError(resp));
                 return;
             }
             const reader = resp.body.getReader();
@@ -843,7 +858,7 @@
                 _lastResult = finalData;
                 renderManualFinal(finalData);
             } else if (finalErr) {
-                renderError(finalErr.user_message || finalErr.raw_error || 'Unknown error');
+                renderError(finalErr);
             }
         }
 
@@ -1071,13 +1086,39 @@
         // ────────────────────────────────────────────────────────────────
         // Errors + utilities
         // ────────────────────────────────────────────────────────────────
+        async function parseHttpError(resp) {
+            try {
+                const data = await resp.json();
+                return data.detail || data;
+            } catch (_) {
+                const text = await resp.text();
+                return text || ('HTTP ' + resp.status);
+            }
+        }
+
         function renderError(msg) {
+            const info = (msg && typeof msg === 'object') ? msg : {user_message: String(msg || 'Unknown error')};
+            const headline = info.user_message || info.raw_error || info.category || 'Request failed';
+            const meta = [
+                info.stage ? `stage: ${info.stage}` : '',
+                info.provider ? `provider: ${info.provider}` : '',
+                info.model_id ? `model: ${info.model_id}` : '',
+                info.status_label ? info.status_label : ''
+            ].filter(Boolean).join(' · ');
+            const raw = info.raw_error && info.raw_error !== headline
+                ? `<details><summary>raw error</summary><pre>${escHtml(info.raw_error)}</pre></details>`
+                : '';
             const badge = document.getElementById('status-badge');
             badge.className = 'status-badge failed';
             badge.textContent = 'ERROR';
             document.getElementById('result-title').textContent = 'Request failed';
             document.getElementById('manual-summary-section').innerHTML =
-                `<div class="synthesis-box" style="display:block;border-color:rgba(239,68,68,0.5);background:rgba(239,68,68,0.06)">${escHtml(msg)}</div>`;
+                `<div class="synthesis-box" style="display:block;border-color:rgba(239,68,68,0.5);background:rgba(239,68,68,0.06)">
+                    <span class="label">${escHtml(meta || info.category || 'error')}</span>
+                    ${escHtml(headline)}
+                    ${info.suggested_action ? `<div style="margin-top:0.6rem;color:#fca5a5">${escHtml(info.suggested_action)}</div>` : ''}
+                    ${raw}
+                </div>`;
             document.getElementById('synthesis-box').style.display = 'none';
             document.getElementById('result-panel').classList.add('visible');
         }

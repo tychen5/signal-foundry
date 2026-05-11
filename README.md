@@ -159,7 +159,58 @@ No more spinner-and-wait — every step / healer activation / confidence score i
 
 ## API Reference (for users)
 
-All examples use the live deployment at `https://signal-foundry.zeabur.app`. Replace with `http://localhost:8080` for local testing. JSON requests; responses are also JSON. The user's own NVIDIA / OpenRouter API key can be passed in the `model` block per-request — never stored server-side.
+All examples use the live deployment at `https://signal-foundry.zeabur.app`. Replace with `http://localhost:8080` for local testing. JSON requests; responses are JSON. Streaming endpoints return Server-Sent Events over a POST body.
+
+Every endpoint that may call an LLM accepts this shared `model` block. Keys are per-request only and are never stored server-side:
+
+```json
+{
+  "model_id": "qwen/qwen3-next-80b-a3b-instruct",
+  "provider": "nvidia",
+  "user_openrouter_key": "sk-or-v1-...",
+  "user_nvidia_key": "nvapi-..."
+}
+```
+
+- `model_id` is free text, but must be shaped as `publisher/model-name` with a slash. It does **not** need to be in `/api/v1/models`.
+- `provider` is optional. Use `"openrouter"` or `"nvidia"` when the backend cannot infer routing from the prefix, or when the same publisher exists on both providers.
+- NVIDIA-routed models need `user_nvidia_key` or server `NVIDIA_API_KEY`.
+- OpenRouter-routed models need `user_openrouter_key` or server `OPENROUTER_API_KEY`.
+- Bad `model_id` shape, ambiguous provider, or missing key fail fast with HTTP 400 before the task starts.
+
+Validation error shape:
+
+```json
+{
+  "detail": {
+    "stage": "input_validation",
+    "category": "missing_key",
+    "error_field": "model.user_openrouter_key",
+    "provider": "openrouter",
+    "model_id": "anthropic/claude-opus-4.7",
+    "user_message": "Selected model ... routes to OpenRouter, but no OpenRouter API key is available.",
+    "suggested_action": "Fix `model.user_openrouter_key` and retry.",
+    "retryable": false
+  }
+}
+```
+
+Provider failures are stage-attributed. Non-streaming responses keep the stable `ExecutionResult` envelope and put provider detail in `cost_metadata.llm_error`; streaming endpoints emit the same fields as an `error` event:
+
+```json
+{
+  "stage": "browser_plan",
+  "provider": "openrouter",
+  "model_id": "anthropic/claude-opus-4.7",
+  "status_code": 401,
+  "status_label": "401 Unauthorized",
+  "category": "invalid_key",
+  "user_message": "API key rejected by the provider.",
+  "suggested_action": "Check that the key was copy-pasted correctly...",
+  "raw_error": "Error code: 401 - Invalid API key",
+  "retryable": false
+}
+```
 
 ### POST `/api/v1/skills/run` — Task 1: CI/CD Skill against a real GitHub repo
 
@@ -172,14 +223,16 @@ Request body:
   "dry_run": true,
   "model": {
     "model_id": "moonshotai/kimi-k2.6",
-    "user_openrouter_key": null
+    "provider": "nvidia",
+    "user_nvidia_key": "nvapi-..."
   }
 }
 ```
 - `skill_name`: one of `lint-and-test`, `dependency-audit`, `security-scan`, `build-and-release`
 - `dry_run`: required `true` for `build-and-release` unless user explicitly opts in
-- `model.model_id`: any model from `/api/v1/models`
-- `model.user_openrouter_key`: optional — supply your own key for OpenRouter models (server uses its own key for NVIDIA models)
+- `model.model_id`: any `publisher/model-name` string hosted by the selected provider
+- `model.provider`: optional hint for free-text IDs; usually inferred
+- `model.user_openrouter_key` / `model.user_nvidia_key`: optional if the server already has the matching provider key configured
 
 Response (success):
 ```json
@@ -214,6 +267,7 @@ Request body:
   "use_vision": true,
   "model": {
     "model_id": "google/gemini-3.1-pro-preview",
+    "provider": "openrouter",
     "user_openrouter_key": "sk-or-v1-..."
   }
 }
@@ -260,7 +314,9 @@ Request body (CIK + accession):
   "force_llm": false,
   "use_vision": false,
   "model": {
-    "model_id": "moonshotai/kimi-k2.6"
+    "model_id": "moonshotai/kimi-k2.6",
+    "provider": "nvidia",
+    "user_nvidia_key": "nvapi-..."
   }
 }
 ```
@@ -272,7 +328,7 @@ Or directly by URL:
 }
 ```
 
-`use_vision=true` is only consulted if Stage 2 LLM boundary refinement actually runs. High-confidence modern HTML filings stay rule-only, so the flag has no cost or quality effect on the normal path. For user demos that need to visibly compare text-only vs multimodal boundary refinement, set `force_llm=true` with an OpenRouter vision model.
+`skip_llm=true` runs Task 3 in rule-only mode and does not require an LLM key. Otherwise, the request validates the `model` block up front because Stage 2 may be needed after the rule parser sees the filing. `use_vision=true` is only consulted if Stage 2 LLM boundary refinement actually runs. High-confidence modern HTML filings stay rule-only, so the flag has no cost or quality effect on the normal path. For user demos that need to visibly compare text-only vs multimodal boundary refinement, set `force_llm=true` with an OpenRouter vision model.
 
 Response (success):
 ```json
@@ -329,14 +385,22 @@ Response (success):
 - `GET /api/v1/sec/filings/{cik}?filing_type=10-K&limit=10` — list a company's recent 10-Ks (find accession numbers)
 - `GET /api/v1/sec/company/{cik}` — company metadata: name, ticker, exchange, SIC code
 - `GET /api/v1/skills/list` — list available CI/CD skills + trigger phrases
-- `GET /api/v1/models` — model registry
+- `GET /api/v1/models` — curated model registry (not a whitelist; API accepts free-text `publisher/model-name`)
 - `GET /metrics` — live cost/latency/token ledger
 - `GET /health` — readiness check
 
+### Streaming endpoints
+
+- `POST /api/v1/skills/stream` — single CI/CD skill milestones plus final `result`
+- `POST /api/v1/skills/auto/stream` — auto-router plan / iteration / synthesis milestones plus final `result`
+- `POST /api/v1/browser/stream` — browser agent phase / step / healer events plus terminal `agent_complete` or `error`
+- `POST /api/v1/sec/stream` — SEC fetch / stage / validation events plus final `result`
+
 ### Authentication notes
 
-- **NVIDIA models** (default): server uses its own NVIDIA API key. Free tier has rate limits (~4 calls/min/model).
-- **OpenRouter models** (paid): if you DON'T supply `user_openrouter_key`, the server uses its own key (limited budget, may exhaust). For sustained / heavy use, pass your own key in the `model` block — never stored, only used for that request.
+- **NVIDIA models**: pass `user_nvidia_key` (`nvapi-...`) or rely on server `NVIDIA_API_KEY`. Free tier has rate limits (~4 calls/min/model).
+- **OpenRouter models**: pass `user_openrouter_key` (`sk-or-v1-...`) or rely on server `OPENROUTER_API_KEY`. For sustained / heavy use, pass your own key in the `model` block.
+- Provider errors preserve upstream status when available: `401 Unauthorized`, `404 Not Found` / model not found, `429 Rate Limit Exceeded`, `500 Internal Server Error`, `502 Bad Gateway`, `503 Service Unavailable`, `504 Gateway Timeout`.
 
 ---
 
@@ -353,7 +417,7 @@ The thing that separates this repo from a one-shot prototype:
 ### Harness Guards (added in latest iterations)
 
 - **SSE streaming for Task 2** (`/api/v1/browser/stream`). The agent emits milestone events through an `asyncio.Queue` (`phase_start` → `phase_done` → `step_start`/`step_done` per action with healer flag, confidence, and error → `agent_complete`). Reverse-proxy heartbeat every 20 s prevents Caddy / Zeabur from dropping the connection on long runs. Frontend uses `fetch + ReadableStream` (not `EventSource`) so we can POST the request body in one shot. Without this, the UI was hanging silently on multi-minute browser tasks.
-- **LLM error classifier** (`src/shared/llm_errors.py`). Maps the raw provider exception (regex over the message string + HTTP code) to one of: `invalid_key`, `rate_limit`, `insufficient_credit`, `quota_exhausted`, `timeout`, `no_response`, `server_error`. Each ships with a `suggested_action` string ("top up at openrouter.ai/credits", "rotate key on console", "wait 30 s and retry"). All 3 task routers populate `ExecutionResult.cost_metadata` with the classified payload; the SSE stream emits an `error` event with the same shape; the UI shows a colour-coded banner so users see the cause + the fix, not a 500.
+- **LLM validation + error classifier** (`src/shared/llm_validation.py`, `src/shared/llm_errors.py`). Public APIs validate `model_id` shape, provider routing, and key presence before long-running work starts. Provider exceptions are classified into `invalid_key`, `rate_limit`, `insufficient_credit`, `quota_exhausted`, `context_length`, `model_not_found`, `timeout`, `no_response`, `server_error`, etc., with parsed status labels (`401 Unauthorized`, `429 Rate Limit Exceeded`, `503 Service Unavailable`) and stage attribution (`browser_plan`, `stage2.boundary_refine.item_7`, `auto_router_synthesize`). Non-stream responses put this in `cost_metadata.llm_error`; SSE emits the same shape as an `error` event.
 - **URL-based blocked-page detection** (`src/task2_browser/agent._BLOCKED_URL_MARKERS`). Deterministic check: if the agent's last URL contains `/authwall`, `/login?`, `accounts.google.com/signin`, `/cf-chl`, `/captcha`, `/access-denied`, `edgar/error`, etc., the silent-failure guard flips status to `not_found` *regardless* of what the LLM said. The redirect itself is the evidence. Fires for both `success` and `partial` states.
 - **Idempotency cache + token redaction** (Task 1). Cache key is `cicd:v1:{owner}/{repo}:{branch}:{skill}:{sha[:12]}:{dry_run}`. HEAD SHA is fetched via the GitHub REST API *before* clone, so cache hits skip the entire clone+subprocess pipeline. The clone URL has the token redacted (`https://x-access-token:***@github.com/...`) in every log line. Subprocess env strips `GITHUB_TOKEN`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY` so child processes can't exfiltrate.
 - **Selective vision** (Task 2 + Task 3). `use_vision=true` is opt-in. `is_vision_capable()` checks the model id against a registry (gemini-3.1-pro / claude-opus-4.7 / gpt-5.5); for the 4 NVIDIA NIM text-only models the toggle silently degrades to AOM-only — no `image_url` payload sent, no 4xx surfaced. Task 2 keeps a bounded screenshot history (3 frames) so the LLM sees what *changed* between actions; Task 3 renders 3 zoom levels per uncertain boundary (header zone + local context + neighbour context) with a yellow `<mark>` highlight at the candidate position.
@@ -362,7 +426,7 @@ The thing that separates this repo from a one-shot prototype:
 - **Honest status taxonomy.** Task 2 returns `success | partial | not_found | unverified | failed`. Each has a precise meaning: `not_found` is the *correct* outcome on a login wall, paywall, captcha, or page that genuinely doesn't contain the answer. The eval scorer treats `not_found` on a negative-test case (example.com hallucination guard) as a pass.
 - **Stuck-loop guard** (`src/task2_browser/agent._detect_stuck_loop`). The reactive loop now detects when the planner picks the *same action* (action_type + target_description) AND the URL doesn't change for 3 consecutive steps — typical pattern when a Submit button silently fails or a captcha-locked field resets. The guard breaks out as `partial` with a `stuck_loop` failure mode rather than burning through `max_steps` repeating the same mistake. Healed retries with different selectors and redirect cycles correctly do *not* trip it.
 - **Per-request budget cap** (`src/shared/cost_tracker.BudgetExceededError`). Spec calls out "$0.50 per filing"; the tracker now enforces it. After Stage 2 in T3 (the only paid stage), the pipeline calls `check_request_budget(trace_id, cap, task)`. On overrun: emits a `budget_cap_hit` SSE event, marks the stage in `stages_used`, and skips remaining LLM stages. Default caps: $0.30 (T1), $0.50 (T2 / T3); set `max_cost_usd=0` on the request to disable for benchmarks.
-- **NVIDIA-key contextvar plumbing** (`src/llm_provider.set_user_keys`). The router calls `set_user_keys(openrouter=..., nvidia=...)` once per request; the contextvar isolates concurrent requests via `asyncio` task scope. `get_llm()` falls back to the contextvar when its explicit `user_*_key` arg is absent — this lets the 7+ downstream agent / healer / planner / refiner call sites keep their existing single-key signature while still routing user-supplied NVIDIA keys correctly.
+- **Provider-hint contextvar plumbing** (`src/llm_provider.set_user_keys`). The router calls `set_user_keys(openrouter=..., nvidia=..., provider_hint=...)` once per request; contextvars isolate concurrent requests via `asyncio` task scope. `get_llm()` falls back to these values when explicit args are absent, so downstream planner / healer / refiner call sites keep their existing signatures while still supporting user-supplied NVIDIA keys and free-text model IDs beyond `MODEL_REGISTRY`.
 - **Multilingual hedge-phrase guard.** The `_NOT_FOUND_PHRASES` list now includes traditional + simplified Chinese (`需要登入` / `需要登录`, `維護中` / `维护中`, `頁面沒有`), Japanese (`ログインが必要`, `メンテナンス中`), and Cloudflare interstitial English ("just a moment", "checking your browser"). Real silent failures across CJK locales now flip to `not_found` rather than passing through as `success`.
 - **Word-boundary verifier parsing.** Previous prose-fallback used substring matching ("complete" in lowered_response), which let *"The task is incomplete"* register as positive. Replaced with `\bincomplete\b | not\s+complete | task\s+is\s+complete` regex — JSON path still preferred, but the prose fallback no longer flips honest negatives to silent successes.
 

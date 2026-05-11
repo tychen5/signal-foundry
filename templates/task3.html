@@ -124,18 +124,30 @@
             <div class="form-row" style="margin-top:1rem;">
                 <div class="form-group">
                     <label>LLM Model</label>
-                    <select id="model-select">
+                    <input type="text" id="model-select" list="model-options" value="{% if models %}{{ models[0].id }}{% else %}moonshotai/kimi-k2.6{% endif %}" placeholder="publisher/model-name">
+                    <datalist id="model-options">
                         {% for model in models %}
                         <option value="{{ model.id }}">{{ model.display_name }}</option>
                         {% endfor %}
-                    </select>
-                    <small style="color:#888">NVIDIA = free with rate limits; OpenRouter = paid (use your own key)</small>
+                    </datalist>
+                    <small style="color:#888">Free-text accepted; set provider hint if prefix is ambiguous.</small>
                 </div>
                 <div class="form-group">
                     <label>OpenRouter API Key (only required if you select an OpenRouter model)</label>
                     <input type="text" id="user-api-key" placeholder="sk-or-v1-...">
                     <small style="color:#888"><a href="https://openrouter.ai/credits" target="_blank">openrouter.ai/credits</a> · NVIDIA NIM key:</small>
                     <input type="text" id="user-nvidia-key" placeholder="nvapi-... (optional override)" style="margin-top:0.35rem">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Provider hint (optional)</label>
+                    <select id="provider-hint">
+                        <option value="">Auto infer</option>
+                        <option value="nvidia">NVIDIA NIM</option>
+                        <option value="openrouter">OpenRouter</option>
+                    </select>
+                    <small style="color:#888">Only needed for free-text model IDs the backend cannot route by prefix.</small>
                 </div>
             </div>
             <div class="form-row">
@@ -235,12 +247,17 @@
 
         function hydrateSharedControls() {
             const modelSelect = document.getElementById('model-select');
+            const providerHint = document.getElementById('provider-hint');
             const apiKeyInput = document.getElementById('user-api-key');
             const savedModel = sessionStorage.getItem('sf_model_id');
+            const savedProvider = sessionStorage.getItem('sf_provider_hint');
             const savedKey = sessionStorage.getItem('sf_openrouter_key');
             if (savedModel) modelSelect.value = savedModel;
+            if (savedProvider && providerHint) providerHint.value = savedProvider;
             if (savedKey) apiKeyInput.value = savedKey;
             modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+            modelSelect.addEventListener('input', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+            if (providerHint) providerHint.addEventListener('change', () => sessionStorage.setItem('sf_provider_hint', providerHint.value));
             apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
         }
         hydrateSharedControls();
@@ -251,7 +268,8 @@
             const cik = document.getElementById('cik').value.trim();
             const accession = document.getElementById('accession').value.trim();
             const fileUrl = document.getElementById('file-url').value.trim();
-            const modelId = document.getElementById('model-select').value;
+            const modelId = document.getElementById('model-select').value.trim();
+            const providerHint = (document.getElementById('provider-hint') || {}).value || '';
             const apiKey = document.getElementById('user-api-key').value.trim();
             const skipLlm = document.getElementById('skip-llm').checked;
             const skipXbrl = document.getElementById('skip-xbrl').checked;
@@ -279,6 +297,7 @@
                 force_llm: forceLlm,
                 use_vision: useVision
             };
+            if (providerHint) payload.model.provider = providerHint;
             if (fileUrl) {
                 payload.filing_url = fileUrl;
             } else {
@@ -305,7 +324,7 @@
                     body: JSON.stringify(payload),
                 });
                 if (!resp.ok || !resp.body) {
-                    showError('Stream failed: ' + resp.status);
+                    showError(await parseHttpError(resp));
                     return;
                 }
                 const reader = resp.body.getReader();
@@ -331,7 +350,7 @@
                 }
 
                 if (lastError) {
-                    showError(lastError.user_message || lastError.raw_error || lastError.category);
+                    showError(lastError);
                     return;
                 }
                 if (finalResult) {
@@ -349,7 +368,7 @@
                     });
                     const data = await resp2.json();
                     if (resp2.status >= 400) {
-                        showError(data.detail || JSON.stringify(data));
+                        showError(data.detail || data);
                     } else {
                         renderExtraction(data);
                     }
@@ -525,8 +544,26 @@
             }
         }
 
+        async function parseHttpError(resp) {
+            try {
+                const data = await resp.json();
+                return data.detail || data;
+            } catch (_) {
+                const text = await resp.text();
+                return {user_message: text || ('HTTP ' + resp.status), raw_error: text || ''};
+            }
+        }
+
         function showError(msg) {
-            document.getElementById('error-section').innerHTML = `<div class="error-box">${escHtml(msg)}</div>`;
+            const info = (msg && typeof msg === 'object') ? msg : {user_message: String(msg || 'Unknown error')};
+            const headline = info.user_message || info.raw_error || info.category || 'Request failed';
+            const meta = [info.stage, info.provider, info.status_label, info.model_id].filter(Boolean).join(' · ');
+            const action = info.suggested_action ? `<div style="margin-top:0.5rem;color:#fecaca">${escHtml(info.suggested_action)}</div>` : '';
+            const raw = info.raw_error && info.raw_error !== headline
+                ? `<details><summary>raw error</summary><pre>${escHtml(info.raw_error)}</pre></details>`
+                : '';
+            document.getElementById('error-section').innerHTML =
+                `<div class="error-box">${meta ? `<div style="font-family:inherit;color:#fecaca;margin-bottom:0.4rem">${escHtml(meta)}</div>` : ''}${escHtml(headline)}${action}${raw}</div>`;
         }
 
         function toggleRaw() {

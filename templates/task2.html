@@ -109,12 +109,13 @@
             <div class="form-row">
                 <div class="form-group">
                     <label>LLM Model</label>
-                    <select id="model-select">
+                    <input type="text" id="model-select" list="model-options" value="{% if models %}{{ models[0].id }}{% else %}moonshotai/kimi-k2.6{% endif %}" placeholder="publisher/model-name">
+                    <datalist id="model-options">
                         {% for model in models %}
                         <option value="{{ model.id }}">{{ model.display_name }}</option>
                         {% endfor %}
-                    </select>
-                    <small style="color:#888">NVIDIA = free with rate limits; OpenRouter = paid (use your own key)</small>
+                    </datalist>
+                    <small style="color:#888">Free-text accepted. Use provider hint below for ambiguous prefixes.</small>
                 </div>
                 <div class="form-group">
                     <label>OpenRouter API Key (only required if you select an OpenRouter model)</label>
@@ -128,6 +129,17 @@
                     <input type="text" id="user-nvidia-key" placeholder="nvapi-...">
                     <small style="color:#888"><a href="https://build.nvidia.com" target="_blank">build.nvidia.com</a> · free tier, ~4 calls/min</small>
                 </div>
+                <div class="form-group">
+                    <label>Provider hint (optional)</label>
+                    <select id="provider-hint">
+                        <option value="">Auto infer</option>
+                        <option value="nvidia">NVIDIA NIM</option>
+                        <option value="openrouter">OpenRouter</option>
+                    </select>
+                    <small style="color:#888">Required only when the server cannot infer where a free-text model is hosted.</small>
+                </div>
+            </div>
+            <div class="form-row">
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="use-vision">
@@ -190,15 +202,20 @@
 
         function hydrateSharedControls() {
             const modelSelect = document.getElementById('model-select');
+            const providerHint = document.getElementById('provider-hint');
             const apiKeyInput = document.getElementById('user-api-key');
             const nvidiaKeyInput = document.getElementById('user-nvidia-key');
             const savedModel = sessionStorage.getItem('sf_model_id');
+            const savedProvider = sessionStorage.getItem('sf_provider_hint');
             const savedKey = sessionStorage.getItem('sf_openrouter_key');
             const savedNvidiaKey = sessionStorage.getItem('sf_nvidia_key');
             if (savedModel) modelSelect.value = savedModel;
+            if (savedProvider && providerHint) providerHint.value = savedProvider;
             if (savedKey) apiKeyInput.value = savedKey;
             if (savedNvidiaKey && nvidiaKeyInput) nvidiaKeyInput.value = savedNvidiaKey;
             modelSelect.addEventListener('change', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+            modelSelect.addEventListener('input', () => sessionStorage.setItem('sf_model_id', modelSelect.value));
+            if (providerHint) providerHint.addEventListener('change', () => sessionStorage.setItem('sf_provider_hint', providerHint.value));
             apiKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_openrouter_key', apiKeyInput.value));
             if (nvidiaKeyInput) {
                 nvidiaKeyInput.addEventListener('input', () => sessionStorage.setItem('sf_nvidia_key', nvidiaKeyInput.value));
@@ -242,6 +259,7 @@
             banner.style.display = 'block';
             banner.innerHTML = `
                 <strong>${escHtml(info.user_message || 'LLM error')}</strong>
+                ${info.stage || info.provider || info.status_label ? `<div class="hint">${escHtml([info.stage, info.provider, info.status_label, info.model_id].filter(Boolean).join(' · '))}</div>` : ''}
                 ${info.suggested_action ? `<div class="hint">💡 ${escHtml(info.suggested_action)}</div>` : ''}
                 ${info.raw_error ? `<details><summary>raw error</summary><pre>${escHtml(info.raw_error)}</pre></details>` : ''}
             `;
@@ -253,7 +271,8 @@
             const taskDesc = document.getElementById('task-desc').value.trim();
             const targetUrl = document.getElementById('target-url').value.trim();
             const maxSteps = parseInt(document.getElementById('max-steps').value);
-            const modelId = document.getElementById('model-select').value;
+            const modelId = document.getElementById('model-select').value.trim();
+            const providerHint = (document.getElementById('provider-hint') || {}).value || '';
             const apiKey = document.getElementById('user-api-key').value.trim();
 
             if (!taskDesc) { alert('Please enter a task description.'); return; }
@@ -288,6 +307,7 @@
                 use_vision: useVision,
                 model: { model_id: modelId }
             };
+            if (providerHint) payload.model.provider = providerHint;
             if (targetUrl) payload.target_url = targetUrl;
             if (apiKey) payload.model.user_openrouter_key = apiKey;
             const nvidiaKey = (document.getElementById('user-nvidia-key') || {}).value || '';
@@ -315,7 +335,12 @@
                     body: JSON.stringify(payload),
                     signal: abortController.signal,
                 });
-                if (!resp.ok || !resp.body) throw new Error('Stream failed: ' + resp.status);
+                if (!resp.ok || !resp.body) {
+                    const info = await parseHttpError(resp);
+                    setStatus('failed', 'ERROR', info.user_message || info.raw_error || info.category || String(info));
+                    showLLMError(info);
+                    return;
+                }
                 const reader = resp.body.getReader();
                 const decoder = new TextDecoder();
                 let buf = '';
@@ -512,6 +537,21 @@
 
             document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
             document.getElementById('raw-toggle').style.display = 'inline-block';
+        }
+
+        async function parseHttpError(resp) {
+            try {
+                const data = await resp.json();
+                return data.detail || data;
+            } catch (_) {
+                const text = await resp.text();
+                return {
+                    category: 'http_error',
+                    user_message: text || ('HTTP ' + resp.status),
+                    raw_error: text || ('HTTP ' + resp.status),
+                    retryable: false
+                };
+            }
         }
 
         function setStatus(cls, label, text) {
