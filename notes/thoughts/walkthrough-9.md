@@ -67,3 +67,52 @@
   2. Fast-path is opt-out, not opt-in — allow_fast_path=True default means any caller benefits immediately; benchmarks use allow_fast_path=False for head-to-head A/B
   3. Per-case expected_outcome is optional — backward compatible; 41 of 46 cases still pass with only the universal layer until they're individually annotated
   4. §9 includes the time-budget honesty — explains the ~30-hour real working budget split between startup work + interview, framed as prioritization tradeoff (breadth over catastrophic-edge depth), not excuse
+
+  ---
+
+
+  Citi 2026 and Intel 2026 are NOT fully solved — but they're now substantially better, and the failure modes are honestly surfaced rather than masked.
+
+  What's actually fixed
+  
+  ┌────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │   Filing   │                                       Before §10 (your reported state)                                        │                                                                             After §10 (now)                                                                              │
+  ├────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Citi 2026  │ All 22 items NOT_FOUND, llm_calls=0, parser couldn't find anything                                            │ 3 real body items extracted with full content: RISK FACTORS (335k chars), CONSOLIDATED FINANCIAL STATEMENTS (664k chars), DISCLOSURE CONTROLS AND PROCEDURES (21k chars) │
+  ├────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Intel 2026 │ 23 items "extracted" but content was the cover-page end-index ("Pages 37-51", "(a)") at char 518k of 522k doc │ 4 real body items at proper body positions: Our Business (101k), Risk Factors (105k), Cybersecurity (238k), Properties (23k)                                             │
+  └────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  Root cause discovered live
+
+  Looking at Citi's raw HTML: zero "ITEM 1" text occurrences. Citi uses bold spans with just title-only text (Risk Factors, Disclosure Controls and Procedures). The "Item N." prefix is rendered via CSS / table column — not as adjacent text. Our entire regex strategy (ITEM\s+\d+) was blind to this style of HTML.
+
+  Solution shipped
+
+  New title-only fallback detector (src/task3_sec/rule_parser.py):
+  - Scans the body region (10%–90% of doc, excluding TOC zone AND end-index appendix)
+  - 23-item lookup with multiple variants per item (ALL CAPS / Title Case / lowercase, longest-prefix-wins)
+  - Triggers when regex returns 0 matches (Citi) OR all matches cluster at >95% of doc (Intel) OR all matches were TOC-suspect
+  - 8 new regression tests covering the trip conditions
+
+  What's still imperfect (honest)
+
+  Rule-only coverage on Citi/Intel is 13–17%, not 100%. The remaining 80% needs Stage 2 LLM refinement:
+  - The fallback only knows canonical title variants. Citi has filer-specific headings like "BUSINESS EXITS", "REPORTABLE BUSINESS SEGMENTS" that we'd need to enumerate
+  - The cost-discipline tradeoff is intentional: rules cover 80% of normal filings at $0; LLM at ~$0.02 covers the long tail
+  - items_found < 10 triggers Stage 2 automatically — with the new 3-4 body anchors, the LLM no longer has to find body content from scratch in a 1.2 MB doc
+
+  Test status
+
+  - 383 tests pass (was 375, +8 new), 0 lint errors
+  - Live verified against actual Citi 2026 + Intel 2026 SEC filings
+  - §10 added to interviewer_concerns.md with full root cause, solution, and honest summary
+
+  What I'd recommend for the live UI test
+
+  When you click 🏦 Citi 2026 or 💾 Intel 2026 on the deployed /task3 page (auto-enables force_llm + use_vision), expect:
+  - Citi: ~3-8 items extracted with real body content (rule-only gets 3; LLM Stage 2 should fill 5-10 more); extraction_completeness ~40-60%
+  - Intel: ~4-10 items in body positions (10-90% of doc, not 99%); coverage ~30-50%
+  - Rest marked not_found honestly
+
+  If you want 100% coverage on these specific filings, that's a larger lift (HTML-tag-aware parsing of <h1>/<h2>/<strong> from raw HTML, plus iterating the Stage 2 prompt to do "find missing items using these anchors") — listed as roadmap in §10.8.

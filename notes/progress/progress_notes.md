@@ -226,7 +226,7 @@
     * [x] Live `.env` OpenRouter runs verified: `openai/gpt-5.5` succeeded in 5 steps with Yahoo `%5ETWII`; `google/gemini-3.1-pro-preview` succeeded in 4 steps with Yahoo `%5ETWII`. Focused Task2 tests pass: 87/87.
   8. [x] NVIDIA key expiration messaging: all 4 pages (index, task1, task2, task3) now explicitly warn that the server-bundled NVIDIA free-tier key may be expired or rate-limited and recommend users sign up at build.nvidia.com. Index BYOK text strengthened with bold "may be expired or rate-limited" warning. Each task page's NVIDIA key input shows "Server-bundled key may be expired/exhausted" hint.
 
-11. [x] Phase 11 依據 @notes/_briefs/interviewer_concerns.md 建議反饋強化系統 ✅ (2026-05-15)
+11. [] Phase 11 依據 @notes/_briefs/interviewer_concerns.md 建議反饋強化系統 ✅ (2026-05-15)
   1. [x] 針對task 3的邏輯 functions 等，新增 Citi 2026 10-K 和 Intel 2026 的 example 到 `https://signal-foundry.zeabur.app/task3` 的 example-btn 中，並修復相關 functions 驗證這兩個 use cases 可正確得到預期結果回傳。
     * [x] **§1.2 修法**：`src/task3_sec/validator.py` `_check_coverage` 現在只把 `status != NOT_FOUND` 的 item 算進 `found`，並新增 `catastrophic` flag（0 個 real extraction 時直接 fail）。對應 Citi 2026 「0 headings 還 pass」的 failure-masking bug。
     * [x] **`ProcessingMetadata.extraction_completeness`** 新欄位實作：含 `extracted_count` / `expected_count` / `extraction_completeness` (0.0~1.0)，pipeline.py 在 finalize 階段填入。API caller 可一眼判斷是否真的抽出來。
@@ -251,6 +251,25 @@
     * [x] P2 完成 — `extraction_completeness` 透明欄位
     * [x] Polish gap 全關閉 — **375 unit tests pass** (was 354, +21 new regression tests), 0 lint errors
     * [x] interviewer_concerns.md 新增 §8 "現況更新與最終狀態" + §9 "與面試官對話時的補充說明 (含時間/工作量背景)"，提供完整的修補論證與下一階段面試素材
+  5. [x] **第二輪迭代 (2026-05-15 evening)** — §8 patches surfaced failure honestly but didn't extract. User reported Citi all-NOT_FOUND, Intel got the cover-page end-index junk. Root cause: regex-based heading detection cannot see title-only HTML (Citi has 0 "ITEM 1" text in raw; Intel's body uses "Our Business" / "Properties" / etc. without "Item N." prefix). Built **title-only fallback detector** (`detect_item_headings_by_title` + `_needs_title_fallback`) in `src/task3_sec/rule_parser.py`:
+    * [x] `_TITLE_ONLY_HEADINGS` lookup: 23 items × multiple title variants (most-specific first, e.g. "disclosure controls and procedures" before "controls and procedures")
+    * [x] Body region scan only: `body_start_pct=0.10` (skip TOC), `body_end_pct=0.90` (skip end-index appendix — this is what fixes Intel's pollution)
+    * [x] 3 case variants per title (ALL CAPS +0.10 conf, Title Case +0.05, lowercase +0); sentence-prose hits rejected via prev-80-char check
+    * [x] Confidence 0.55–0.70 deliberately below Stage 2 LLM trigger threshold so LLM refinement always fires when items_found < 10
+    * [x] `_needs_title_fallback` 3 trip conditions: zero matches (Citi) / all matches at >95% doc (Intel) / all matches TOC-suspect
+    * [x] Merge logic: keep regex-matched non-TOC-suspect non-end-cluster boundaries + add fallback boundaries
+    * [x] **8 new regression tests** (`TestTitleFallbackHeadingDetection`): ALL-CAPS detection, end-region exclusion, DISCLOSURE prefix, "Our Business" prefix, mid-sentence rejection, 3 fallback trip conditions
+    * [x] **Live verification**:
+      - Citi 2026 rule-only: 0 → **3 real body items** (1A RISK FACTORS 335k chars, 8 CONSOLIDATED FINANCIAL STATEMENTS 664k chars, 9A DISCLOSURE CONTROLS AND PROCEDURES 21k chars)
+      - Intel 2026 rule-only: end-index junk → **4 real body items** in 10-90% region (1 Our Business 101k, 1A Risk Factors 105k, 1C Cybersecurity 238k, 2 Properties 23k)
+      - Coverage 13%/17% rule-only is honestly reported via `extraction_completeness`; Stage 2 LLM auto-fires (`items_found < 10`) to fill the gap
+    * [x] **383 tests pass** (was 375, +8 new), 0 lint errors
+    * [x] interviewer_concerns.md §10 added documenting root cause + solution + honest summary for the interviewer
+  6. [] 完成所有roadmap listed in §10.8
+    * []  HTML-tag-aware heading detection: parse `<h1>` / `<h2>` / `<strong>` tags from raw HTML directly (preserving structure info the text-normalizer strips)
+    * [] Iterate Stage 2 LLM refiner prompt to use the rule-discovered anchors more aggressively — for sparse-anchor cases like Citi it should explicitly do "find the missing items using these anchors as known body locations" rather than "refine low-confidence boundaries".
+    * [] Add 5 more held-out 2026 filings to the eval set so this exact regression doesn't happen again (a 0-headings case + an end-cluster case from the major filers).
+    * [] implement stage 2 LLM refinement: The fallback only knows canonical title variants. Citi has filer-specific headings like "BUSINESS EXITS", "REPORTABLE BUSINESS SEGMENTS" that we'd need to enumerate、The cost-discipline tradeoff is intentional: rules cover 80% of normal filings at $0; LLM at ~$0.02 covers the long tail、items_found < 10 triggers Stage 2 automatically — with the new 3-4 body anchors, the LLM no longer has to find body content from scratch in a 1.2 MB doc
   
 
 
