@@ -221,7 +221,44 @@ def detect_item_headings(text: str) -> list[ItemBoundary]:
     # because the first occurrence is usually in the Table of Contents
     for item_number, matches in seen_items.items():
         if len(matches) == 1:
-            boundaries.append(matches[0])
+            only = matches[0]
+            # Single-match TOC suppression: when the rule parser only matched
+            # ONE occurrence of an item AND that match sits in the document's
+            # first ~10% region (the typical ToC zone), it's almost certainly
+            # the TOC entry — the actual body heading was likely wrapped in
+            # an HTML pattern that defeated our regex (e.g. <span>-broken,
+            # &nbsp;-padded, <a name="...">-anchored). Without this guard,
+            # we'd accept the TOC entry as a body boundary and extract
+            # cross-reference list content instead of the real prose
+            # (the Intel-2026 failure mode surfaced on 2026-05-15).
+            #
+            # Mitigation: lower confidence to <0.55 so pipeline.py's Stage 2
+            # trigger fires and the LLM refiner can re-locate the real body
+            # heading using a wider boundary context window.
+            #
+            # Detection signal: a small window around the match start (we
+            # don't preserve the full match string, so we re-scan ±80 chars).
+            # Position-only check is intentionally conservative — we only
+            # downweight when the match sits in the first 10% of the doc.
+            doc_len = max(len(text), 1)
+            doc_pct = only.start_pos / doc_len
+            window_start = max(0, only.start_pos - 40)
+            window_end = min(len(text), only.start_pos + 200)
+            local_window = text[window_start:window_end]
+            in_toc_region = doc_pct < 0.10
+            has_toc_markers = _looks_like_toc_entry(local_window, only.start_pos, doc_len)
+            if in_toc_region or has_toc_markers:
+                only.confidence = min(only.confidence, 0.40)
+                only.source = "heading_regex_toc_suspect"
+                logger.info(
+                    "single_match_in_toc_region",
+                    item=item_number,
+                    pos=only.start_pos,
+                    doc_pct=round(doc_pct * 100, 1),
+                    in_toc_region=in_toc_region,
+                    has_toc_markers=has_toc_markers,
+                )
+            boundaries.append(only)
         else:
             # Sort by position, take the last occurrence (content, not ToC)
             matches.sort(key=lambda b: b.start_pos)

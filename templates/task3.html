@@ -115,6 +115,11 @@
                 <button class="example-btn" onclick="setExample('0001046179','0001628280-26-025362')">TSMC 20-F</button>
             </div>
             <div class="examples-row" style="margin-top:0.4rem;">
+                <span style="font-size:0.8rem;color:#475569;">Interviewer regression (most-recent 10-K, vision+force_llm on): </span>
+                <button class="example-btn" onclick="setExample('0000831001',''); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true; document.getElementById('skip-llm').checked = false; updateTask3CostHint();" title="Citi 2026 — regression case for the catastrophic-failure / coverage-mask bug fix">🏦 Citi 2026 (regression)</button>
+                <button class="example-btn" onclick="setExample('0000050863',''); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true; document.getElementById('skip-llm').checked = false; updateTask3CostHint();" title="Intel 2026 — regression case for the single-match TOC-suppression fix">💾 Intel 2026 (regression)</button>
+            </div>
+            <div class="examples-row" style="margin-top:0.4rem;">
                 <span style="font-size:0.8rem;color:#475569;">Edge cases (try with vision + force_llm): </span>
                 <button class="example-btn" onclick="setExample('0001024401','0001024401-01-500010'); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true; updateTask3CostHint();" title="Plain-text early EDGAR format, FY2000 — vision helps boundary detection">📜 Enron 2000 (plain text)</button>
                 <button class="example-btn" onclick="setExample('0000723527','0001005477-02-001226'); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true; updateTask3CostHint();" title="Pre-fraud telecom, plain text format">📜 WorldCom 2001</button>

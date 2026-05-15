@@ -351,6 +351,15 @@ async def extract_10k(
         1 for item in items if item.extraction_method in (ExtractionMethod.LLM_REFINED, ExtractionMethod.HYBRID)
     )
 
+    # Honesty metrics — see ProcessingMetadata docstring. expected_count is
+    # the size of STANDARD_10K_ITEMS; extracted_count is how many of `items`
+    # were actually populated (any status other than NOT_FOUND).
+    from src.task3_sec.schemas import STANDARD_10K_ITEMS as _STD_ITEMS
+
+    expected_count = len(_STD_ITEMS)
+    extracted_count = sum(1 for item in items if item.status != ItemStatus.NOT_FOUND)
+    completeness = round(extracted_count / max(expected_count, 1), 3)
+
     result.processing_metadata = ProcessingMetadata(
         total_tokens_in=request_cost.get("tokens_in", 0),
         total_tokens_out=request_cost.get("tokens_out", 0),
@@ -364,6 +373,9 @@ async def extract_10k(
         format_detected=format_type,
         validation_report=validation_report,
         xbrl_report=xbrl_report,
+        extracted_count=extracted_count,
+        expected_count=expected_count,
+        extraction_completeness=completeness,
     )
 
     logger.info(

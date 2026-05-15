@@ -78,23 +78,49 @@ def validate_extraction(result: ExtractionResult, source_text: str) -> dict:
 
 
 def _check_coverage(result: ExtractionResult) -> dict:
-    """Check if all standard items are accounted for."""
-    found = {item.item_number for item in result.items}
+    """Check if all standard items are accounted for.
+
+    NOTE on NOT_FOUND placeholders: the pipeline pads any unmatched standard
+    item with a NOT_FOUND placeholder so the response shape is stable. Those
+    placeholders MUST NOT be counted toward "found" — otherwise a filing that
+    extracted 0 headings would still pass the coverage check because every
+    item is "present" as a NOT_FOUND placeholder. This was the Citi-2026
+    failure-masking bug surfaced by interviewer review on 2026-05-15.
+    """
+    # Items that actually carry content (any non-NOT_FOUND status counts as
+    # a real signal — INCORPORATED_BY_REFERENCE / NOT_APPLICABLE / RESERVED
+    # are legitimate outcomes, not failures).
+    real_found = {
+        item.item_number
+        for item in result.items
+        if item.status != ItemStatus.NOT_FOUND
+    }
+    placeholder = {
+        item.item_number
+        for item in result.items
+        if item.status == ItemStatus.NOT_FOUND
+    }
     expected = {item["item_number"] for item in STANDARD_10K_ITEMS}
-    missing = expected - found
-    extra = found - expected
+    missing = expected - real_found
+    extra = real_found - expected
     missing_required = missing - _OPTIONAL_ITEMS
+
+    # A filing with ZERO real extractions is catastrophic — surface that as
+    # a hard failure regardless of which items happened to be in the
+    # required-set. This catches the Citi pattern where the rule parser
+    # silently emits no boundaries.
+    catastrophic = len(real_found) == 0
 
     return {
         "check": "coverage",
-        # Pass if every *required* item is present. Optional items (1C/9C/16/6)
-        # may legitimately be absent depending on filing year/regime.
-        "passed": len(missing_required) == 0,
-        "found": len(found),
+        "passed": (not catastrophic) and len(missing_required) == 0,
+        "found": len(real_found),
+        "placeholder_not_found": len(placeholder),
         "expected": len(expected),
         "missing": sorted(missing),
         "missing_required": sorted(missing_required),
         "extra": sorted(extra),
+        "catastrophic": catastrophic,
     }
 
 

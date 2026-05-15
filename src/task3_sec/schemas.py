@@ -137,6 +137,24 @@ class ProcessingMetadata(BaseModel):
     format_detected: str = Field(default="html", description="html | text | xbrl")
     validation_report: dict = Field(default_factory=dict)
     xbrl_report: dict = Field(default_factory=dict)
+    # Honesty fields — exposed so callers can detect "we returned 22 items
+    # but actually extracted zero" failure-masking. Added 2026-05-15 after
+    # the Citi-2026 review surfaced that validation_report.overall_valid
+    # alone could not distinguish "fully extracted" from "all placeholders".
+    extracted_count: int = Field(
+        default=0,
+        description="Number of items with status != not_found (real extractions)",
+    )
+    expected_count: int = Field(
+        default=0,
+        description="Number of standard items the schema enumerates",
+    )
+    extraction_completeness: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="extracted_count / expected_count — 0.0 means total failure",
+    )
 
 
 class ExtractionResult(BaseModel):

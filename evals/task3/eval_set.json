@@ -1278,5 +1278,73 @@
         "15"
       ]
     }
+  },
+  {
+    "case_id": "t3_citigroup_2026_interviewer_regression",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000831001"
+    },
+    "expected_behavior": "Citigroup Inc most recent 10-K (FY2025, filed 2026). Added 2026-05-15 as a regression case after VICI interviewer review surfaced a failure-masking bug: pipeline returned validation_report.overall_valid=true even when the rule parser detected zero headings (Citi's <span>-broken banking-layout HTML defeated the regex patterns). Patches applied: (1) _check_coverage now excludes NOT_FOUND placeholders and flags catastrophic (0 real extractions) as a hard failure; (2) ProcessingMetadata now exposes extraction_completeness so callers can detect mass placeholder backfills. This case verifies both fixes hold against the live Citi filing.",
+    "difficulty": "edge_case",
+    "tags": [
+      "large_cap",
+      "banking",
+      "regression",
+      "interviewer_held_out",
+      "catastrophic_fail_guard",
+      "modern_html"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000831001.json",
+      "note": "No accession — fetcher finds most recent 10-K (FY2025 filed 2026)"
+    },
+    "assertions": {
+      "min_items_extracted": 15,
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8",
+        "15"
+      ]
+    }
+  },
+  {
+    "case_id": "t3_intel_2026_toc_regression",
+    "task": "task3_sec",
+    "input_data": {
+      "cik": "0000050863"
+    },
+    "expected_behavior": "Intel Corporation most recent 10-K (FY2025, filed 2026). Added 2026-05-15 as a regression case after VICI interviewer review surfaced a TOC-confusion bug: the rule parser's single-match codepath unconditionally accepted the only matched occurrence even when that match sat inside the Table of Contents region (Intel's body headings were wrapped in anchor tags that defeated regex Pattern 1 while the TOC entries with trailing page numbers still matched). Patch applied: single-match boundaries within the first 10% of the document OR with TOC-marker text now have confidence downgraded to 0.40, which forces Stage 2 LLM boundary refinement to run and re-locate the real body heading. This case verifies the patch keeps Intel's body content out of TOC space.",
+    "difficulty": "edge_case",
+    "tags": [
+      "large_cap",
+      "tech",
+      "semiconductor",
+      "regression",
+      "interviewer_held_out",
+      "toc_confusion_guard",
+      "modern_html",
+      "llm_trigger_candidate"
+    ],
+    "source": {
+      "kind": "official_sec_submissions_api",
+      "submissions_url": "https://data.sec.gov/submissions/CIK0000050863.json",
+      "note": "No accession — fetcher finds most recent 10-K (FY2025 filed 2026)"
+    },
+    "assertions": {
+      "min_items_extracted": 15,
+      "required_items": [
+        "1",
+        "1A",
+        "7",
+        "7A",
+        "8",
+        "15"
+      ]
+    }
   }
 ]

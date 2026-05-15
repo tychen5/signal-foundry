@@ -552,8 +552,19 @@ The following risk factors should be considered.
         assert result.confidence_avg > 0
 
     def test_heading_confidence_scoring(self):
-        """Headings with matching titles should have higher confidence."""
-        text = """
+        """Headings with matching titles should have higher confidence.
+
+        Note: the rule parser deliberately downweights single matches that
+        sit in the first 10% of the document (the TOC zone) — see the
+        Intel-2026 TOC-suppression patch in rule_parser.py. To exercise the
+        normal "high confidence" path we need the headings past the 10%
+        boundary, so we pad with leading filler so the matches land in the
+        body region of the synthetic doc.
+        """
+        # Pad with ~1 KB of body-text-like filler so the headings land past
+        # the 10% TOC zone.
+        filler = ("Filler narrative paragraph for layout. " * 40) + "\n\n"
+        text = filler + """
 Item 1. Business
 Company description here.
 
@@ -563,6 +574,26 @@ Risk discussion here.
         boundaries = detect_item_headings(text)
         for b in boundaries:
             assert b.confidence > 0.5  # All should have reasonable confidence
+
+    def test_single_match_in_toc_region_is_downweighted(self):
+        """Regression for the Intel-2026 TOC-confusion bug.
+
+        When a heading matches ONCE and the match sits in the doc's first
+        10%, that's almost certainly a Table-of-Contents entry rather than
+        the real body heading. The parser must downgrade confidence so
+        Stage 2 LLM refinement can re-locate the body heading.
+        """
+        # Tiny doc — both items pin to start_pos < 10% of doc length.
+        text = "Item 1. Business\nShort description.\n"
+        boundaries = detect_item_headings(text)
+        assert len(boundaries) >= 1
+        toc_suspect = [b for b in boundaries if b.source == "heading_regex_toc_suspect"]
+        assert toc_suspect, "Expected at least one TOC-suspect boundary"
+        for b in toc_suspect:
+            assert b.confidence <= 0.40, (
+                "TOC-suspect boundaries must be downweighted below the "
+                "Stage 2 LLM trigger threshold so refinement fires."
+            )
 
 
 # ========== FETCHER TESTS ==========
@@ -702,6 +733,86 @@ class TestValidator:
         result = self._make_result(items)
         report = validate_extraction(result, "content" * 100)
         assert len(report["coverage"]["missing"]) > 0
+
+    def test_coverage_fails_when_all_items_are_not_found_placeholders(self):
+        """Regression for the Citi-2026 failure-masking bug.
+
+        Before the patch: pipeline._fill_missing_items pads ALL standard
+        items with NOT_FOUND placeholders so the response shape is stable,
+        and _check_coverage's "found" set included those placeholders ->
+        coverage["passed"] was True even when 0 real extractions occurred.
+
+        After the patch: NOT_FOUND items are excluded from "found", AND a
+        special "catastrophic" flag fires when the real-found count is 0.
+        """
+        # Simulate the exact post-pipeline state when the rule parser
+        # detected ZERO headings: every standard item exists as a NOT_FOUND
+        # placeholder.
+        items = [
+            ExtractedItem(
+                part=item["part"],
+                item_number=item["item_number"],
+                item_title=item["item_title"],
+                content_text="",
+                char_range=[0, 0],
+                status=ItemStatus.NOT_FOUND,
+                confidence=0.0,
+            )
+            for item in STANDARD_10K_ITEMS
+        ]
+        result = self._make_result(items)
+        report = validate_extraction(result, "irrelevant source text")
+        coverage = report["coverage"]
+        assert coverage["passed"] is False, (
+            "Catastrophic failure (0 real extractions) must NOT pass coverage."
+        )
+        assert coverage["found"] == 0
+        assert coverage["catastrophic"] is True
+        assert coverage["placeholder_not_found"] == len(STANDARD_10K_ITEMS)
+        assert report["overall_valid"] is False
+
+    def test_coverage_counts_real_extractions_only(self):
+        """Items with INCORPORATED_BY_REFERENCE / NOT_APPLICABLE / RESERVED
+        statuses are legitimate (not failures) and should count toward
+        coverage. Only NOT_FOUND placeholders are excluded."""
+        items = []
+        # First 6 items are real extractions of various legitimate statuses
+        legit_statuses = [
+            ItemStatus.EXTRACTED,
+            ItemStatus.EXTRACTED,
+            ItemStatus.INCORPORATED_BY_REFERENCE,
+            ItemStatus.NOT_APPLICABLE,
+            ItemStatus.RESERVED,
+            ItemStatus.EXTRACTED,
+        ]
+        for i, std in enumerate(STANDARD_10K_ITEMS[:6]):
+            items.append(
+                ExtractedItem(
+                    part=std["part"],
+                    item_number=std["item_number"],
+                    item_title=std["item_title"],
+                    content_text="content" if legit_statuses[i] == ItemStatus.EXTRACTED else "",
+                    char_range=[0, 50],
+                    status=legit_statuses[i],
+                )
+            )
+        # Remaining items are NOT_FOUND placeholders
+        for std in STANDARD_10K_ITEMS[6:]:
+            items.append(
+                ExtractedItem(
+                    part=std["part"],
+                    item_number=std["item_number"],
+                    item_title=std["item_title"],
+                    content_text="",
+                    char_range=[0, 0],
+                    status=ItemStatus.NOT_FOUND,
+                )
+            )
+        result = self._make_result(items)
+        report = validate_extraction(result, "content" * 100)
+        assert report["coverage"]["found"] == 6
+        assert report["coverage"]["catastrophic"] is False
+        assert report["coverage"]["placeholder_not_found"] == len(STANDARD_10K_ITEMS) - 6
 
     def test_ordering_check(self):
         """Items should be in standard order."""
@@ -1038,3 +1149,83 @@ class TestPipelineIntegration:
 
         assert calls == {"force_refine": True, "use_vision": True}
         assert "llm_refine" in result.processing_metadata.stages_used
+
+
+class TestExtractionCompletenessField:
+    """Tests for the ProcessingMetadata.extraction_completeness field added
+    2026-05-15 in response to interviewer Q1 (Citi-2026 failure masking)."""
+
+    def test_processing_metadata_has_completeness_fields(self) -> None:
+        from src.task3_sec.schemas import ProcessingMetadata
+
+        meta = ProcessingMetadata()
+        assert hasattr(meta, "extracted_count")
+        assert hasattr(meta, "expected_count")
+        assert hasattr(meta, "extraction_completeness")
+        # Defaults are safe
+        assert meta.extracted_count == 0
+        assert meta.expected_count == 0
+        assert meta.extraction_completeness == 0.0
+
+    def test_extraction_completeness_bounded_0_1(self) -> None:
+        from src.task3_sec.schemas import ProcessingMetadata
+
+        # Field has ge=0.0 le=1.0 validators
+        ok = ProcessingMetadata(extraction_completeness=0.5)
+        assert ok.extraction_completeness == 0.5
+        import pytest
+
+        with pytest.raises(Exception):
+            ProcessingMetadata(extraction_completeness=1.5)
+        with pytest.raises(Exception):
+            ProcessingMetadata(extraction_completeness=-0.1)
+
+
+class TestRegressionCitiIntelEvalEntries:
+    """Tests that pin the new regression cases to the eval set so future
+    edits can't silently drop them."""
+
+    def test_eval_set_contains_citi_2026_regression(self) -> None:
+        import json
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parent.parent / "evals" / "task3" / "eval_set.json"
+        cases = json.loads(path.read_text(encoding="utf-8"))
+        cids = {c["case_id"] for c in cases}
+        assert "t3_citigroup_2026_interviewer_regression" in cids, (
+            "Citi 2026 regression case must be present in eval_set.json — "
+            "this case pins the validator coverage-mask fix."
+        )
+
+    def test_eval_set_contains_intel_2026_regression(self) -> None:
+        import json
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parent.parent / "evals" / "task3" / "eval_set.json"
+        cases = json.loads(path.read_text(encoding="utf-8"))
+        cids = {c["case_id"] for c in cases}
+        assert "t3_intel_2026_toc_regression" in cids, (
+            "Intel 2026 regression case must be present in eval_set.json — "
+            "this case pins the single-match TOC-suppression fix."
+        )
+
+    def test_regression_cases_use_cik_only_finder_path(self) -> None:
+        """Both regression cases intentionally omit accession_number so the
+        fetcher resolves the most-recent 10-K. This matters because the
+        actual Citi/Intel 2026 accession the interviewer ran against isn't
+        knowable until the filings exist; using the latest path keeps the
+        regression evergreen."""
+        import json
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parent.parent / "evals" / "task3" / "eval_set.json"
+        cases = {c["case_id"]: c for c in json.loads(path.read_text(encoding="utf-8"))}
+        for cid in (
+            "t3_citigroup_2026_interviewer_regression",
+            "t3_intel_2026_toc_regression",
+        ):
+            data = cases[cid]["input_data"]
+            assert "cik" in data
+            assert "accession_number" not in data, (
+                f"{cid}: regression case should rely on most-recent-10-K resolution"
+            )
