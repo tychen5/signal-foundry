@@ -1296,3 +1296,196 @@ class TestRegressions:
         # Both should be required (no default value)
         assert sig.parameters["latency_ms"].default is inspect.Parameter.empty
         assert sig.parameters["operation"].default is inspect.Parameter.empty
+
+
+class TestFastPath:
+    """Tests for the static-site fast path added 2026-05-15 in response to
+    interviewer Q4: avoid launching Playwright + LLM for server-side
+    rendered pages where a deterministic httpx + BS4 extraction suffices."""
+
+    def test_registry_has_expected_domains(self) -> None:
+        from src.task2_browser.fast_path import list_registered_domains
+
+        domains = list_registered_domains()
+        assert "wikipedia.org" in domains
+        assert "arxiv.org" in domains
+        assert "news.ycombinator.com" in domains
+        assert "example.com" in domains
+
+    def test_task_is_static_compatible_rejects_dynamic_verbs(self) -> None:
+        from src.task2_browser.fast_path import task_is_static_compatible
+
+        assert not task_is_static_compatible("click the submit button")
+        assert not task_is_static_compatible("fill the search box with 'foo' and submit")
+        assert not task_is_static_compatible("sign in to the site")
+        assert not task_is_static_compatible("登入到該網站")
+        assert not task_is_static_compatible("scroll down to find the price")
+
+    def test_task_is_static_compatible_accepts_extract_intents(self) -> None:
+        from src.task2_browser.fast_path import task_is_static_compatible
+
+        assert task_is_static_compatible(
+            "Read the first paragraph of the Wikipedia article on AI"
+        )
+        assert task_is_static_compatible(
+            "Report the paper's title and the first two authors"
+        )
+        assert task_is_static_compatible("Get the top story headline")
+
+    def test_domain_handler_lookup_suffix_match(self) -> None:
+        from src.task2_browser.fast_path import _domain_handler_for
+
+        assert _domain_handler_for("https://en.wikipedia.org/wiki/AI") is not None
+        assert _domain_handler_for("https://arxiv.org/abs/2509.13753") is not None
+        assert _domain_handler_for("https://example.com/") is not None
+        # Miss
+        assert _domain_handler_for("https://google.com/search?q=x") is None
+        assert _domain_handler_for("") is None
+
+    def test_try_fast_path_returns_none_on_unknown_domain(self) -> None:
+        import asyncio
+
+        from src.task2_browser.fast_path import try_fast_path
+
+        async def runner():
+            return await try_fast_path(
+                "Get the title",
+                "https://some-unknown-site.example",
+                trace_id="t",
+            )
+
+        result = asyncio.run(runner())
+        assert result is None, "Unknown domain must fall through to agent path"
+
+    def test_try_fast_path_returns_none_when_no_target_url(self) -> None:
+        import asyncio
+
+        from src.task2_browser.fast_path import try_fast_path
+
+        async def runner():
+            return await try_fast_path("any task", None, trace_id="t")
+
+        assert asyncio.run(runner()) is None
+
+    def test_try_fast_path_is_coroutine(self) -> None:
+        import inspect
+
+        from src.task2_browser.fast_path import try_fast_path
+
+        assert inspect.iscoroutinefunction(try_fast_path)
+
+    def test_browser_agent_run_accepts_allow_fast_path_kwarg(self) -> None:
+        """The run() signature must expose allow_fast_path so the router,
+        eval, and benchmark code can opt out for head-to-head comparison."""
+        import inspect
+
+        from src.task2_browser.agent import BrowserAgent
+
+        sig = inspect.signature(BrowserAgent.run)
+        assert "allow_fast_path" in sig.parameters
+        assert sig.parameters["allow_fast_path"].default is True
+
+    def test_router_request_schema_exposes_allow_fast_path(self) -> None:
+        from src.task2_browser.router import BrowserTaskRequest
+
+        req = BrowserTaskRequest(task_description="x")
+        assert req.allow_fast_path is True
+        req2 = BrowserTaskRequest(task_description="x", allow_fast_path=False)
+        assert req2.allow_fast_path is False
+
+
+class TestPerCaseExpectedOutcome:
+    """Tests for the per-case expected_outcome scoring layer added 2026-05-15
+    in response to interviewer Q3."""
+
+    def _stub_result(self, **kw):
+        from src.task2_browser.schemas import AgentResult
+
+        defaults: dict = dict(
+            trace_id="t",
+            task_description="x",
+            target_url="https://example.com",
+            status="success",
+            final_answer="The first paragraph mentions artificial intelligence and machines.",
+            total_steps=3,
+            cost_usd=0.0,
+            llm_calls=0,
+            failure_modes=[],
+            metadata={},
+        )
+        defaults.update(kw)
+        return AgentResult(**defaults)
+
+    def test_must_contain_check_passes_on_match(self) -> None:
+        from evals.task2.run_eval import _score_case
+
+        case = {
+            "case_id": "demo",
+            "input_data": {"max_steps": 10},
+            "expected_outcome": {
+                "allowed_statuses": ["success"],
+                "answer_must_contain": ["artificial intelligence"],
+                "answer_must_not_contain": ["I cannot"],
+            },
+        }
+        result = self._stub_result()
+        score = _score_case(case, result)
+        assert score["passed"] is True
+
+    def test_must_contain_check_fails_on_missing_substring(self) -> None:
+        from evals.task2.run_eval import _score_case
+
+        case = {
+            "case_id": "demo",
+            "input_data": {"max_steps": 10},
+            "expected_outcome": {
+                "answer_must_contain": ["price-to-earnings ratio"],
+            },
+        }
+        result = self._stub_result()
+        score = _score_case(case, result)
+        assert score["passed"] is False
+        substr_checks = [c for c in score["checks"] if "must_contain" in c["name"]]
+        assert substr_checks and substr_checks[0]["passed"] is False
+
+    def test_negative_case_passes_with_not_found_status(self) -> None:
+        """The silent-failure-guard case expects status=not_found AND no @
+        in the answer. Both must be enforced deterministically."""
+        from evals.task2.run_eval import _score_case
+
+        case = {
+            "case_id": "t2_anuse_silent_failure_guard",
+            "input_data": {"max_steps": 10},
+            "expected_outcome": {
+                "allowed_statuses": ["not_found", "partial"],
+                "answer_must_not_contain": ["@example.com", "trademark@"],
+            },
+        }
+        result = self._stub_result(
+            status="not_found",
+            final_answer="example.com has no contact information",
+        )
+        score = _score_case(case, result)
+        assert score["passed"] is True
+
+    def test_negative_case_fails_on_hallucinated_email(self) -> None:
+        """If the agent hallucinates an email (banned substring), the per-
+        case check must catch it even though status is plausible."""
+        from evals.task2.run_eval import _score_case
+
+        case = {
+            "case_id": "t2_anuse_silent_failure_guard",
+            "input_data": {"max_steps": 10},
+            "expected_outcome": {
+                "allowed_statuses": ["not_found", "partial", "success"],
+                "answer_must_not_contain": ["@example.com"],
+            },
+        }
+        result = self._stub_result(
+            status="success",
+            final_answer="The contact email is trademark@example.com.",
+        )
+        score = _score_case(case, result)
+        assert score["passed"] is False, (
+            "Hallucinated email must trip must_not_contain check"
+        )

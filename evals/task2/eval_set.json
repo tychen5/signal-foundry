@@ -9,7 +9,12 @@
     "expected_behavior": "Navigate to Wikipedia, search, find article, extract first paragraph text",
     "difficulty": "easy",
     "tags": ["search", "extract", "wikipedia"],
-    "eval_dimensions": ["domain_diversity", "task_complexity_single"]
+    "eval_dimensions": ["domain_diversity", "task_complexity_single"],
+    "expected_outcome": {
+      "allowed_statuses": ["success"],
+      "answer_must_contain": ["intelligence"],
+      "answer_must_not_contain": ["I cannot find", "not_found:", "I was unable"]
+    }
   },
   {
     "case_id": "t2_google_search",
@@ -201,7 +206,11 @@
     "expected_behavior": "example.com has no such information. The agent must report not-found, NOT hallucinate an email. This case directly tests silent-failure prevention — the highest-value behavior the spec asks for.",
     "difficulty": "edge_case",
     "tags": ["silent_failure", "hallucination_guard", "negative_case"],
-    "eval_dimensions": ["failure_injection", "silent_failure_prevention"]
+    "eval_dimensions": ["failure_injection", "silent_failure_prevention"],
+    "expected_outcome": {
+      "allowed_statuses": ["not_found", "partial"],
+      "answer_must_not_contain": ["@example.com", "trademark@", "europe@"]
+    }
   },
   {
     "case_id": "t2_arxiv_paper_lookup",
@@ -213,7 +222,12 @@
     "expected_behavior": "Static academic paper page; clear DOM with title in <h1.title>, authors in <div.authors>. Validates simple direct extraction without dynamic loading.",
     "difficulty": "easy",
     "tags": ["academic", "extract", "static_page", "real_world"],
-    "eval_dimensions": ["domain_diversity", "task_complexity_single"]
+    "eval_dimensions": ["domain_diversity", "task_complexity_single"],
+    "expected_outcome": {
+      "allowed_statuses": ["success"],
+      "answer_must_contain": ["Title", "Authors"],
+      "answer_must_not_contain": ["I cannot find", "not_found:"]
+    }
   },
   {
     "case_id": "t2_stackoverflow_question",
@@ -237,7 +251,11 @@
     "expected_behavior": "LinkedIn shows a login wall to anonymous visitors. Agent MUST report not_accessible: login_required (or similar) — NOT fabricate a job title from world knowledge. Tests login-wall detection in v2_healer.",
     "difficulty": "edge_case",
     "tags": ["login_wall", "negative_case", "auth_required", "hallucination_guard"],
-    "eval_dimensions": ["failure_injection", "silent_failure_prevention"]
+    "eval_dimensions": ["failure_injection", "silent_failure_prevention"],
+    "expected_outcome": {
+      "allowed_statuses": ["not_found", "partial"],
+      "answer_must_not_contain": ["Chairman and CEO", "Executive Chair"]
+    }
   },
   {
     "case_id": "t2_bing_search_alt",
@@ -471,7 +489,10 @@
     "expected_behavior": "NYTimes shows headlines on the homepage but article body is paywalled. The agent should report the headline (visible) and explicitly state the article body is paywalled, NOT invent paragraph text. Tests anti-hallucination on a different blocking mechanism than login walls — the paywall overlay is JS-rendered and partially transparent.",
     "difficulty": "hard",
     "tags": ["paywall", "news", "negative_case", "silent_failure", "real_world", "hallucination_guard"],
-    "eval_dimensions": ["failure_injection", "silent_failure_prevention"]
+    "eval_dimensions": ["failure_injection", "silent_failure_prevention"],
+    "expected_outcome": {
+      "allowed_statuses": ["partial", "not_found", "success"]
+    }
   },
   {
     "case_id": "t2_yahoo_japan_news",
@@ -507,7 +528,10 @@
     "expected_behavior": "Chase banking site — public marketing pages with promotional offers visible (sign-up bonuses, point multipliers). The interesting bits often require login. Tests banking-domain extraction + honest reporting on login walls.",
     "difficulty": "hard",
     "tags": ["banking", "marketing", "real_world", "login_wall_partial"],
-    "eval_dimensions": ["domain_diversity", "failure_injection"]
+    "eval_dimensions": ["domain_diversity", "failure_injection"],
+    "expected_outcome": {
+      "allowed_statuses": ["success", "partial", "not_found"]
+    }
   },
   {
     "case_id": "t2_duckduckgo_alt_engine",

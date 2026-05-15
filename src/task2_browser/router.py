@@ -81,6 +81,16 @@ class BrowserTaskRequest(BaseModel):
             "the AOM tree. Helps with visually-encoded data (charts, captchas, layout)."
         ),
     )
+    allow_fast_path: bool = Field(
+        default=True,
+        description=(
+            "If true (default), attempt the deterministic static-site fast path "
+            "before launching Playwright. Server-side rendered domains "
+            "(Wikipedia, arxiv, HN, example.com) resolve in <2 s with 0 LLM "
+            "calls. Set false to force the full Plan→Execute→Observe→Heal loop "
+            "for head-to-head benchmarks against the agent path."
+        ),
+    )
     model: ModelSelectionRequest = Field(default_factory=ModelSelectionRequest)
 
 
@@ -137,6 +147,7 @@ async def execute_browser_task(request: BrowserTaskRequest):
             target_url=request.target_url,
             max_steps=request.max_steps,
             trace_id=trace_id,
+            allow_fast_path=request.allow_fast_path,
         )
 
         from src.shared.tracing import trace_url
@@ -254,6 +265,7 @@ async def stream_browser_task(request: BrowserTaskRequest):
                 target_url=request.target_url,
                 max_steps=request.max_steps,
                 trace_id=trace_id,
+                allow_fast_path=request.allow_fast_path,
             )
         except LLMStageError as e:
             err_info = e.to_envelope()

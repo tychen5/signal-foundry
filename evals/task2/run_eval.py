@@ -26,20 +26,71 @@ def _load_cases(path: Path) -> list[dict[str, Any]]:
 
 
 def _score_case(case: dict[str, Any], result: AgentResult) -> dict[str, Any]:
-    """Score one browser agent result with deterministic checks."""
-    checks: list[dict[str, Any]] = []
+    """Score one browser agent result with deterministic checks.
 
-    # Check 1: Agent didn't crash
+    Two layers of check:
+
+    1. Universal harness checks (always run): the agent didn't crash, took
+       at least one step, didn't infinite-loop. These keep the eval honest
+       on every case regardless of expected outcome.
+
+    2. Per-case ``expected_outcome`` (optional, but recommended for every
+       case): a deterministic correctness contract. Fields:
+
+           expected_outcome.status               — "success" | "partial" | "not_found" | "unverified"
+           expected_outcome.allowed_statuses     — list of statuses (any one passes)
+           expected_outcome.answer_must_contain  — list of case-insensitive substrings
+           expected_outcome.answer_must_not_contain — list of substrings
+           expected_outcome.failure_modes_must_contain — list of failure-mode strings
+           expected_outcome.min_steps / max_steps — optional bounds
+
+    Added 2026-05-15 in response to interviewer concern Q3:
+    "Task 2 eval 為什麼 not_found / partial / unverified 都算 pass?"
+    The harness *intentionally* downgrades to not_found on silent-failure-
+    guard cases, so a blanket "status==success" check would penalise the
+    correct behaviour. But the original 4 generic checks were too permissive
+    — they passed positive cases even when the agent returned the wrong
+    answer. Per-case expected_outcome closes that gap deterministically (no
+    LLM-as-judge involved).
+    """
+    checks: list[dict[str, Any]] = []
+    expected = case.get("expected_outcome") or {}
+
+    # ── Layer 1: universal harness checks ────────────────────────────
     checks.append(
         {
             "name": "no_crash",
             "passed": result.status != "failed",
-            "expected": "success or partial",
+            "expected": "not failed",
             "actual": result.status,
         }
     )
 
-    # Check 2: Agent produced a final answer
+    # took_steps is waived when the fast path served the request (1 synthetic
+    # step is recorded but the agent path was skipped entirely).
+    fast_path_hit = bool((result.metadata or {}).get("fast_path", {}).get("hit"))
+    min_steps = max(0, expected.get("min_steps", 1 if not fast_path_hit else 0))
+    checks.append(
+        {
+            "name": "took_steps",
+            "passed": result.total_steps >= min_steps,
+            "expected": f">= {min_steps}",
+            "actual": result.total_steps,
+        }
+    )
+
+    max_steps = expected.get("max_steps") or case.get("input_data", {}).get("max_steps", 20)
+    checks.append(
+        {
+            "name": "reasonable_steps",
+            "passed": result.total_steps <= max_steps,
+            "expected": f"<= {max_steps}",
+            "actual": result.total_steps,
+        }
+    )
+
+    # has_answer remains universal — even not_found cases should have a
+    # human-readable explanation populated.
     checks.append(
         {
             "name": "has_answer",
@@ -49,26 +100,57 @@ def _score_case(case: dict[str, Any], result: AgentResult) -> dict[str, Any]:
         }
     )
 
-    # Check 3: Agent took steps (not zero-shot)
-    checks.append(
-        {
-            "name": "took_steps",
-            "passed": result.total_steps > 0,
-            "expected": "> 0 steps",
-            "actual": result.total_steps,
-        }
-    )
+    # ── Layer 2: per-case correctness (deterministic, no LLM) ────────
+    if expected:
+        if "status" in expected:
+            checks.append(
+                {
+                    "name": "expected_status",
+                    "passed": result.status == expected["status"],
+                    "expected": expected["status"],
+                    "actual": result.status,
+                }
+            )
+        if "allowed_statuses" in expected:
+            allowed = set(expected["allowed_statuses"])
+            checks.append(
+                {
+                    "name": "status_in_allowed",
+                    "passed": result.status in allowed,
+                    "expected": f"one of {sorted(allowed)}",
+                    "actual": result.status,
+                }
+            )
 
-    # Check 4: Reasonable step count (not infinite loop)
-    max_steps = case.get("input_data", {}).get("max_steps", 15)
-    checks.append(
-        {
-            "name": "reasonable_steps",
-            "passed": result.total_steps <= max_steps,
-            "expected": f"<= {max_steps}",
-            "actual": result.total_steps,
-        }
-    )
+        answer_lower = (result.final_answer or "").lower()
+        for substr in expected.get("answer_must_contain", []):
+            checks.append(
+                {
+                    "name": f"must_contain[{substr[:40]}]",
+                    "passed": substr.lower() in answer_lower,
+                    "expected": f"contains '{substr}'",
+                    "actual": "present" if substr.lower() in answer_lower else "missing",
+                }
+            )
+        for substr in expected.get("answer_must_not_contain", []):
+            checks.append(
+                {
+                    "name": f"must_not_contain[{substr[:40]}]",
+                    "passed": substr.lower() not in answer_lower,
+                    "expected": f"missing '{substr}'",
+                    "actual": "missing" if substr.lower() not in answer_lower else "present (banned)",
+                }
+            )
+        for fm in expected.get("failure_modes_must_contain", []):
+            present = any(fm in (m or "") for m in (result.failure_modes or []))
+            checks.append(
+                {
+                    "name": f"failure_mode[{fm}]",
+                    "passed": present,
+                    "expected": f"failure_modes contains '{fm}'",
+                    "actual": ",".join(result.failure_modes or []) or "(none)",
+                }
+            )
 
     passed = all(c["passed"] for c in checks)
 
@@ -85,6 +167,8 @@ def _score_case(case: dict[str, Any], result: AgentResult) -> dict[str, Any]:
         "latency_ms": result.total_duration_ms,
         "cost_usd": result.cost_usd,
         "llm_calls": result.llm_calls,
+        "fast_path_hit": fast_path_hit,
+        "expected_outcome_present": bool(expected),
     }
 
 
