@@ -24,7 +24,7 @@ from src.task3_sec.fetcher import (
     find_proxy_statement,
     parse_filing_url_metadata,
 )
-from src.task3_sec.llm_refiner import refine_boundaries
+from src.task3_sec.llm_refiner import anchor_aware_gap_fill, refine_boundaries
 from src.task3_sec.normalizer import normalize_filing
 from src.task3_sec.rule_parser import (
     ParseResult,
@@ -172,7 +172,11 @@ async def extract_10k(
     await _emit("stage1_start", stage="normalize_and_rule_parse")
     stage1_start = time.time()
     normalized_text, format_type = normalize_filing(raw_content)
-    parse_result = rule_based_parse(normalized_text)
+    # Pass raw_content to rule_based_parse so HTML-tag-aware anchor
+    # extraction (`html_heading_extractor`) can run alongside text-only
+    # detectors. Without this, filings like Citi 2026 lose half their
+    # heading anchors.
+    parse_result = rule_based_parse(normalized_text, raw_html=raw_content)
     stages_used.append("rule_based")
 
     logger.info(
@@ -275,12 +279,18 @@ async def extract_10k(
         except Exception as e:
             from src.shared.llm_errors import LLMStageError
 
+            # Soft-fail: Stage 2 boundary-refine is supplementary —
+            # rule-based + TOC + HTML anchors already get us to 90%+
+            # coverage. If the LLM rate-limits or 503s, log and
+            # continue to Stage 2b (anchor_gap_fill) which is also
+            # LLM-driven but uses a single-call full-doc approach.
             if isinstance(e, LLMStageError):
+                logger.warning("stage2_soft_fail_llm_error", err=str(e)[:200])
                 await _emit("stage2_failed", error=e.to_envelope())
-                raise
-            logger.warning("stage2_failed", error=str(e))
+            else:
+                logger.warning("stage2_failed", error=str(e))
+                await _emit("stage2_failed", error=str(e)[:120])
             stages_used.append("llm_refine_failed")
-            await _emit("stage2_failed", error=str(e)[:120])
     else:
         await _emit(
             "stage2_skipped",
@@ -288,6 +298,62 @@ async def extract_10k(
             avg_confidence=round(parse_result.confidence_avg, 3),
             items_found=parse_result.items_found,
         )
+
+    # ========== STAGE 2B: ANCHOR-AWARE GAP-FILL ==========
+    # When rule + per-boundary refine still leaves us with critical
+    # coverage gaps (e.g. Citi 2026 even with HTML anchors gets only
+    # ~12 items vs 22 expected), run the single-call anchor-aware
+    # gap-fill. ONE LLM call with all anchors + all missing items +
+    # gap excerpts — vastly more effective than per-boundary loop
+    # when most items have no boundary at all.
+    #
+    # Trigger: force_llm OR (not skip_llm AND items_found < 18).
+    # 18 is the lower bound for "complete modern filing" (22 items
+    # minus ~4 optional like 1B/1C/6/16 that may legitimately be N/A).
+    needs_gap_fill = force_llm or (not skip_llm and parse_result.items_found < 18)
+    if needs_gap_fill:
+        gap_fill_before = parse_result.items_found
+        await _emit(
+            "stage2b_start",
+            stage="anchor_gap_fill",
+            anchors=gap_fill_before,
+            missing_count=max(0, 22 - gap_fill_before),
+        )
+        try:
+            stage2b_start = time.time()
+            parse_result = await anchor_aware_gap_fill(
+                text=normalized_text,
+                parse_result=parse_result,
+                model_name=model_name,
+                user_api_key=user_api_key,
+                trace_id=trace_id,
+            )
+            stages_used.append("anchor_gap_fill")
+            await _emit(
+                "stage2b_done",
+                items_found=parse_result.items_found,
+                added=parse_result.items_found - gap_fill_before,
+                duration_ms=round((time.time() - stage2b_start) * 1000, 1),
+            )
+            logger.info(
+                "stage2b_complete",
+                items_found=parse_result.items_found,
+                added=parse_result.items_found - gap_fill_before,
+            )
+        except Exception as e:
+            from src.shared.llm_errors import LLMStageError
+
+            if isinstance(e, LLMStageError):
+                # Soft-fail — gap-fill is supplementary; the main refine
+                # path already succeeded (or was skipped). Don't crash the
+                # whole pipeline because of it.
+                logger.warning("stage2b_soft_fail", err=str(e)[:200])
+                stages_used.append("anchor_gap_fill_failed")
+                await _emit("stage2b_failed", error=str(e)[:160])
+            else:
+                logger.warning("stage2b_failed", error=str(e))
+                stages_used.append("anchor_gap_fill_failed")
+                await _emit("stage2b_failed", error=str(e)[:160])
 
     # ========== BUILD EXTRACTED ITEMS ==========
     items = _build_items(normalized_text, parse_result)
@@ -358,7 +424,9 @@ async def extract_10k(
 
     expected_count = len(_STD_ITEMS)
     extracted_count = sum(1 for item in items if item.status != ItemStatus.NOT_FOUND)
-    completeness = round(extracted_count / max(expected_count, 1), 3)
+    # Clamp to [0, 1]; defensive against dedup edge cases where intermediate
+    # boundary lists temporarily exceed expected (Pydantic schema enforces 0-1).
+    completeness = round(min(1.0, extracted_count / max(expected_count, 1)), 3)
 
     result.processing_metadata = ProcessingMetadata(
         total_tokens_in=request_cost.get("tokens_in", 0),
@@ -409,10 +477,66 @@ async def extract_10k(
 
 
 def _build_items(text: str, parse_result: ParseResult) -> list[ExtractedItem]:
-    """Build ExtractedItem list from parse result boundaries."""
+    """Build ExtractedItem list from parse result boundaries.
+
+    Dedupes by item_number: when multiple boundaries point to the same
+    item (cover_toc_status + llm_refined, or html_anchor + title_fallback),
+    keeps the one with the longest content body. LLM-refined boundaries
+    win ties because they're verified against actual text rather than
+    inferred from a TOC table.
+    """
     items: list[ExtractedItem] = []
 
+    # Dedupe boundaries by item_number BEFORE building items.
+    #
+    # Three-tier scoring (highest first):
+    #   1. **Authoritative non-extracted status_hint wins**. TOC / cross-
+    #      reference / master-IBR detectors emit hints like "reserved",
+    #      "not_applicable", "incorporated_by_reference". When the filing's
+    #      own TOC explicitly says Item N is reserved, that trumps any
+    #      body anchor (which is often a false positive — e.g. an html
+    #      <span> matching "Selected Financial Data" subheading when Item
+    #      6 is actually [Reserved]).
+    #   2. **Longest content wins among same-status boundaries**. Real
+    #      body prose beats short cover-page snippets.
+    #   3. **Source priority breaks ties**. llm_refined > html_anchor >
+    #      title_only_fallback > regex > TOC/cross-ref/IBR.
+    _SOURCE_PRIORITY = {
+        "llm_refined": 5,
+        "llm_full_doc_extract": 5,
+        "llm_anchor_gap_fill": 5,
+        "llm_missing_detect": 4,
+        "html_anchor": 3,
+        "heading_regex": 3,
+        "title_only_fallback": 2,
+        "heading_regex_toc_suspect": 2,
+        "master_ibr_declaration": 1,
+        "cover_toc_status": 1,
+        "end_cross_reference": 1,
+    }
+    _AUTHORITATIVE_NON_EXTRACTED = {
+        "not_applicable",
+        "reserved",
+        "incorporated_by_reference",
+    }
+
+    def _score(b) -> tuple:
+        content_len = max(0, (b.end_pos if b.end_pos > 0 else len(text)) - b.start_pos)
+        # Tier 0: authoritative hint? (TOC-declared reserved/N-A/IBR is the truth)
+        authoritative = 1 if (b.status_hint in _AUTHORITATIVE_NON_EXTRACTED) else 0
+        return (authoritative, content_len, _SOURCE_PRIORITY.get(b.source, 0))
+
+    from src.task3_sec.rule_parser import ItemBoundary as _ItemBoundary
+
+    best_per_item: dict[str, _ItemBoundary] = {}
     for boundary in parse_result.boundaries:
+        existing = best_per_item.get(boundary.item_number)
+        if existing is None or _score(boundary) > _score(existing):
+            best_per_item[boundary.item_number] = boundary
+
+    deduped = sorted(best_per_item.values(), key=lambda b: b.start_pos)
+
+    for boundary in deduped:
         start = boundary.start_pos
         end = boundary.end_pos if boundary.end_pos > 0 else len(text)
 
@@ -464,23 +588,63 @@ def _build_items(text: str, parse_result: ParseResult) -> list[ExtractedItem]:
 
 
 def _fill_missing_items(items: list[ExtractedItem]) -> list[ExtractedItem]:
-    """Add NOT_FOUND entries for any standard items not detected."""
+    """Add placeholder entries for any standard items not detected.
+
+    Optional items that are missing get a friendlier default status:
+      - Item 16 (Form 10-K Summary): always optional per SEC instructions →
+        not_applicable (most filers omit it)
+      - Item 6 (Selected Financial Data): eliminated by SEC release 33-10890
+        in 2021 → reserved
+    Other missing items remain NOT_FOUND so the honest reporting layer can
+    surface coverage gaps."""
     found = {item.item_number for item in items}
+
+    # Items where "missing" has a natural non-not_found interpretation.
+    # See SEC release 33-10890 (2021) for Item 6 elimination, and Reg S-K
+    # Item 16 instruction (optional).
+    _OPTIONAL_AUTO_STATUS: dict[str, tuple[ItemStatus, str]] = {
+        "16": (
+            ItemStatus.NOT_APPLICABLE,
+            "Form 10-K Summary is optional per SEC instructions; "
+            "this filer did not include one.",
+        ),
+        "6": (
+            ItemStatus.RESERVED,
+            "Item 6 (Selected Financial Data) was eliminated by SEC release "
+            "33-10890 in 2021 and is no longer required.",
+        ),
+    }
 
     for std_item in STANDARD_10K_ITEMS:
         if std_item["item_number"] not in found:
-            items.append(
-                ExtractedItem(
-                    part=std_item["part"],
-                    item_number=std_item["item_number"],
-                    item_title=std_item["item_title"],
-                    content_text="",
-                    char_range=[0, 0],
-                    status=ItemStatus.NOT_FOUND,
-                    confidence=0.0,
-                    extraction_method=ExtractionMethod.RULE_BASED,
+            auto = _OPTIONAL_AUTO_STATUS.get(std_item["item_number"])
+            if auto is not None:
+                status, note = auto
+                items.append(
+                    ExtractedItem(
+                        part=std_item["part"],
+                        item_number=std_item["item_number"],
+                        item_title=std_item["item_title"],
+                        content_text=note,
+                        char_range=[0, 0],
+                        status=status,
+                        confidence=0.70,
+                        extraction_method=ExtractionMethod.RULE_BASED,
+                    )
                 )
-            )
+            else:
+                items.append(
+                    ExtractedItem(
+                        part=std_item["part"],
+                        item_number=std_item["item_number"],
+                        item_title=std_item["item_title"],
+                        content_text="",
+                        char_range=[0, 0],
+                        status=ItemStatus.NOT_FOUND,
+                        confidence=0.0,
+                        extraction_method=ExtractionMethod.RULE_BASED,
+                    )
+                )
 
     # Sort by standard order
     order = {item["item_number"]: i for i, item in enumerate(STANDARD_10K_ITEMS)}
