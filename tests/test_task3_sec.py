@@ -1341,3 +1341,225 @@ class TestTitleFallbackHeadingDetection:
             ItemBoundary(item_number="7", start_pos=500_000, source="heading_regex"),
         ]
         assert _needs_title_fallback(boundaries, total_chars=1_000_000) is False
+
+
+class TestHTMLHeadingExtractor:
+    """Tests for the HTML-tag-aware heading detector added in the larger lift
+    for Citi 2026 / Intel 2026 body extraction. Verifies the structural
+    detection path that the text-only parser cannot see."""
+
+    def test_match_item_number_recognizes_canonical_titles(self) -> None:
+        from src.task3_sec.html_heading_extractor import _match_item_number
+
+        assert _match_item_number("Risk Factors") == ("1A", "risk factors")
+        assert _match_item_number("RISK FACTORS") == ("1A", "risk factors")
+        assert _match_item_number("Disclosure Controls and Procedures") == (
+            "9A",
+            "disclosure controls and procedures",
+        )
+
+    def test_match_item_number_handles_item_n_prefix(self) -> None:
+        from src.task3_sec.html_heading_extractor import _match_item_number
+
+        # "Item 1A. Risk Factors" → strip prefix, match title
+        match = _match_item_number("Item 1A. Risk Factors")
+        assert match is not None
+        assert match[0] == "1A"
+
+    def test_match_item_number_rejects_unrecognized_text(self) -> None:
+        from src.task3_sec.html_heading_extractor import _match_item_number
+
+        assert _match_item_number("Total Stockholders Equity") is None
+        assert _match_item_number("") is None
+        assert _match_item_number("X" * 300) is None  # too long
+
+    def test_detect_html_anchors_returns_empty_on_no_html(self) -> None:
+        from src.task3_sec.html_heading_extractor import detect_html_anchors
+
+        assert detect_html_anchors("", "some normalized text") == []
+        assert detect_html_anchors("<html></html>", "") == []
+
+    def test_detect_html_anchors_finds_bold_span_heading(self) -> None:
+        from src.task3_sec.html_heading_extractor import detect_html_anchors
+
+        # Synthetic: bold span containing "Risk Factors" + matching normalized text.
+        raw_html = (
+            "<html><body>"
+            + "<p>" + ("body filler " * 200) + "</p>"
+            + '<span style="font-weight: 700; font-size: 12pt">Risk Factors</span>'
+            + "<p>" + ("more filler " * 200) + "</p>"
+            + "</body></html>"
+        )
+        normalized = ("body filler " * 200) + "\n\n\nRisk Factors\n\n\n" + ("more filler " * 200)
+        anchors = detect_html_anchors(raw_html, normalized)
+        items = {a["item_number"] for a in anchors}
+        assert "1A" in items, f"Expected Item 1A from bold-span 'Risk Factors'; got {items}"
+
+    def test_detect_html_anchors_excludes_toc_region(self) -> None:
+        """Heading in first 10% of doc should be excluded (TOC zone)."""
+        from src.task3_sec.html_heading_extractor import detect_html_anchors
+
+        # Put "Risk Factors" at the very start of normalized text.
+        raw_html = (
+            "<html><body>"
+            + "<h1>Risk Factors</h1>"
+            + "<p>" + ("body filler " * 1000) + "</p>"
+            + "</body></html>"
+        )
+        normalized = "Risk Factors\n" + ("body filler " * 1000)
+        anchors = detect_html_anchors(raw_html, normalized, body_start_pct=0.10)
+        items = {a["item_number"] for a in anchors}
+        # The single occurrence is at position 0 (< 10%) — should be filtered out
+        assert "1A" not in items
+
+
+class TestCoverTocTable:
+    """Tests for cover-page TOC parser that handles Citi-style filings where
+    every item's status (extracted / not_applicable / reserved / IBR) is
+    declared in the cover-page TOC table."""
+
+    def test_parse_cover_toc_recognizes_not_applicable_status(self) -> None:
+        from src.task3_sec.rule_parser import parse_cover_toc_table
+
+        # Synthetic cover-page TOC with Items 1B and 4 marked "Not Applicable"
+        text = (
+            "preamble " * 250  # ~2 KB preamble (skipped by parser)
+            + "\n\n1B.\nUnresolved Staff Comments\nNot Applicable\n\n"
+            + "1C.\nCybersecurity\n55-57\n\n"
+            + "4.\nMine Safety Disclosures\nNot Applicable\n\n"
+        )
+        toc = parse_cover_toc_table(text)
+        assert "1B" in toc
+        assert toc["1B"]["status"] == "not_applicable"
+        assert "4" in toc
+        assert toc["4"]["status"] == "not_applicable"
+
+    def test_parse_cover_toc_recognizes_reserved_status(self) -> None:
+        from src.task3_sec.rule_parser import parse_cover_toc_table
+
+        text = (
+            "preamble " * 250
+            + "\n\n6.\nReserved\n\n7.\nMd&a\n8-36\n\n"
+        )
+        toc = parse_cover_toc_table(text)
+        assert "6" in toc
+        assert toc["6"]["status"] == "reserved"
+
+    def test_parse_cover_toc_first_occurrence_wins(self) -> None:
+        """Stale '9.' tokens in later financial tables must NOT overwrite
+        the real TOC entry."""
+        from src.task3_sec.rule_parser import parse_cover_toc_table
+
+        # First occurrence in TOC zone (real entry)
+        text = (
+            "preamble " * 250
+            + "\n\n9.\nChanges in and Disagreements with Accountants\nNot Applicable\n\n"
+            + ("intermediate body text " * 200)
+            + "\n\n9.\nUnrelated table row\n123.45\n\n"  # should be ignored
+        )
+        toc = parse_cover_toc_table(text)
+        assert toc["9"]["status"] == "not_applicable"
+        assert "Changes" in toc["9"]["title"]
+
+
+class TestMasterIbrDeclaration:
+    """Tests for detecting the cover-page master IBR declaration that says
+    'Items X, Y, Z are incorporated by reference from the Proxy Statement'."""
+
+    def test_master_ibr_extracts_item_list(self) -> None:
+        from src.task3_sec.rule_parser import detect_master_ibr_declaration
+
+        # IBR declaration must be in the first 15% of doc (cover zone).
+        ibr = (
+            "Documents Incorporated by Reference:\n"
+            "Portions of the registrant's proxy statement for the "
+            "annual meeting of stockholders are incorporated by "
+            "reference in this Form 10-K in response to Items "
+            "10, 11, 12, 13 and 14 of Part III.\n\n"
+        )
+        text = ibr + ("body content " * 10000)  # large body, IBR sits in cover
+        boundaries = detect_master_ibr_declaration(text)
+        item_numbers = {b.item_number for b in boundaries}
+        assert item_numbers == {"10", "11", "12", "13", "14"}
+        for b in boundaries:
+            assert b.status_hint == "incorporated_by_reference"
+            assert b.source == "master_ibr_declaration"
+
+    def test_master_ibr_no_match_returns_empty(self) -> None:
+        from src.task3_sec.rule_parser import detect_master_ibr_declaration
+
+        text = "no IBR pattern here just plain prose. " * 100
+        assert detect_master_ibr_declaration(text) == []
+
+
+class TestEndCrossReferenceIndex:
+    """Tests for Intel-style end-of-doc Cross-Reference Index parser."""
+
+    def test_parse_end_index_finds_items_with_status(self) -> None:
+        from src.task3_sec.rule_parser import parse_end_cross_reference_index
+
+        # 95%+ region of doc contains "Item N." entries with status notes
+        body_filler = "body content " * 1000
+        index_block = (
+            "\n\nForm 10-K Cross-Reference Index\n\n"
+            + "Item 1B.\nUnresolved Staff Comments\nNone\n\n"
+            + "Item 4.\nMine Safety Disclosures\nNone\n\n"
+            + "Item 6.\n[Reserved]\n\n"
+        )
+        text = body_filler + index_block
+        index = parse_end_cross_reference_index(text)
+        assert "1B" in index
+        assert index["1B"]["status"] == "not_applicable"
+        assert "4" in index
+        assert index["4"]["status"] == "not_applicable"
+        assert "6" in index
+        assert index["6"]["status"] == "reserved"
+
+
+class TestDedupePicksAuthoritativeStatus:
+    """Regression: when TOC says 'reserved' but html_anchor (false positive)
+    finds a body match for the same item, the TOC status must win in dedupe.
+    This protects against Citi-style false positives where 'Selected Financial
+    Data' subheading shadows Item 6 which is actually [Reserved]."""
+
+    def test_authoritative_status_hint_beats_long_body_content(self) -> None:
+        # Direct unit test of the dedupe scoring function would require
+        # exposing it. Instead, integration-test through extract_10k path
+        # is covered elsewhere. Here we just confirm the priority constant
+        # exists.
+        from src.task3_sec.pipeline import _build_items
+        from src.task3_sec.rule_parser import ItemBoundary, ParseResult
+        from src.task3_sec.schemas import ItemStatus
+
+        text = "x" * 100_000
+        # Two boundaries for Item 6: TOC says reserved (short), html says
+        # extracted (long body false positive)
+        toc = ItemBoundary(
+            item_number="6",
+            start_pos=4_000,
+            end_pos=4_200,
+            heading_text="Reserved",
+            source="cover_toc_status",
+            status_hint="reserved",
+        )
+        body_false_positive = ItemBoundary(
+            item_number="6",
+            start_pos=50_000,
+            end_pos=80_000,  # long content
+            heading_text="Selected Financial Data",
+            source="html_anchor",
+            status_hint="",
+        )
+        items = _build_items(
+            text,
+            ParseResult(
+                boundaries=[toc, body_false_positive],
+                total_chars=len(text),
+                items_found=2,
+            ),
+        )
+        # Only one Item 6 in result (deduped)
+        item_6 = [i for i in items if i.item_number == "6"]
+        assert len(item_6) == 1, f"Item 6 should be deduped to 1; got {len(item_6)}"
+        # Authoritative TOC status wins over the body false positive
+        assert item_6[0].status == ItemStatus.RESERVED
