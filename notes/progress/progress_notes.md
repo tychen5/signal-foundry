@@ -226,6 +226,34 @@
     * [x] Live `.env` OpenRouter runs verified: `openai/gpt-5.5` succeeded in 5 steps with Yahoo `%5ETWII`; `google/gemini-3.1-pro-preview` succeeded in 4 steps with Yahoo `%5ETWII`. Focused Task2 tests pass: 87/87.
   8. [x] NVIDIA key expiration messaging: all 4 pages (index, task1, task2, task3) now explicitly warn that the server-bundled NVIDIA free-tier key may be expired or rate-limited and recommend users sign up at build.nvidia.com. Index BYOK text strengthened with bold "may be expired or rate-limited" warning. Each task page's NVIDIA key input shows "Server-bundled key may be expired/exhausted" hint.
 
+11. [x] Phase 11 依據 @notes/_briefs/interviewer_concerns.md 建議反饋強化系統 ✅ (2026-05-15)
+  1. [x] 針對task 3的邏輯 functions 等，新增 Citi 2026 10-K 和 Intel 2026 的 example 到 `https://signal-foundry.zeabur.app/task3` 的 example-btn 中，並修復相關 functions 驗證這兩個 use cases 可正確得到預期結果回傳。
+    * [x] **§1.2 修法**：`src/task3_sec/validator.py` `_check_coverage` 現在只把 `status != NOT_FOUND` 的 item 算進 `found`，並新增 `catastrophic` flag（0 個 real extraction 時直接 fail）。對應 Citi 2026 「0 headings 還 pass」的 failure-masking bug。
+    * [x] **`ProcessingMetadata.extraction_completeness`** 新欄位實作：含 `extracted_count` / `expected_count` / `extraction_completeness` (0.0~1.0)，pipeline.py 在 finalize 階段填入。API caller 可一眼判斷是否真的抽出來。
+    * [x] **§2.2 修法**：`src/task3_sec/rule_parser.py` `detect_item_headings` 單一匹配分支現在會檢查 (a) 是否在 doc 前 10% (in_toc_region) 或 (b) 局部視窗符合 TOC marker pattern (has_toc_markers)，命中則 confidence 降為 0.40。這會觸發 pipeline.py:202-209 的 Stage 2 LLM 條件 (`confidence_avg < 0.55`)，由 LLM refiner 重新找正文 heading。對應 Intel 2026 「抽到 TOC 而非正文」的限制。
+    * [x] **eval set 新增 2 個 regression case**：`t3_citigroup_2026_interviewer_regression` 與 `t3_intel_2026_toc_regression`，均使用 cik-only 路徑（不指定 accession，由 fetcher 找最近一份 10-K），即使 2026 filing 還沒釋出也不會 fail，且 evergreen for 未來年份。對應 §1.3 §2.3 的 eval 設計反省（缺 catastrophic-failure case 與 TOC-only case 兩個維度）。
+    * [x] **Task 3 UI** (`templates/task3.html`) 新增 "Interviewer regression" 列，含 🏦 Citi 2026 + 💾 Intel 2026 兩顆按鈕，按下自動開啟 use_vision + force_llm（這兩 case 是 LLM-trigger candidate）。
+    * [x] **新增 5 個 regression tests** (test_task3_sec.py)：`test_coverage_fails_when_all_items_are_not_found_placeholders`、`test_coverage_counts_real_extractions_only`、`test_single_match_in_toc_region_is_downweighted`、`test_processing_metadata_has_completeness_fields`、`test_extraction_completeness_bounded_0_1`，以及 eval set 新項目存在性的 3 個 pin test。
+  2. [x] 針對task 2 (interviewer Q3)，套用 **§3.3 修法** per-case expected outcome + deterministic correctness check：
+    * [x] `evals/task2/run_eval.py` 重寫 `_score_case`，分為 universal harness checks (no_crash / took_steps / reasonable_steps / has_answer) 與 per-case `expected_outcome` checks (status / allowed_statuses / answer_must_contain / answer_must_not_contain / failure_modes_must_contain / min_steps / max_steps)。所有 check 都是 deterministic 的 substring/equality 比對——0 個 LLM-as-judge。
+    * [x] `evals/task2/eval_set.json` 為 5 個代表性 case 加 `expected_outcome`：t2_wikipedia_search (positive)、t2_arxiv_paper_lookup (positive)、t2_anuse_silent_failure_guard (negative — banned email substring)、t2_linkedin_login_wall (negative — banned hallucinated titles)、t2_nytimes_paywall_guard (allow partial/not_found)、t2_chase_banking_login_wall。其餘 case 可漸進補上 (eval set 仍然向後相容——沒有 expected_outcome 的 case 只跑 universal layer)。
+    * [x] 新增 4 個 TestPerCaseExpectedOutcome 測試覆蓋 must_contain / must_not_contain / negative-case status 與 hallucination 防護。
+  3. [x] 針對task 2 (interviewer Q4)，套用 **§4.3 實作方案** 變成 hybrid (static-site fast path + agent fallback)：
+    * [x] 新檔 `src/task2_browser/fast_path.py` (~270 行)：domain-suffix registry (wikipedia.org / arxiv.org / news.ycombinator.com / example.com)、`task_is_static_compatible()` 動態動作偵測 (英文 + 中日語 CJK)、`try_fast_path()` async entry point。所有 handler 都是 httpx + BeautifulSoup deterministic 抽取，0 LLM calls / $0 cost。任一個 miss 都 fall through 到 agent path。
+    * [x] `src/task2_browser/agent.py` `BrowserAgent.run` 增加 `allow_fast_path=True` 參數；在 Playwright launch 之前 try fast path，命中直接 return；同步 emit `agent_complete` 事件並標 `fast_path: True`。
+    * [x] `src/task2_browser/router.py` `BrowserTaskRequest` 暴露 `allow_fast_path` 欄位（預設 True），同步傳遞到 `/execute` 與 `/stream` 端點，讓 caller 可以強制走 agent path 做 head-to-head benchmark。
+    * [x] 新增 9 個 TestFastPath 測試覆蓋 registry / dynamic-verb 偵測 (含中日語) / domain lookup / unknown-domain fallback / 無 URL fallback / coroutine 型別 / agent kwarg / router schema。
+    * [x] example.com 的 fast path handler 特別處理 "找 email/contact" 這類 task：自動回 `not_found:` 結尾的 deterministic answer，是 silent-failure-guard 的進一步防線。
+    * [x] **README 補充 status taxonomy 說明**：新增 "Task 2 Status Taxonomy" section，詳列 success / partial / not_found / unverified / failed 各代表什麼語意，並指出 `not_found` 在 login wall / paywall / captcha / page genuinely has no answer 的情境下才是「正確」outcome——這是 spec 的 silent-failure prevention 直接體現。
+  4. [x] 完成 §7 所有建議的下一步行動，並用實證（修好的 commit + 通過 Citi/Intel 的新 eval）去申訴評級：
+    * [x] P0 完成 — `_check_coverage` 修、`detect_item_headings` 單一匹配 TOC 修、Citi/Intel regression cases 進 eval set
+    * [x] P1 完成 — Task 2 `expected_outcome` per-case 與 fast_path module
+    * [x] P2 完成 — `extraction_completeness` 透明欄位
+    * [x] Polish gap 全關閉 — **375 unit tests pass** (was 354, +21 new regression tests), 0 lint errors
+    * [x] interviewer_concerns.md 新增 §8 "現況更新與最終狀態" + §9 "與面試官對話時的補充說明 (含時間/工作量背景)"，提供完整的修補論證與下一階段面試素材
+  
+
+
 ---
 
 ## 🔄 當前狀態 (2026-05-11, 全部 Phases 0–10 完成)
