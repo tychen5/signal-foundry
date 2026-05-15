@@ -325,6 +325,8 @@ _TITLE_ONLY_HEADINGS: list[tuple[str, list[str]]] = [
         "market for registrant's common equity",
         "market for registrant",
         "market for the registrant",
+        "market for our common stock",
+        "market for our common equity",
     ]),
     ("6", ["selected financial data", "[reserved]"]),
     ("7", [
@@ -339,6 +341,7 @@ _TITLE_ONLY_HEADINGS: list[tuple[str, list[str]]] = [
     ("8", [
         "financial statements and supplementary data",
         "consolidated financial statements",
+        "report of independent registered public accounting firm",
     ]),
     ("9", [
         "changes in and disagreements with accountants on accounting and financial disclosure",
@@ -357,6 +360,8 @@ _TITLE_ONLY_HEADINGS: list[tuple[str, list[str]]] = [
     ("10", [
         "directors, executive officers and corporate governance",
         "directors, executive officers, and corporate governance",
+        "information about our executive officers",
+        "executive officers of the registrant",
     ]),
     ("11", ["executive compensation"]),
     ("12", [
@@ -374,6 +379,7 @@ _TITLE_ONLY_HEADINGS: list[tuple[str, list[str]]] = [
     ("15", [
         "exhibits and financial statement schedules",
         "exhibits, financial statement schedules",
+        "exhibit index",
     ]),
     ("16", ["form 10-k summary"]),
 ]
@@ -560,6 +566,331 @@ def detect_item_status(content: str) -> ItemStatus:
     return ItemStatus.EXTRACTED
 
 
+def parse_cover_toc_table(text: str) -> dict[str, dict]:
+    """Parse the cover-page Table of Contents table that lists every Item with
+    its page range / status note.
+
+    Many 10-Ks (Citi, IBM, large filers) include a TOC table on the cover page
+    where each row looks like:
+
+        Item Number    Title                                   Page(s)
+        1.             Business                                4-36
+        1B.            Unresolved Staff Comments               Not Applicable
+        6.             Reserved
+        9.             Changes in...                           Not Applicable
+        10.            Directors, Executive Officers...        304-306*
+
+    After HTML normalization the table is rendered as alternating lines:
+
+        1.
+        Business
+        4-36
+
+        1B.
+        Unresolved Staff Comments
+        Not Applicable
+
+    This function walks the cover-page region and builds a mapping:
+
+        {item_number: {
+            "status": "extracted" | "not_applicable" | "reserved" |
+                      "incorporated_by_reference",
+            "page_note": "...",
+            "title": "...",
+            "toc_pos": <char position of the item entry in TOC>,
+        }}
+
+    The status comes from the page-note column:
+      - Numeric page range → extracted (item has body section)
+      - "Not Applicable" / "N/A" → not_applicable
+      - "Reserved" / "[Reserved]" → reserved (or title is "Reserved")
+      - Footnote marker only ("*", "**", "***") → incorporated_by_reference
+        (the footnote text is the master IBR declaration elsewhere)
+
+    Returns empty dict if no recognizable TOC table found.
+    """
+    # Scan the cover-page region: skip the first 2 KB of legal preamble,
+    # bound to 10 KB after that (TOC tables don't exceed this on real
+    # filings). Tighter bounding prevents the parser from walking into
+    # financial tables later in the doc that contain stray "9." or "13."
+    # row labels and producing false-positive items.
+    region_start = 2000 if len(text) > 5000 else 0
+    region_end = min(region_start + 10_000, int(len(text) * 0.15) if len(text) > 10000 else len(text))
+    region = text[region_start:region_end]
+
+    # State machine: walk through non-empty lines looking for "N." patterns
+    lines: list[tuple[int, str]] = []
+    pos = 0
+    for raw_line in region.split("\n"):
+        line = raw_line.strip()
+        if line:
+            lines.append((region_start + pos, line))
+        pos += len(raw_line) + 1  # +1 for the newline
+
+    item_num_re = re.compile(r"^(\d{1,2}[A-C]?)\.?$")
+    not_applicable_re = re.compile(r"(?i)^\s*(?:not\s+applicable|n\s*/?\s*a|none)\.?\s*$")
+    reserved_re = re.compile(r"(?i)^\s*(?:reserved|\[reserved\])\.?\s*$")
+    page_range_re = re.compile(r"^\s*\d+(?:\s*[–\-,\s]\s*\d+)*\s*\*{0,3}\s*$")
+    footnote_only_re = re.compile(r"^\s*\*{1,3}\s*$")
+
+    toc: dict[str, dict] = {}
+    i = 0
+    while i < len(lines):
+        line_pos, line = lines[i]
+        m = item_num_re.match(line)
+        if not m:
+            i += 1
+            continue
+        item_number = m.group(1).upper()
+        if item_number not in _STANDARD_ITEM_NUMBERS:
+            i += 1
+            continue
+        # FIRST-occurrence-wins per item: TOC parses the cover-page table,
+        # but the same "N." token could appear in a later financial table.
+        # Keep the first hit (it's structurally inside the TOC) and skip
+        # subsequent duplicates.
+        if item_number in toc:
+            i += 1
+            continue
+        # Look at next 1-3 lines for title + status
+        title = ""
+        status = "extracted"
+        page_note = ""
+        consumed = 1
+        # Next line: title (or "Reserved" inline)
+        if i + 1 < len(lines):
+            next_pos, next_line = lines[i + 1]
+            if reserved_re.match(next_line):
+                # Title is literally "Reserved" (Item 6 post-2021 pattern)
+                title = "Reserved"
+                status = "reserved"
+                consumed = 2
+            elif item_num_re.match(next_line):
+                # Skip — TOC row had no title/status (rare)
+                consumed = 1
+            else:
+                title = next_line
+                consumed = 2
+                # Look at line after title for status indicator
+                if i + 2 < len(lines):
+                    after_title_pos, after_title = lines[i + 2]
+                    if not_applicable_re.match(after_title):
+                        status = "not_applicable"
+                        page_note = after_title
+                        consumed = 3
+                    elif reserved_re.match(after_title):
+                        status = "reserved"
+                        page_note = after_title
+                        consumed = 3
+                    elif footnote_only_re.match(after_title):
+                        # Footnote marker only — incorporated by reference
+                        status = "incorporated_by_reference"
+                        page_note = after_title
+                        consumed = 3
+                    elif page_range_re.match(after_title):
+                        # Page range — usually means body section exists.
+                        # Trailing * means part-incorporated-by-reference.
+                        page_note = after_title
+                        consumed = 3
+                        if after_title.rstrip().endswith("*"):
+                            # Mixed body + IBR — prefer extracted since
+                            # there's a page range. The IBR is partial.
+                            status = "extracted"
+                    elif item_num_re.match(after_title):
+                        # No status row — title was the whole entry
+                        pass
+                    elif len(after_title) < 80 and not after_title.lower().startswith("part "):
+                        # Could be continuation of title or status note
+                        # — keep cautiously
+                        page_note = after_title
+                        consumed = 3
+        toc[item_number] = {
+            "status": status,
+            "page_note": page_note,
+            "title": title,
+            "toc_pos": line_pos,
+        }
+        i += consumed
+
+    if toc:
+        logger.info(
+            "cover_toc_parsed",
+            count=len(toc),
+            items=sorted(toc.keys()),
+            statuses={k: v["status"] for k, v in toc.items()},
+        )
+    return toc
+
+
+def parse_end_cross_reference_index(text: str) -> dict[str, dict]:
+    """Parse a Form 10-K Cross-Reference Index that some filers (Intel) put
+    at the END of the document instead of (or in addition to) the cover-page
+    TOC.
+
+    Format observed in Intel 2026:
+
+        Form 10-K Cross-Reference Index
+        116
+
+        Item 1.
+        Business:
+            General development of business    Pages 3-5, 18
+            Description of business            Pages 3-24, 33
+
+        Item 1A.
+        Risk Factors                            Pages 37-51
+
+        Item 1B.
+        Unresolved Staff Comments               None
+
+        Item 4.
+        Mine Safety Disclosures                 None
+
+        Item 6.
+        [Reserved]
+
+    For each item this parser captures: the page-reference string (or
+    "None" / "[Reserved]") so we can mark status correctly for short
+    items even when the body has no explicit heading.
+
+    Returns mapping {item_number: {"status": str, "page_note": str,
+    "title": str, "index_pos": int}}.
+    """
+    # Scan the END region (last 5% of doc).
+    region_start = int(len(text) * 0.95)
+    region = text[region_start:]
+    # Pattern: 'Item N.\nTitle\nPages X-Y' or 'Item N.\nTitle\nNone'
+    item_re = re.compile(
+        r"(?im)^Item\s+(\d{1,2}[A-C]?)\.\s*\n+([^\n]{1,200})(?:\n+([^\n]{1,200}))?",
+    )
+    not_applicable_re = re.compile(r"(?i)^\s*(?:none|n\s*/?\s*a|not\s+applicable)\.?\s*$")
+    reserved_re = re.compile(r"(?i)^\s*\[?\s*reserved\s*\]?\.?\s*$")
+    page_range_re = re.compile(r"^\s*pages?\s+\d+|^\s*\d+\s*[\-–]\s*\d+", re.IGNORECASE)
+
+    index: dict[str, dict] = {}
+    for m in item_re.finditer(region):
+        item_number = m.group(1).upper()
+        if item_number not in _STANDARD_ITEM_NUMBERS:
+            continue
+        if item_number in index:
+            continue
+        title_or_status = (m.group(2) or "").strip()
+        third_line = (m.group(3) or "").strip()
+        # Determine status: title might be a status marker itself
+        # (e.g., "[Reserved]" or "None"), or third line carries it.
+        title = title_or_status
+        if reserved_re.match(title_or_status):
+            status = "reserved"
+            title = "Reserved"
+        elif not_applicable_re.match(title_or_status):
+            status = "not_applicable"
+        elif not_applicable_re.match(third_line):
+            status = "not_applicable"
+        elif reserved_re.match(third_line):
+            status = "reserved"
+        elif page_range_re.match(third_line) or "Pages" in third_line or re.match(r"^\d", third_line):
+            # Body section exists — page reference here
+            status = "extracted"
+        elif "incorporat" in third_line.lower() or "proxy" in third_line.lower():
+            status = "incorporated_by_reference"
+        else:
+            # Unclear — default to extracted (body section likely exists)
+            status = "extracted"
+        index[item_number] = {
+            "status": status,
+            "page_note": third_line[:120] if third_line else "",
+            "title": title[:120],
+            "index_pos": region_start + m.start(),
+        }
+    if index:
+        logger.info(
+            "end_cross_reference_parsed",
+            count=len(index),
+            statuses={k: v["status"] for k, v in index.items()},
+        )
+    return index
+
+
+def detect_master_ibr_declaration(text: str) -> list[ItemBoundary]:
+    """Detect the master 'Documents Incorporated by Reference' declaration.
+
+    Many 10-Ks (especially banks/financials like Citigroup, IBM, etc.) put
+    a single declaration on the cover page saying:
+
+      "Portions of the registrant's proxy statement ... are incorporated
+      by reference in this Form 10-K in response to Items 10, 11, 12, 13
+      and 14 of Part III."
+
+    The body doesn't have separate headings for those items — the
+    declaration IS the entire incorporation reference. Without this
+    detector, items 10-14 show as `not_found` even though they're
+    legitimately incorporated by reference.
+
+    This function:
+      1. Searches the cover-page region (first 15% of doc) for the
+         "incorporated by reference ... Items X, Y, Z" pattern
+      2. Parses the item-number list
+      3. Returns one ItemBoundary per declared item, all pointing to the
+         master declaration position, with status_hint='incorporated_by_reference'
+
+    Returns empty list if no master declaration found.
+    """
+    cover_zone = text[: int(len(text) * 0.15)] if len(text) > 1000 else text
+
+    # Pattern matches "incorporated by reference ... Items 10, 11, 12, 13 and 14"
+    # The intermediate text can be ~200 chars (filer mentions proxy statement,
+    # annual meeting date, etc.). We anchor on the verb phrase first then look
+    # for the item-number list in the trailing window.
+    master_pattern = re.compile(
+        r"(?is)\b(?:are|is)\s+incorporated\s+(?:herein\s+)?by\s+reference"
+        r"[^.]{0,400}?items?\s+"
+        r"(\d+(?:[A-C])?(?:\s*[,\s]+(?:and\s+)?\d+(?:[A-C])?)*)"
+        r"\b",
+    )
+    boundaries: list[ItemBoundary] = []
+    seen_items: set[str] = set()
+    for m in master_pattern.finditer(cover_zone):
+        item_list_str = m.group(1)
+        # Parse "10, 11, 12, 13 and 14" → ["10", "11", "12", "13", "14"]
+        item_numbers = re.findall(r"\d+[A-C]?", item_list_str)
+        item_numbers = [n.upper() for n in item_numbers if n.upper() in _STANDARD_ITEM_NUMBERS]
+        if not item_numbers:
+            continue
+        anchor_pos = m.start()
+        # Capture the declaration text as the heading for these items
+        # (truncated to a reasonable length)
+        declaration_text = cover_zone[m.start():min(m.end() + 50, len(cover_zone))]
+        declaration_text = " ".join(declaration_text.split())[:200]
+        # Stagger start_pos by 1 char each to preserve stable ordering after
+        # downstream sort. content_text will resolve to the master declaration
+        # paragraph via the IBR status hint regardless of these tiny offsets.
+        declaration_end = min(m.end() + 200, len(cover_zone))
+        for offset, item_number in enumerate(item_numbers):
+            if item_number in seen_items:
+                continue
+            seen_items.add(item_number)
+            boundaries.append(
+                ItemBoundary(
+                    item_number=item_number,
+                    start_pos=anchor_pos + offset,
+                    end_pos=declaration_end,
+                    heading_text=f"Item {item_number} (incorporated by reference from Proxy Statement)",
+                    confidence=0.85,
+                    source="master_ibr_declaration",
+                    status_hint="incorporated_by_reference",
+                )
+            )
+        if boundaries:
+            logger.info(
+                "master_ibr_detected",
+                items=sorted(seen_items),
+                pos=anchor_pos,
+                text_preview=declaration_text[:120],
+            )
+            break  # only one master declaration per filing
+    return boundaries
+
+
 def _needs_title_fallback(boundaries: list[ItemBoundary], total_chars: int) -> bool:
     """Decide whether the regex-based pass missed the body and should be
     augmented (or replaced) by the title-only fallback.
@@ -591,17 +922,29 @@ def _needs_title_fallback(boundaries: list[ItemBoundary], total_chars: int) -> b
     return False
 
 
-def rule_based_parse(text: str) -> ParseResult:
+def rule_based_parse(text: str, raw_html: str = "") -> ParseResult:
     """
     Stage 1: Rule-based parsing of 10-K text.
 
-    Zero LLM cost. Detects item boundaries using regex patterns; when the
-    regex pass fails the credibility check (`_needs_title_fallback`), runs
-    a title-only fallback to recover body headings for filings like Citi
-    2026 / Intel 2026 that don't emit "Item N." text in the body.
+    Zero LLM cost. Combines THREE complementary detectors:
+      1. Text regex detection (Pattern 1-4): catches standard "Item N. Title"
+         format filings — works for ~70% of modern filings.
+      2. Title-only fallback (text): catches filings whose body uses bold-
+         span standalone titles (Citi 2026 / Intel 2026). Fires when
+         `_needs_title_fallback` trip conditions are met.
+      3. HTML-tag-aware extraction (when `raw_html` is provided): walks
+         the raw HTML with BeautifulSoup, identifies heading-shaped
+         elements (`<h1>`-`<h6>` / `<strong>` / CSS-styled-bold / ALL-CAPS
+         spans), maps to item numbers via canonical title variants, and
+         locates positions in normalized text. This is the structural-
+         layer detector — sees what text-only detectors can't.
 
     Args:
-        text: Normalized filing text
+        text: Normalized filing text (positions in returned boundaries
+            refer to this string)
+        raw_html: Raw HTML content BEFORE normalization. Optional but
+            strongly recommended — without it, HTML-tag-aware detection
+            can't run and filings like Citi 2026 lose half their anchors.
 
     Returns:
         ParseResult with detected boundaries and confidence scores
@@ -614,6 +957,7 @@ def rule_based_parse(text: str) -> ParseResult:
     # Step 2: Detect item headings (regex-based)
     boundaries = detect_item_headings(text)
     used_title_fallback = False
+    used_html_anchors = False
 
     # Step 2b: Title-only fallback for filings whose body uses bold-span
     # standalone titles (no "Item N." text — Citi 2026 / Intel 2026 / many
@@ -640,10 +984,140 @@ def rule_based_parse(text: str) -> ParseResult:
                 total=len(boundaries),
             )
 
-    # Step 3: Set end positions (each item ends where the next begins)
+    # Step 2bb-pre: End-of-doc Cross-Reference Index (Intel-style filings).
+    # Some filers put the authoritative item index at the END of the doc,
+    # not the cover page. Items appearing there with "None" / "[Reserved]"
+    # / "Pages X-Y" tell us status when the body doesn't have an explicit
+    # heading. We use this as a SECONDARY status source — body anchors
+    # still win when present.
+    end_index_map = parse_end_cross_reference_index(text)
+    if end_index_map:
+        end_added = 0
+        for item_number, info in end_index_map.items():
+            # No existence check — emit always. The dedupe in
+            # _build_items picks the best boundary per item, preferring
+            # body anchors with longer content over short cross-reference
+            # entries. Short cross-ref entries serve as fallback when the
+            # body has no detectable heading.
+            boundaries.append(
+                ItemBoundary(
+                    item_number=item_number,
+                    start_pos=info["index_pos"],
+                    end_pos=info["index_pos"] + 300,
+                    heading_text=info["title"] or f"Item {item_number}",
+                    confidence=0.80,
+                    source="end_cross_reference",
+                    status_hint=info["status"],
+                )
+            )
+            end_added += 1
+        if end_added:
+            boundaries.sort(key=lambda b: b.start_pos)
+            logger.info("end_cross_reference_merged", added=end_added)
+
+    # Step 2ba: Cover-page TOC table as authoritative status source.
+    # Citi/IBM-style 10-Ks have a TOC table on the cover page showing each
+    # Item's status (page range vs "Not Applicable" vs "Reserved" vs
+    # footnote-only IBR). Items that don't have body sections — but ARE
+    # legitimately "Not Applicable" or "Reserved" or "Incorporated by
+    # Reference" — should still appear in the result with the correct
+    # status. Without this detector, those items show as not_found.
+    #
+    # We emit a boundary for EVERY TOC-listed item that isn't already
+    # found. For "extracted" status items, the dedupe step in pipeline's
+    # _build_items will prefer the body boundary when one exists; if no
+    # body boundary is found, the TOC entry becomes the content_text
+    # (preserves the page-range reference like "287-293" so callers know
+    # the item is acknowledged even when the heading style defeats body
+    # detection).
+    toc_status_map = parse_cover_toc_table(text)
+    if toc_status_map:
+        toc_only_added = 0
+        for item_number, info in toc_status_map.items():
+            # No existence check — emit always. The dedupe in
+            # _build_items picks the best per item, preferring body
+            # anchors with longer content over the short TOC entry.
+            boundaries.append(
+                ItemBoundary(
+                    item_number=item_number,
+                    start_pos=info["toc_pos"],
+                    end_pos=info["toc_pos"] + 200,  # short content window
+                    heading_text=info["title"] or f"Item {item_number}",
+                    confidence=0.85,
+                    source="cover_toc_status",
+                    status_hint=info["status"],
+                )
+            )
+            toc_only_added += 1
+        if toc_only_added:
+            boundaries.sort(key=lambda b: b.start_pos)
+            logger.info("cover_toc_status_merged", added=toc_only_added)
+
+    # Step 2bb: Master "Documents Incorporated by Reference" declaration.
+    # Many financial-services 10-Ks (Citi, banks) state on the cover page
+    # that Items 10–14 are incorporated by reference — and never include
+    # separate body headings for those items. Without this detector,
+    # those items show as not_found even though they're legitimately IBR.
+    master_ibr = detect_master_ibr_declaration(text)
+    if master_ibr:
+        # Always merge — dedupe in _build_items picks best per item.
+        boundaries.extend(master_ibr)
+        boundaries.sort(key=lambda b: b.start_pos)
+        logger.info("master_ibr_merged", added=len(master_ibr))
+
+    # Step 2c: HTML-tag-aware extraction (when raw HTML available).
+    # Adds anchors for items that text-only detection missed — works for
+    # Citi 2026 (bold spans), Intel 2026 (styled-color spans), and any
+    # other filer using structural heading markup.
+    if raw_html:
+        try:
+            from src.task3_sec.html_heading_extractor import detect_html_anchors
+
+            html_anchors = detect_html_anchors(raw_html, text)
+            if html_anchors:
+                added = 0
+                for a in html_anchors:
+                    boundaries.append(
+                        ItemBoundary(
+                            item_number=a["item_number"],
+                            start_pos=a["start_pos"],
+                            heading_text=a["heading_text"],
+                            # 0.80 — HTML structural detection is more
+                            # reliable than text title-fallback (0.55-0.70)
+                            # but slightly less than regex+TOC-confirmed
+                            # multi-match (0.90-0.95).
+                            confidence=0.80,
+                            source="html_anchor",
+                        )
+                    )
+                    added += 1
+                if added:
+                    used_html_anchors = True
+                    boundaries.sort(key=lambda b: b.start_pos)
+                    logger.info("html_anchors_merged", added=added, total=len(boundaries))
+        except Exception as e:
+            logger.warning("html_anchor_step_failed", err=str(e)[:160])
+
+    # Step 3: Set end positions (each item ends where the next begins),
+    # EXCEPT for cover-page-anchored boundaries (master_ibr / cover_toc_status)
+    # which point to short cover-page snippets and keep their pre-set end_pos.
+    _cover_page_sources = {"master_ibr_declaration", "cover_toc_status", "end_cross_reference"}
     for i, boundary in enumerate(boundaries):
+        if boundary.source in _cover_page_sources and boundary.end_pos > 0:
+            continue  # preserve the cover-page content window
         if i + 1 < len(boundaries):
-            boundary.end_pos = boundaries[i + 1].start_pos
+            next_b = boundaries[i + 1]
+            # If next boundary is cover-page-anchored at a similar position,
+            # don't terminate at that — find the next BODY boundary instead.
+            if next_b.source in _cover_page_sources:
+                next_real = None
+                for j in range(i + 1, len(boundaries)):
+                    if boundaries[j].source not in _cover_page_sources:
+                        next_real = boundaries[j]
+                        break
+                boundary.end_pos = next_real.start_pos if next_real else total_chars
+            else:
+                boundary.end_pos = next_b.start_pos
         else:
             boundary.end_pos = total_chars
 
@@ -667,6 +1141,7 @@ def rule_based_parse(text: str) -> ParseResult:
         avg_confidence=round(avg_conf, 3),
         total_chars=total_chars,
         used_title_fallback=used_title_fallback,
+        used_html_anchors=used_html_anchors,
     )
 
     return result
