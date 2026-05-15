@@ -1229,3 +1229,115 @@ class TestRegressionCitiIntelEvalEntries:
             assert "accession_number" not in data, (
                 f"{cid}: regression case should rely on most-recent-10-K resolution"
             )
+
+
+class TestTitleFallbackHeadingDetection:
+    """Tests for the title-only fallback added 2026-05-15 after live testing
+    revealed the original P0.2 patch was insufficient for Citi/Intel 2026.
+
+    The original patch only downgraded single-match TOC entries to fire
+    Stage 2 LLM. But for filings whose body uses bold-span title-only
+    headings (no "Item N." text at all), the regex matched ZERO items
+    (Citi) or ONLY the cover-page end-index (Intel). Title-fallback fixes
+    both by scanning the body region for canonical title strings.
+    """
+
+    def test_title_fallback_finds_all_caps_standalone_heading(self) -> None:
+        """Citi-style: 'RISK FACTORS' appearing as a standalone all-caps
+        heading line in the body region must be detected."""
+        from src.task3_sec.rule_parser import detect_item_headings_by_title
+
+        # Construct a synthetic doc with TOC zone in first 10% and a
+        # standalone RISK FACTORS heading at 15% (body region).
+        toc = "Table of Contents\nItem 1A. Risk Factors ... 49\n" * 30
+        body_filler = "Body filler. " * 200
+        doc = (
+            toc
+            + body_filler
+            + "\nRISK FACTORS\n\n\nThe following discussion presents material risks.\n"
+            + body_filler
+        )
+        boundaries = detect_item_headings_by_title(doc)
+        items = {b.item_number for b in boundaries}
+        assert "1A" in items, f"Expected Item 1A found via RISK FACTORS heading; got {items}"
+
+    def test_title_fallback_excludes_end_appendix_region(self) -> None:
+        """Intel-style end-index sat at 99% of doc must NOT be picked up
+        by the fallback (body_end_pct=0.90 ceiling)."""
+        from src.task3_sec.rule_parser import detect_item_headings_by_title
+
+        body = "Body content. " * 5000
+        end_index = "\nRISK FACTORS\nPages 37-51\n"
+        doc = body + end_index
+        # The RISK FACTORS sits at ~99% of doc — past body_end_pct=0.90
+        boundaries = detect_item_headings_by_title(doc, body_end_pct=0.90)
+        items = {b.item_number for b in boundaries}
+        assert "1A" not in items, (
+            "End-region match must be excluded — that's the cover-page index, not body"
+        )
+
+    def test_title_fallback_matches_disclosure_controls_prefix(self) -> None:
+        """Citi's body uses 'DISCLOSURE CONTROLS AND PROCEDURES'; the
+        variant list must match this longer form (not just bare
+        'Controls and Procedures')."""
+        from src.task3_sec.rule_parser import detect_item_headings_by_title
+
+        filler = "Body filler text. " * 300
+        doc = filler + "\nDISCLOSURE CONTROLS AND PROCEDURES\n\n\nCiti's disclosure controls...\n" + filler
+        boundaries = detect_item_headings_by_title(doc)
+        items = {b.item_number for b in boundaries}
+        assert "9A" in items, (
+            f"DISCLOSURE CONTROLS AND PROCEDURES must map to Item 9A; got {items}"
+        )
+
+    def test_title_fallback_matches_our_business_prefix(self) -> None:
+        """Intel's body uses 'Our Business' as the section heading.
+        Variant list must include 'our business' to catch this."""
+        from src.task3_sec.rule_parser import detect_item_headings_by_title
+
+        filler = "Body filler. " * 300
+        doc = filler + "\nOur Business\n\n\n9\n\n\nIntel designs and builds...\n" + filler
+        boundaries = detect_item_headings_by_title(doc)
+        items = {b.item_number for b in boundaries}
+        assert "1" in items, f"'Our Business' must map to Item 1; got {items}"
+
+    def test_title_fallback_rejects_mid_sentence_prose_hits(self) -> None:
+        """'see Risk Factors below for ...' must NOT count as a heading."""
+        from src.task3_sec.rule_parser import detect_item_headings_by_title
+
+        filler = "Body filler. " * 300
+        # 'risk factors' embedded in mid-sentence prose
+        doc = filler + "...please see Risk Factors below for details. " + filler
+        boundaries = detect_item_headings_by_title(doc)
+        items = {b.item_number for b in boundaries}
+        assert "1A" not in items, (
+            "Mid-sentence prose hit must be rejected — only standalone heading lines"
+        )
+
+    def test_needs_title_fallback_fires_on_zero_regex_matches(self) -> None:
+        """Citi pattern: 0 regex matches → fallback must fire."""
+        from src.task3_sec.rule_parser import _needs_title_fallback
+
+        assert _needs_title_fallback([], total_chars=1_000_000) is True
+
+    def test_needs_title_fallback_fires_on_end_cluster(self) -> None:
+        """Intel pattern: all matches in last 5% of doc → fallback must fire."""
+        from src.task3_sec.rule_parser import ItemBoundary, _needs_title_fallback
+
+        # All matches at 99% of a 1M-char doc
+        boundaries = [
+            ItemBoundary(item_number=str(i), start_pos=990_000 + i, source="heading_regex")
+            for i in range(1, 6)
+        ]
+        assert _needs_title_fallback(boundaries, total_chars=1_000_000) is True
+
+    def test_needs_title_fallback_skips_when_body_matches_exist(self) -> None:
+        """Healthy case: matches spread across body region → no fallback."""
+        from src.task3_sec.rule_parser import ItemBoundary, _needs_title_fallback
+
+        boundaries = [
+            ItemBoundary(item_number="1", start_pos=10_000, source="heading_regex"),
+            ItemBoundary(item_number="1A", start_pos=200_000, source="heading_regex"),
+            ItemBoundary(item_number="7", start_pos=500_000, source="heading_regex"),
+        ]
+        assert _needs_title_fallback(boundaries, total_chars=1_000_000) is False

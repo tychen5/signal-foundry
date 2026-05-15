@@ -305,6 +305,186 @@ def text_window_prefix(value: str) -> str:
     return value[:200]
 
 
+# Item-number -> canonical title slugs used by the title-only fallback
+# detector. These are the body-heading anchors used by filers (Citi 2026,
+# Intel 2026, several banking-layout XBRL filings) whose HTML strips
+# "Item N." from the prose and renders the section title alone.
+#
+# Each variant list is ORDER-MATTERS — most-specific first. The detector
+# stops on first hit per item so a phrase like "Disclosure Controls and
+# Procedures" must come before the bare "Controls and Procedures".
+_TITLE_ONLY_HEADINGS: list[tuple[str, list[str]]] = [
+    ("1", ["our business", "business"]),
+    ("1A", ["risk factors"]),
+    ("1B", ["unresolved staff comments"]),
+    ("1C", ["cybersecurity"]),
+    ("2", ["properties"]),
+    ("3", ["legal proceedings"]),
+    ("4", ["mine safety disclosures", "mine safety"]),
+    ("5", [
+        "market for registrant's common equity",
+        "market for registrant",
+        "market for the registrant",
+    ]),
+    ("6", ["selected financial data", "[reserved]"]),
+    ("7", [
+        "management's discussion and analysis",
+        "managements discussion and analysis",
+        "management discussion and analysis",
+    ]),
+    ("7A", [
+        "quantitative and qualitative disclosures about market risk",
+        "quantitative and qualitative disclosures",
+    ]),
+    ("8", [
+        "financial statements and supplementary data",
+        "consolidated financial statements",
+    ]),
+    ("9", [
+        "changes in and disagreements with accountants on accounting and financial disclosure",
+        "changes in and disagreements with accountants",
+    ]),
+    ("9A", [
+        "disclosure controls and procedures",
+        "controls and procedures",
+    ]),
+    ("9B", ["other information"]),
+    ("9C", [
+        "disclosure regarding foreign jurisdictions that prevent inspections",
+        "disclosure regarding foreign jurisdictions",
+        "foreign jurisdictions that prevent inspections",
+    ]),
+    ("10", [
+        "directors, executive officers and corporate governance",
+        "directors, executive officers, and corporate governance",
+    ]),
+    ("11", ["executive compensation"]),
+    ("12", [
+        "security ownership of certain beneficial owners and management",
+        "security ownership of certain beneficial owners",
+    ]),
+    ("13", [
+        "certain relationships and related transactions, and director independence",
+        "certain relationships and related transactions",
+    ]),
+    ("14", [
+        "principal accountant fees and services",
+        "principal accounting fees and services",
+    ]),
+    ("15", [
+        "exhibits and financial statement schedules",
+        "exhibits, financial statement schedules",
+    ]),
+    ("16", ["form 10-k summary"]),
+]
+
+
+def detect_item_headings_by_title(
+    text: str,
+    body_start_pct: float = 0.10,
+    body_end_pct: float = 0.90,
+) -> list[ItemBoundary]:
+    """Title-only heading fallback for filings that don't emit literal "Item N."
+    text in the body.
+
+    Citi 2026 and Intel 2026 (and several other modern filers — banking
+    layout, table-heavy XBRL HTML) render section headings as bold spans
+    containing ONLY the title (e.g. "Risk Factors" / "RISK FACTORS" /
+    "DISCLOSURE CONTROLS AND PROCEDURES"). The "Item N." label is rendered
+    in a separate column / via CSS and never appears as adjacent text.
+    The default regex-based detector cannot see these headings, so the
+    pipeline returned 0 boundaries (Citi) or matched only the end-of-doc
+    cover-page index (Intel).
+
+    This fallback scans the body region (``body_start_pct`` < pos <
+    ``body_end_pct``) for known canonical titles and picks the FIRST
+    occurrence of each that looks like a standalone heading line. Default
+    body window 10%–90% excludes:
+      - first 10%: the Table of Contents region (matches there are TOC
+        entries, not body)
+      - last 10%: the cover-page-style index / signatures / exhibits
+        appendix many filers put at end (Intel 2026 has 22 "Item N. ..."
+        entries packed into the last 0.7% of doc — those are the END
+        index, NOT the body content the parser wants)
+
+    Confidence is 0.55–0.70 so Stage 2 LLM refinement can promote /
+    correct them — they're a recovery signal, not gospel.
+
+    Heuristics:
+      1. ALL-CAPS variants get a +0.10 confidence bonus
+      2. Title-case variants get +0.05
+      3. The title must be standalone on a "line" after collapsing
+         pipe noise from normalized table cells
+      4. Sentence-prose hits ("see Risk Factors below ...") are rejected
+         when the preceding 80 chars end mid-word
+    """
+    doc_len = len(text)
+    body_floor = int(doc_len * body_start_pct)
+    body_ceil = int(doc_len * body_end_pct)
+    boundaries: list[ItemBoundary] = []
+    seen: set[str] = set()
+
+    for item_number, variants in _TITLE_ONLY_HEADINGS:
+        if item_number in seen:
+            continue
+        best_pos: int | None = None
+        best_text: str = ""
+        best_caps_bonus = 0.0
+        for variant in variants:
+            # Three case variants — most specific first (ALL CAPS wins over
+            # title-case wins over lower-case).
+            for case_pattern, caps_bonus in (
+                (re.escape(variant.upper()), 0.10),
+                (re.escape(variant.title()), 0.05),
+                (re.escape(variant), 0.0),
+            ):
+                pat = re.compile(
+                    r"(?m)(?:^|\n)\s*(?:\|\s*)*"
+                    + case_pattern
+                    + r"(?:\s*\|\s*)*\s*$",
+                )
+                for m in pat.finditer(text, pos=body_floor):
+                    if m.start() > body_ceil:
+                        # Past the body window — likely end-index pollution
+                        break
+                    # Reject sentence-prose hits: previous 80 chars must
+                    # not end with a lowercase word (would mean we're in
+                    # mid-prose "...see Risk Factors below").
+                    pre = text[max(0, m.start() - 80):m.start()]
+                    if re.search(r"[a-z][a-z]{2,}\s*$", pre.strip()):
+                        continue
+                    if best_pos is None or m.start() < best_pos:
+                        best_pos = m.start()
+                        best_text = m.group(0).strip().strip("|").strip()
+                        best_caps_bonus = caps_bonus
+                if best_pos is not None:
+                    break
+            if best_pos is not None:
+                break
+        if best_pos is None:
+            continue
+        seen.add(item_number)
+        confidence = min(0.55 + best_caps_bonus, 0.70)
+        boundaries.append(
+            ItemBoundary(
+                item_number=item_number,
+                start_pos=best_pos,
+                heading_text=best_text or variants[0],
+                confidence=confidence,
+                source="title_only_fallback",
+            )
+        )
+
+    boundaries.sort(key=lambda b: b.start_pos)
+    logger.info(
+        "title_fallback_detected",
+        count=len(boundaries),
+        body_window=f"{body_start_pct:.0%}-{body_end_pct:.0%}",
+        items=[b.item_number for b in boundaries],
+    )
+    return boundaries
+
+
 def detect_part_boundaries(text: str) -> dict[str, int]:
     """Detect Part I, II, III, IV boundary positions."""
     parts: dict[str, int] = {}
@@ -380,11 +560,45 @@ def detect_item_status(content: str) -> ItemStatus:
     return ItemStatus.EXTRACTED
 
 
+def _needs_title_fallback(boundaries: list[ItemBoundary], total_chars: int) -> bool:
+    """Decide whether the regex-based pass missed the body and should be
+    augmented (or replaced) by the title-only fallback.
+
+    Three trip conditions, each captures a real failure mode observed
+    against held-out 2026 filings:
+
+    1. **Zero matches** (Citi 2026 pattern). The HTML uses bold-span
+       title-only headings so no "Item N." text exists for the regex to
+       find. We MUST fall back or downstream returns 22 NOT_FOUND
+       placeholders.
+
+    2. **End-of-doc cluster** (Intel 2026 pattern). Every match sits in
+       the last 5% of the document. That's almost always a cover-page
+       index / summary appendix, not real body sections — the body must
+       be earlier. We replace the regex matches with title-fallback
+       results in the body region.
+
+    3. **All matches TOC-suspect** (the §2.2 single-match patch already
+       handles half of this — when every regex match was downgraded to
+       the TOC-suspect confidence floor, we have no real body anchors).
+    """
+    if not boundaries:
+        return True
+    if all(b.start_pos > total_chars * 0.95 for b in boundaries):
+        return True
+    if all(b.source == "heading_regex_toc_suspect" for b in boundaries):
+        return True
+    return False
+
+
 def rule_based_parse(text: str) -> ParseResult:
     """
     Stage 1: Rule-based parsing of 10-K text.
 
-    Zero LLM cost. Detects item boundaries using regex patterns.
+    Zero LLM cost. Detects item boundaries using regex patterns; when the
+    regex pass fails the credibility check (`_needs_title_fallback`), runs
+    a title-only fallback to recover body headings for filings like Citi
+    2026 / Intel 2026 that don't emit "Item N." text in the body.
 
     Args:
         text: Normalized filing text
@@ -397,8 +611,34 @@ def rule_based_parse(text: str) -> ParseResult:
     # Step 1: Detect part boundaries
     part_boundaries = detect_part_boundaries(text)
 
-    # Step 2: Detect item headings
+    # Step 2: Detect item headings (regex-based)
     boundaries = detect_item_headings(text)
+    used_title_fallback = False
+
+    # Step 2b: Title-only fallback for filings whose body uses bold-span
+    # standalone titles (no "Item N." text — Citi 2026 / Intel 2026 / many
+    # banking-layout XBRL filings). See _needs_title_fallback for the
+    # trip conditions and rationale.
+    if _needs_title_fallback(boundaries, total_chars):
+        fallback = detect_item_headings_by_title(text)
+        if fallback:
+            used_title_fallback = True
+            # Merge: keep any high-confidence regex matches that are NOT in
+            # the suspicious zones; otherwise prefer the title-fallback
+            # boundary (it's anchored to actual body content).
+            regex_keep = [
+                b for b in boundaries
+                if b.source != "heading_regex_toc_suspect"
+                and b.start_pos <= total_chars * 0.95
+                and b.item_number not in {f.item_number for f in fallback}
+            ]
+            boundaries = sorted(regex_keep + fallback, key=lambda x: x.start_pos)
+            logger.info(
+                "title_fallback_activated",
+                regex_kept=len(regex_keep),
+                fallback_added=len(fallback),
+                total=len(boundaries),
+            )
 
     # Step 3: Set end positions (each item ends where the next begins)
     for i, boundary in enumerate(boundaries):
@@ -426,6 +666,7 @@ def rule_based_parse(text: str) -> ParseResult:
         items_found=result.items_found,
         avg_confidence=round(avg_conf, 3),
         total_chars=total_chars,
+        used_title_fallback=used_title_fallback,
     )
 
     return result
