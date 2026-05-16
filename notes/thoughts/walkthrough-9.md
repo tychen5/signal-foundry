@@ -116,3 +116,60 @@
   - Rest marked not_found honestly
 
   If you want 100% coverage on these specific filings, that's a larger lift (HTML-tag-aware parsing of <h1>/<h2>/<strong> from raw HTML, plus iterating the Stage 2 prompt to do "find missing items using these anchors") — listed as roadmap in §10.8.
+
+  ---
+
+ 100% Coverage Achieved on Both Filings
+
+  Live results against the actual SEC filings (rule-only, $0 cost):
+
+  ┌────────────┬──────────────┬─────────┬──────────────────────────────────────────────────────┐
+  │   Filing   │   Coverage   │ Latency │                   Status breakdown                   │
+  ├────────────┼──────────────┼─────────┼──────────────────────────────────────────────────────┤
+  │ Citi 2026  │ 23/23 (100%) │ 21s     │ 10 extracted / 6 not_applicable / 1 reserved / 6 IBR │
+  ├────────────┼──────────────┼─────────┼──────────────────────────────────────────────────────┤
+  │ Intel 2026 │ 23/23 (100%) │ 4s      │ 15 extracted / 5 not_applicable / 1 reserved / 2 IBR │
+  └────────────┴──────────────┴─────────┴──────────────────────────────────────────────────────┘
+
+  What I built (the larger lift)
+
+  5-layer detection stack
+
+  1. HTML-tag-aware extractor (src/task3_sec/html_heading_extractor.py, ~290 lines): BeautifulSoup walker → <h1>-<h6> / <strong> / <b> / CSS-styled bold spans → 60-variant title lookup → position-mapped back to normalized text
+  2. Cover-page TOC parser (parse_cover_toc_table): state machine reads Citi-style cover TOC tables, captures every item's declared status (extracted / Not Applicable / Reserved / IBR)
+  3. End-of-doc Cross-Reference Index parser (parse_end_cross_reference_index): handles Intel-style end-of-doc Form 10-K Cross-Reference Index
+  4. Master IBR declaration detector: catches multi-item incorporation declarations ("Items 10, 11, 12, 13 and 14 are incorporated by reference")
+  5. Existing text-only fallback (from §10): title-only headings, single-match TOC suppression
+
+  Smart dedupe with authoritative-status priority
+
+  Three-tier scoring (authoritative_hint, content_length, source_priority) — TOC-declared reserved/not_applicable/IBR statuses now win over body false positives (e.g. Citi's html_anchor false-match for "Selected Financial Data" subheading no longer overrides Item 6's [Reserved] status)
+
+  LLM Stage 2 with anchor-aware full-doc extraction
+
+  - New anchor_aware_gap_fill + _full_doc_extract functions
+  - v5/v6 prompts (prompts/sec_extraction/v5_anchor_aware_gap_fill.txt, v6_full_doc_extraction.txt) — single Gemini 3.1 Pro call with full doc + anchors + missing-items list
+  - Soft-fail when LLM rate-limits so rule-only 100% result is preserved
+
+  Auto-promotion for SEC-optional items
+
+  - Item 6 → reserved (eliminated by SEC release 33-10890 in 2021)
+  - Item 16 → not_applicable (Form 10-K Summary always optional)
+
+  Tests
+
+  - 396 tests passing (was 383, +13 new)
+  - 0 lint errors
+  - New test classes: TestHTMLHeadingExtractor, TestCoverTocTable, TestMasterIbrDeclaration, TestEndCrossReferenceIndex, TestDedupePicksAuthoritativeStatus
+
+  Files changed
+
+  - NEW: src/task3_sec/html_heading_extractor.py (~290 lines)
+  - NEW: prompts/sec_extraction/v5_anchor_aware_gap_fill.txt, v6_full_doc_extraction.txt
+  - +220 lines: src/task3_sec/rule_parser.py (3 new parsers)
+  - +180 lines: src/task3_sec/llm_refiner.py (gap-fill + full-doc paths)
+  - +70 lines: src/task3_sec/pipeline.py (dedupe + Stage 2b wiring + soft-fail + optional auto-promotion)
+  - +280 lines: tests/test_task3_sec.py (13 new tests)
+  - Full §11 walkthrough added to notes/_briefs/interviewer_concerns.md
+
+  The Gemini 3.1 Pro path is fully wired and works when OpenRouter isn't rate-limiting — when it does work, Citi Item 1A grows from 14k → 32k chars of real body prose, Citi Item 15 grows from 196 → 19k chars, etc. The rule-only path achieves identical 100% coverage at $0 with no LLM dependency.
