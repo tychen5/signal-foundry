@@ -115,9 +115,9 @@
                 <button class="example-btn" onclick="setExample('0001046179','0001628280-26-025362')">TSMC 20-F</button>
             </div>
             <div class="examples-row" style="margin-top:0.4rem;">
-                <span style="font-size:0.8rem;color:#475569;">Interviewer regression (most-recent 10-K, vision+force_llm on): </span>
-                <button class="example-btn" onclick="setExample('0000831001',''); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true; document.getElementById('skip-llm').checked = false; updateTask3CostHint();" title="Citi 2026 — regression case for the catastrophic-failure / coverage-mask bug fix">🏦 Citi 2026 (regression)</button>
-                <button class="example-btn" onclick="setExample('0000050863',''); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true; document.getElementById('skip-llm').checked = false; updateTask3CostHint();" title="Intel 2026 — regression case for the single-match TOC-suppression fix">💾 Intel 2026 (regression)</button>
+                <span style="font-size:0.8rem;color:#475569;">Banking / structured-XBRL layout (vision + force_llm auto-enabled): </span>
+                <button class="example-btn" onclick="setExample('0000831001',''); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true; document.getElementById('skip-llm').checked = false; updateTask3CostHint();" title="Citi 2026 — exercises the cover-page TOC parser, master-IBR detector, and HTML-tag-aware heading extractor (banking layout with bold-span titles)">🏦 Citi 2026 (latest 10-K)</button>
+                <button class="example-btn" onclick="setExample('0000050863',''); document.getElementById('use-vision').checked = true; document.getElementById('force-llm').checked = true; document.getElementById('skip-llm').checked = false; updateTask3CostHint();" title="Intel 2026 — exercises the end-of-doc Cross-Reference Index parser (Intel-style filings put authoritative item index at end)">💾 Intel 2026 (latest 10-K)</button>
             </div>
             <div class="examples-row" style="margin-top:0.4rem;">
                 <span style="font-size:0.8rem;color:#475569;">Edge cases (try with vision + force_llm): </span>
