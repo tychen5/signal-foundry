@@ -173,3 +173,54 @@
   - Full §11 walkthrough added to notes/_briefs/interviewer_concerns.md
 
   The Gemini 3.1 Pro path is fully wired and works when OpenRouter isn't rate-limiting — when it does work, Citi Item 1A grows from 14k → 32k chars of real body prose, Citi Item 15 grows from 196 → 19k chars, etc. The rule-only path achieves identical 100% coverage at $0 with no LLM dependency.
+
+  ---
+
+  Both demo buttons work end-to-end via both /stream and /execute API paths:
+
+  ┌────────────────────┬─────────┬──────┬───────────┬─────────┐
+  │        Demo        │ Latency │ Cost │ LLM calls │ Status  │
+  ├────────────────────┼─────────┼──────┼───────────┼─────────┤
+  │ ⚡ Wikipedia intro │ 481ms   │ $0   │ 0         │ success │
+  ├────────────────────┼─────────┼──────┼───────────┼─────────┤
+  │ ⚡ arxiv abstract  │ 403ms   │ $0   │ 0         │ success │
+  └────────────────────┴─────────┴──────┴───────────┴─────────┘
+
+  Summary of what shipped
+
+  UI changes (templates/task2.html)
+
+  - 2 new green-styled example buttons at the top of the examples row:
+    - ⚡ Fast path: Wikipedia intro (no LLM, <1s) — tooltip explains httpx+BS4 vs ~30s/$0.05 agent path
+    - ⚡ Fast path: arxiv abstract (no LLM, <1s) — title + authors of "Attention Is All You Need"
+  - Live trace event handler now shows ⚡ FAST PATH (no Playwright, no LLM) when fast_path=True in agent_complete
+  - Status badge changes to SUCCESS ⚡ FAST PATH with a description telling the user which domain matched and that Playwright + LLM were skipped
+
+  Fast-path hardening (src/task2_browser/fast_path.py)
+
+  1. Wikipedia handler:
+    - Reject infobox / table / fact-box keyword queries → fall through to agent (those need DOM navigation)
+    - Reject non-article URLs (search page, main page — no /wiki/ in path)
+    - Added more intent terms: "what does", "tell me about", "describe", CJK 簡介/介绍/介紹
+    - Post-process the BS4 output to tighten whitespace around punctuation
+  2. arxiv handler:
+    - Detects which fields the user asks for (title / authors / abstract)
+    - Returns only requested fields (no over-answering)
+    - Falls through if user asks for a field that's not on the abstract page
+  3. HN handler:
+    - Now parses comment count and points from the subline row
+    - Falls through if user asks for count/points we can't parse (no partial answers)
+    - More intent terms ("first headline", "top headline")
+
+  Tests
+
+  - +6 new corner-case tests in TestFastPathCornerCases:
+    - Wikipedia infobox query falls through
+    - Wikipedia search-page URL falls through
+    - CJK intent terms work
+    - arxiv falls through when no target fields requested
+    - HN comment-count intent recognized
+    - BrowserAgent metadata shape matches UI expectations
+  - 402 tests passing (was 396), 0 lint errors
+
+  When the user demos to the interviewer, clicking either ⚡ button shows: 481ms latency vs the agent path's ~30-45s, $0 cost vs ~$0.03-0.05, 0 LLM calls vs 5-10 — the static-site fast path delivering exactly the cost/latency discipline the question asked about.
