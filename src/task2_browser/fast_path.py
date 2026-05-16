@@ -32,6 +32,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from src.shared.logger import get_logger
+from src.task2_browser.fast_path_intent import Intent, parse_intent
 from src.task2_browser.schemas import (
     ActionType,
     AgentResult,
@@ -85,53 +86,124 @@ async def _http_get(url: str) -> Optional[httpx.Response]:
         return None
 
 
+def _tighten_wikitext(raw: str) -> str:
+    """Wikipedia BS4 text output puts extra spaces around punctuation —
+    'AI ( artificial intelligence )' becomes 'AI (artificial intelligence)'.
+    Also collapses runs of whitespace. Shared by Wikipedia + MDN handlers."""
+    cleaned = re.sub(r"\s+([,.;:!?\)\]])", r"\1", raw)
+    cleaned = re.sub(r"([\(\[])\s+", r"\1", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned.strip()
+
+
+def _collect_paragraphs(container, min_len: int = 80, recursive: bool = False) -> list[str]:
+    """Collect non-empty paragraphs from an article container.
+
+    Args:
+        container: BeautifulSoup element wrapping the article body
+        min_len: skip paragraphs shorter than this (image captions, hatnotes)
+        recursive: True walks all descendant <p> tags (MDN-style nested
+            sections); False takes only direct children (Wikipedia-style,
+            keeps infobox text out). Excludes paragraphs that live inside
+            noise wrappers (`<aside>`, `<nav>`, `<table>`, `.infobox`,
+            `.notecard`, `.note`, `.toc`) so deep-walk doesn't grab them.
+    """
+    paragraphs: list[str] = []
+    candidates = container.find_all("p", recursive=recursive)
+    noise_ancestors = {"aside", "nav", "table", "footer", "header", "details"}
+    noise_classes = {
+        # Wikipedia
+        "infobox", "notecard", "note", "toc", "navbox", "sidebar",
+        "thumb", "thumbcaption", "hatnote", "mw-empty-elt", "mw-references-wrap",
+        "reference", "reflist", "ambox", "shortdescription",
+        # MDN (note: MDN's layout__header CONTAINS the lead paragraph so we
+        # don't filter that; the noise inside it is reached via <details> /
+        # baseline-indicator ancestor which is already excluded above)
+        "baseline-indicator", "bcd-table", "extra", "notecard-warning",
+        "callout", "warning",
+        # Generic page-chrome
+        "page-header", "subnav", "breadcrumb",
+        "metadata", "footnote",
+    }
+    for p in candidates:
+        cls = set(p.get("class") or [])
+        if cls & noise_classes:
+            continue
+        # Walk up the ancestor chain to filter paragraphs nested inside noise
+        ancestor = p.parent
+        skip = False
+        while ancestor is not None and getattr(ancestor, "name", None) != container.name:
+            anc_cls = set(ancestor.get("class") or []) if hasattr(ancestor, "get") else set()
+            if getattr(ancestor, "name", None) in noise_ancestors:
+                skip = True
+                break
+            if anc_cls & noise_classes:
+                skip = True
+                break
+            ancestor = ancestor.parent
+        if skip:
+            continue
+        raw = p.get_text(" ", strip=True)
+        if not raw or len(raw) <= min_len:
+            continue
+        paragraphs.append(_tighten_wikitext(raw))
+    return paragraphs
+
+
+def _select_paragraphs(paragraphs: list[str], intent: Intent) -> Optional[str]:
+    """Given a list of body paragraphs and the user's intent, return the
+    joined text the user asked for. Returns None when the request can't be
+    satisfied (e.g. user asked for paragraph 8 but only 3 exist) — caller
+    should fall through to the agent in that case so it can scroll/navigate."""
+    if not paragraphs:
+        return None
+    # All paragraphs (whole-article request)
+    if intent.paragraphs_all:
+        return "\n\n".join(paragraphs)
+    # Range request: "first 3" / "paragraphs 2-4"
+    if intent.paragraph_range is not None:
+        a, b = intent.paragraph_range
+        slice_ = paragraphs[a - 1 : b]
+        if not slice_:
+            return None
+        return "\n\n".join(slice_)
+    # Single index (1-based, or -1 for last)
+    if intent.paragraph_index is not None:
+        idx = intent.paragraph_index
+        if idx == -1:
+            return paragraphs[-1]
+        if 1 <= idx <= len(paragraphs):
+            return paragraphs[idx - 1]
+        return None  # asked for nonexistent paragraph
+    # Default: first paragraph for summary / definition intents
+    if intent.wants_summary or intent.wants_definition:
+        return paragraphs[0]
+    return None
+
+
 @_register("wikipedia.org")
 async def _wikipedia(url: str, task: str) -> HandlerResult:
-    """Wikipedia article first-paragraph / lead-section extraction.
+    """Wikipedia article paragraph extraction (any paragraph by index,
+    range, or summary intent).
 
-    Triggers on intents like "first paragraph", "introduction", "summary",
-    "what is X", "首段", "lead paragraph". Falls through to the agent for
-    tasks asking for specific structured facts (infobox values, table rows,
-    population numbers) — those need the LLM to navigate.
+    Triggers when the parsed Intent has a paragraph request OR
+    summary/definition intent. Falls through to the agent for infobox /
+    fact-box / specific-data-cell queries — those need DOM navigation.
     """
-    intent_terms = (
-        "first paragraph",
-        "introduction",
-        "lead section",
-        "lead paragraph",
-        "introduction paragraph",
-        "summary",
-        "what is",
-        "what's",
-        "what does",
-        "tell me about",
-        "describe",
-        # CJK
-        "首段",
-        "首段落",
-        "簡介",
-        "介绍",
-        "介紹",
-    )
-    task_lower = task.lower()
-    if not any(t in task_lower for t in intent_terms):
-        return None
-    # Reject obvious infobox / table / specific-fact queries that need the
-    # LLM agent to navigate the rendered DOM (httpx+BS4 can extract these
-    # too in principle, but they're not in our intent template).
-    infobox_terms = (
-        "infobox",
-        "side bar",
-        "sidebar",
-        "table",
-        "fact box",
-        "fact-box",
-    )
-    if any(t in task_lower for t in infobox_terms):
-        return None
+    intent = parse_intent(task)
     # Only fast-path actual article pages — not the main page / search.
     if "/wiki/" not in url:
         return None
+    # Reject infobox / table / specific-fact queries (need agent path).
+    infobox_terms = ("infobox", "side bar", "sidebar", "table",
+                     "fact box", "fact-box", "data cell")
+    task_lower = task.lower()
+    if any(t in task_lower for t in infobox_terms):
+        return None
+    # Must have a paragraph or summary intent to fast-path
+    if not intent.any_paragraph_request():
+        return None
+
     resp = await _http_get(url)
     if resp is None:
         return None
@@ -139,40 +211,32 @@ async def _wikipedia(url: str, task: str) -> HandlerResult:
     container = soup.select_one("#mw-content-text .mw-parser-output")
     if container is None:
         return None
-    # First non-empty <p> that is a direct child (skip hatnotes / infobox).
-    # `get_text` separator " " produces `AI ( artificial intelligence )` with
-    # spaces around punctuation. We post-process to tighten that for readability.
-    for p in container.find_all("p", recursive=False):
-        cls = p.get("class") or []
-        if "mw-empty-elt" in cls:
-            continue
-        raw = p.get_text(" ", strip=True)
-        if not raw or len(raw) <= 80:
-            continue
-        # Tighten spacing around punctuation (Wikipedia BS4 output adds extra
-        # spaces around parens / commas / periods that hurt readability).
-        cleaned = re.sub(r"\s+([,.;:!?\)\]])", r"\1", raw)
-        cleaned = re.sub(r"([\(\[])\s+", r"\1", cleaned)
-        cleaned = re.sub(r"\s{2,}", " ", cleaned)
-        return cleaned, cleaned
-    return None
+    paragraphs = _collect_paragraphs(container, min_len=80)
+    answer = _select_paragraphs(paragraphs, intent)
+    if not answer:
+        return None
+    return answer, answer
 
 
 @_register("arxiv.org")
 async def _arxiv(url: str, task: str) -> HandlerResult:
-    """arxiv.org/abs/<id> — extract title + authors + (optionally) abstract.
-    Pure DOM, no LLM. Returns the fields the task asks for; if none of the
-    target fields are mentioned, returns all three so the agent doesn't
-    falsely hallucinate when this fast path served partial info.
+    """arxiv.org/abs/<id> — extract title / authors / abstract.
+
+    Uses the shared Intent parser so:
+      - "authors of paper X" → strict mode, return ONLY authors
+      - "title and abstract" → return both, no authors (no over-answer)
+      - "tell me about paper X" → generic intent, return title + abstract
     """
     if "/abs/" not in url:
         return None
-    task_lower = task.lower()
-    wants_title = "title" in task_lower or "paper" in task_lower
-    wants_authors = "author" in task_lower
-    wants_abstract = "abstract" in task_lower or "summary" in task_lower
-    if not (wants_title or wants_authors or wants_abstract):
+    intent = parse_intent(task)
+    # Trigger gate: must request at least one arxiv-relevant field OR
+    # explicit summary intent.
+    relevant_fields = {"title", "author", "abstract"}
+    has_relevant = bool(intent.requested_fields & relevant_fields)
+    if not (has_relevant or intent.wants_summary):
         return None
+
     resp = await _http_get(url)
     if resp is None:
         return None
@@ -183,22 +247,38 @@ async def _arxiv(url: str, task: str) -> HandlerResult:
     title = (title_node.get_text(" ", strip=True) if title_node else "").removeprefix("Title:").strip()
     authors = (authors_node.get_text(" ", strip=True) if authors_node else "").removeprefix("Authors:").strip()
     abstract = (abstract_node.get_text(" ", strip=True) if abstract_node else "").removeprefix("Abstract:").strip()
-    # Collapse internal whitespace.
     title = re.sub(r"\s{2,}", " ", title)
     authors = re.sub(r"\s{2,}", " ", authors)
     abstract = re.sub(r"\s{2,}", " ", abstract)
     if not title and not authors and not abstract:
         return None
+
+    # Strict mode: include ONLY explicitly-requested fields.
+    # Non-strict: include explicitly-requested fields + sensible defaults
+    # for generic "tell me about this paper" tasks (title + abstract).
+    if intent.strict_field_mode:
+        include_title = intent.wants("title")
+        include_authors = intent.wants("author")
+        include_abstract = intent.wants("abstract")
+    elif has_relevant:
+        include_title = intent.wants("title")
+        include_authors = intent.wants("author")
+        include_abstract = intent.wants("abstract")
+    else:
+        # Pure summary intent ("tell me about paper X") with no specific
+        # field → return title + abstract as the standard paper summary.
+        include_title = True
+        include_authors = False
+        include_abstract = True
+
     pieces: list[str] = []
-    if title and (wants_title or not (wants_authors or wants_abstract)):
+    if include_title and title:
         pieces.append(f"Title: {title}")
-    if authors and (wants_authors or not (wants_title or wants_abstract)):
+    if include_authors and authors:
         pieces.append(f"Authors: {authors}")
-    if abstract and wants_abstract:
+    if include_abstract and abstract:
         pieces.append(f"Abstract: {abstract}")
     if not pieces:
-        # User asked for one specific field that wasn't in the page —
-        # fall through so the agent can try.
         return None
     answer = "\n".join(pieces)
     observed = f"{title}\n{authors}\n{abstract}".strip()
@@ -207,69 +287,246 @@ async def _arxiv(url: str, task: str) -> HandlerResult:
 
 @_register("news.ycombinator.com")
 async def _hackernews(url: str, task: str) -> HandlerResult:
-    """Hacker News top-story / front-page listing fast path.
+    """Hacker News top-story / first-N-stories listing fast path.
 
-    Returns title + URL of the top story. Also captures comment count and
-    points when the user asks (HN renders these as text in the subline
-    immediately after .athing, so a single GET fetches them all).
+    Supports:
+      - top story (default) → title + URL
+      - top N stories ("top 5 stories") → N rows
+      - comment count / points when explicitly requested
 
-    If user asks for "comment count" / "points" specifically and we can't
-    parse them, fall through to the agent — better than partial answer.
+    Uses Intent to pick exactly what to return — never over-answers with
+    unsolicited fields.
     """
-    task_lower = task.lower()
-    wants_top = any(
-        t in task_lower
-        for t in (
-            "top story", "top post", "top story title", "front page",
-            "first story", "first post", "first headline", "top headline",
-        )
+    intent = parse_intent(task)
+    # Trigger: must want a headline / top story / top-N listing
+    wants_top = (
+        intent.wants("headline")
+        or intent.top_n is not None
+        or "story" in task.lower()
     )
     if not wants_top:
         return None
-    wants_count = "comment" in task_lower or "count" in task_lower
-    wants_points = "points" in task_lower or "upvotes" in task_lower or "score" in task_lower
 
     target = "https://news.ycombinator.com/news"
     resp = await _http_get(target)
     if resp is None:
         return None
     soup = BeautifulSoup(resp.text, "lxml")
-    first_row = soup.select_one("tr.athing")
-    if first_row is None:
-        return None
-    title_a = first_row.select_one("span.titleline > a")
-    if title_a is None:
-        return None
-    title = title_a.get_text(strip=True)
-    href = title_a.get("href", "")
-    if not title:
+    rows = soup.select("tr.athing")
+    if not rows:
         return None
 
-    # Subline row (next <tr>) carries the comment count + points
-    comments = None
-    points = None
-    subline = first_row.find_next_sibling("tr")
-    if subline is not None:
-        sub_text = subline.get_text(" ", strip=True)
-        m_comments = re.search(r"(\d+)\s*comments?", sub_text, re.IGNORECASE)
-        if m_comments:
-            comments = int(m_comments.group(1))
-        m_points = re.search(r"(\d+)\s*points?", sub_text, re.IGNORECASE)
-        if m_points:
-            points = int(m_points.group(1))
-    # If the user asked specifically for fields we couldn't parse, fall
-    # through to the agent rather than return partial info.
-    if wants_count and comments is None:
+    n = intent.top_n if intent.top_n and intent.top_n > 1 else 1
+    want_comments = intent.wants("comments")
+    want_points = intent.wants("points")
+
+    entries: list[dict] = []
+    for row in rows[:n]:
+        title_a = row.select_one("span.titleline > a")
+        if title_a is None:
+            continue
+        title = title_a.get_text(strip=True)
+        href = title_a.get("href", "")
+        if not title:
+            continue
+        comments = None
+        points = None
+        subline = row.find_next_sibling("tr")
+        if subline is not None:
+            sub_text = subline.get_text(" ", strip=True)
+            m_c = re.search(r"(\d+)\s*comments?", sub_text, re.IGNORECASE)
+            if m_c:
+                comments = int(m_c.group(1))
+            m_p = re.search(r"(\d+)\s*points?", sub_text, re.IGNORECASE)
+            if m_p:
+                points = int(m_p.group(1))
+        entries.append({"title": title, "url": href, "comments": comments, "points": points})
+
+    if not entries:
         return None
-    if wants_points and points is None:
+
+    # If user asked for fields we couldn't parse on the FIRST entry, fall
+    # through — partial answers degrade trust.
+    if want_comments and entries[0]["comments"] is None:
         return None
-    pieces = [f"Top story: {title}", f"URL: {href}"]
-    if comments is not None:
-        pieces.append(f"Comments: {comments}")
-    if points is not None:
-        pieces.append(f"Points: {points}")
+    if want_points and entries[0]["points"] is None:
+        return None
+
+    out_lines: list[str] = []
+    for i, e in enumerate(entries, start=1):
+        prefix = f"{i}. " if len(entries) > 1 else "Top story: "
+        parts = [f"{prefix}{e['title']}", f"   URL: {e['url']}"]
+        if want_points and e["points"] is not None:
+            parts.append(f"   Points: {e['points']}")
+        if want_comments and e["comments"] is not None:
+            parts.append(f"   Comments: {e['comments']}")
+        out_lines.extend(parts)
+    answer = "\n".join(out_lines)
+    observed = "\n".join(e["title"] for e in entries)
+    return answer, observed
+
+
+# ────────────────────────────────────────────────────────────────────
+# Generic article-page handlers (new in 2026-05-16 generalization pass)
+# ────────────────────────────────────────────────────────────────────
+
+
+@_register("developer.mozilla.org")
+async def _mdn(url: str, task: str) -> HandlerResult:
+    """MDN Web Docs first-paragraph / summary extraction.
+
+    MDN nests paragraphs inside `<section>` blocks within `<main>`, so the
+    collector runs in recursive mode and relies on the noise-ancestor
+    filter to skip aside / table / note callouts.
+    """
+    intent = parse_intent(task)
+    if not intent.any_paragraph_request():
+        return None
+    resp = await _http_get(url)
+    if resp is None:
+        return None
+    soup = BeautifulSoup(resp.text, "lxml")
+    # MDN uses several different main-content wrappers across the site
+    # generations — try them in order of specificity.
+    container = (
+        soup.select_one("article.main-page-content")
+        or soup.select_one("main article")
+        or soup.select_one("main")
+    )
+    if container is None:
+        return None
+    paragraphs = _collect_paragraphs(container, min_len=40, recursive=True)
+    answer = _select_paragraphs(paragraphs, intent)
+    if not answer:
+        return None
+    return answer, answer
+
+
+@_register("pypi.org")
+async def _pypi(url: str, task: str) -> HandlerResult:
+    """PyPI package page — version / author / license / description / summary.
+
+    URL pattern: pypi.org/project/<name>/ . Uses standard project-summary
+    meta tags + sidebar fields.
+    """
+    if "/project/" not in url:
+        return None
+    intent = parse_intent(task)
+    # Trigger: explicit field request OR summary intent
+    relevant = {"title", "version", "author", "license", "description"}
+    has_relevant = bool(intent.requested_fields & relevant)
+    if not (has_relevant or intent.wants_summary):
+        return None
+
+    resp = await _http_get(url)
+    if resp is None:
+        return None
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    # PyPI renders h1 as "<package-name> <version>" — e.g. "requests 2.34.2".
+    # Split on whitespace and use the last token as version.
+    h1 = soup.select_one("h1.package-header__name")
+    h1_text = h1.get_text(" ", strip=True) if h1 else ""
+    package_name = ""
+    version = ""
+    if h1_text:
+        parts = h1_text.split()
+        if len(parts) >= 2 and re.match(r"^\d", parts[-1]):
+            package_name = " ".join(parts[:-1])
+            version = parts[-1]
+        else:
+            package_name = h1_text
+    # Summary tagline
+    summary_node = soup.select_one("p.package-description__summary")
+    summary = summary_node.get_text(" ", strip=True) if summary_node else ""
+    # Sidebar metadata (meta-list pattern with bordered cards)
+    meta_text = (soup.select_one("aside") or soup).get_text("\n", strip=True)
+    m_license = re.search(r"License:\s*(.+?)(?:\n|$)", meta_text)
+    license_ = m_license.group(1).strip() if m_license else ""
+    m_author = re.search(r"Author:?\s*\n?\s*(.+?)(?:\n|Maintainer|$)", meta_text)
+    author = m_author.group(1).strip() if m_author else ""
+
+    if not (package_name or summary):
+        return None
+
+    # Strict mode: include only requested fields
+    fields_avail = {
+        "title": package_name,
+        "version": version,
+        "author": author,
+        "license": license_,
+        "description": summary,
+    }
+    if intent.strict_field_mode and has_relevant:
+        pieces = [
+            f"{k.title()}: {v}" for k, v in fields_avail.items()
+            if intent.wants(k) and v
+        ]
+    elif has_relevant:
+        pieces = [
+            f"{k.title()}: {v}" for k, v in fields_avail.items()
+            if intent.wants(k) and v
+        ]
+    else:
+        # Generic summary
+        pieces = [
+            f"Package: {package_name}",
+            f"Version: {version}" if version else "",
+            f"Summary: {summary}" if summary else "",
+        ]
+        pieces = [p for p in pieces if p]
+
+    if not pieces:
+        return None
     answer = "\n".join(pieces)
-    return answer, f"{title}\n{href}"
+    observed = "\n".join(v for v in fields_avail.values() if v)
+    return answer, observed
+
+
+@_register("github.com")
+async def _github(url: str, task: str) -> HandlerResult:
+    """GitHub repository README first-paragraph extraction.
+
+    Triggers on `github.com/<owner>/<repo>` (no /blob/ / /pulls / /issues
+    subpath). Fetches the rendered README from the raw URL and extracts the
+    requested paragraph.
+    """
+    intent = parse_intent(task)
+    if not intent.any_paragraph_request():
+        return None
+    # URL must point at a repo root (3 path segments: '', owner, repo)
+    parts = urlparse(url).path.strip("/").split("/")
+    if len(parts) < 2:
+        return None
+    owner, repo = parts[0], parts[1]
+    # Exclude non-repo paths
+    if owner in {"orgs", "settings", "marketplace", "search", "topics"}:
+        return None
+    if len(parts) >= 3 and parts[2] in {
+        "blob", "tree", "issues", "pulls", "wiki", "actions", "discussions",
+        "security", "pulse", "graphs", "network", "releases", "tags",
+    }:
+        return None
+    # Try the rendered HTML first — its README is HTML-converted already
+    resp = await _http_get(f"https://github.com/{owner}/{repo}")
+    if resp is None:
+        return None
+    soup = BeautifulSoup(resp.text, "lxml")
+    readme = soup.select_one("article.markdown-body")
+    if readme is None:
+        return None
+    paragraphs = _collect_paragraphs(readme, min_len=40)
+    if not paragraphs:
+        # README might use only headings + bullet lists — return the first
+        # substantive text block.
+        first_text = readme.get_text(" ", strip=True)[:1000]
+        if first_text and len(first_text) > 80:
+            return first_text, first_text
+        return None
+    answer = _select_paragraphs(paragraphs, intent)
+    if not answer:
+        return None
+    return answer, answer
 
 
 @_register("example.com")
