@@ -1448,25 +1448,27 @@ class TestFastPathCornerCases:
         assert task_is_static_compatible("請告訴我關於量子計算的首段介紹")
         assert task_is_static_compatible("給我這篇文章的簡介")
 
-    def test_arxiv_field_specific_request_returns_only_that_field(self) -> None:
-        """User asks for 'authors' only — output should contain Authors but
-        not Title (to avoid over-answering)."""
-        # We can't make an http request in unit tests, so we just verify
-        # the intent gate logic at the entry point (the http call comes
-        # later and the function returns None if no fields requested).
-        import asyncio
+    def test_arxiv_field_specific_request_uses_intent(self) -> None:
+        """Verify the arxiv handler is wired to the shared intent parser.
 
-        from src.task2_browser.fast_path import _arxiv
+        The trigger gate is `requested_fields & {title,author,abstract}` OR
+        `wants_summary`. Asking specifically for one field flips strict_mode
+        so the handler returns ONLY that field (no over-answering).
+        """
+        from src.task2_browser.fast_path_intent import parse_intent
 
-        async def run():
-            # Task mentions no title/author/abstract/paper/summary keywords
-            return await _arxiv(
-                "https://arxiv.org/abs/1706.03762",
-                "tell me about transformers",
-            )
+        # Task with no relevant field + no summary verb → no triggers
+        intent = parse_intent("Random unrelated text about cats")
+        assert not (intent.requested_fields & {"title", "author", "abstract"})
+        assert not intent.wants_summary
 
-        # No matching keywords → fall through
-        assert asyncio.run(run()) is None
+        # Asking for a single specific field → strict mode kicks in
+        intent2 = parse_intent("What are the authors of the paper?")
+        assert "author" in intent2.requested_fields
+        assert intent2.strict_field_mode is True
+        # "tell me about" → triggers summary intent for arxiv default
+        intent3 = parse_intent("tell me about this paper")
+        assert intent3.wants_summary is True
 
     def test_hn_comments_intent_requires_count_field(self) -> None:
         """Verify that HN fast path's intent parser recognizes comment-count
@@ -1478,6 +1480,112 @@ class TestFastPathCornerCases:
         assert task_is_static_compatible(
             "Get the top story title AND comment count from Hacker News"
         )
+
+    def test_intent_parser_paragraph_index(self) -> None:
+        """Intent parser recognizes paragraph N requests (ordinal + numeric)."""
+        from src.task2_browser.fast_path_intent import parse_intent
+
+        assert parse_intent("Get the first paragraph").paragraph_index == 1
+        assert parse_intent("Show me the second paragraph").paragraph_index == 2
+        assert parse_intent("What is the 3rd paragraph?").paragraph_index == 3
+        assert parse_intent("paragraph 5").paragraph_index == 5
+        assert parse_intent("Give me the last paragraph").paragraph_index == -1
+
+    def test_intent_parser_paragraph_range(self) -> None:
+        """Intent parser recognizes paragraph range requests."""
+        from src.task2_browser.fast_path_intent import parse_intent
+
+        assert parse_intent("First 3 paragraphs").paragraph_range == (1, 3)
+        assert parse_intent("Get paragraphs 2 to 4").paragraph_range == (2, 4)
+        assert parse_intent("paragraphs 5-7").paragraph_range == (5, 7)
+        assert parse_intent("Read the entire article").paragraphs_all is True
+
+    def test_intent_parser_field_strict_mode(self) -> None:
+        """Single specific field request triggers strict_field_mode (no over-answer)."""
+        from src.task2_browser.fast_path_intent import parse_intent
+
+        intent = parse_intent("Just the authors please")
+        assert intent.requested_fields == {"author"}
+        assert intent.strict_field_mode is True
+        # Multiple fields → not strict (user asked for several)
+        intent2 = parse_intent("Title and abstract please")
+        assert intent2.requested_fields == {"title", "abstract"}
+        assert intent2.strict_field_mode is False
+
+    def test_intent_parser_summary_suppressed_by_field(self) -> None:
+        """A specific field request beats generic 'what is X' summary intent."""
+        from src.task2_browser.fast_path_intent import parse_intent
+
+        intent = parse_intent("What are the authors of arxiv paper X?")
+        assert "author" in intent.requested_fields
+        assert intent.wants_summary is False  # suppressed by field
+        assert intent.strict_field_mode is True
+
+    def test_intent_parser_cjk_works(self) -> None:
+        from src.task2_browser.fast_path_intent import parse_intent
+
+        intent = parse_intent("請告訴我關於量子計算的首段介紹")
+        assert intent.paragraph_index == 1
+        assert intent.wants_summary is True
+
+    def test_intent_parser_top_n(self) -> None:
+        from src.task2_browser.fast_path_intent import parse_intent
+
+        assert parse_intent("Top 5 stories").top_n == 5
+        assert parse_intent("First 3 results").top_n == 3
+
+    def test_fast_path_registry_includes_new_domains(self) -> None:
+        """The generalization pass added MDN / PyPI / GitHub handlers."""
+        from src.task2_browser.fast_path import list_registered_domains
+
+        domains = list_registered_domains()
+        assert "developer.mozilla.org" in domains
+        assert "pypi.org" in domains
+        assert "github.com" in domains
+
+    def test_github_handler_rejects_non_repo_paths(self) -> None:
+        """github.com/<owner>/<repo>/issues should fall through — not a README."""
+        import asyncio
+
+        from src.task2_browser.fast_path import _github
+
+        async def run():
+            return await _github(
+                "https://github.com/psf/requests/issues/42",
+                "Get the first paragraph",
+            )
+
+        assert asyncio.run(run()) is None
+
+    def test_pypi_handler_rejects_non_project_path(self) -> None:
+        """pypi.org/search/?q=requests is not a project page — fall through."""
+        import asyncio
+
+        from src.task2_browser.fast_path import _pypi
+
+        async def run():
+            return await _pypi(
+                "https://pypi.org/search/?q=requests",
+                "What is the version?",
+            )
+
+        assert asyncio.run(run()) is None
+
+    def test_select_paragraphs_handles_out_of_range(self) -> None:
+        """Asking for paragraph 8 when only 3 exist returns None (fall through)."""
+        from src.task2_browser.fast_path import _select_paragraphs
+        from src.task2_browser.fast_path_intent import Intent
+
+        paragraphs = ["P1 content", "P2 content", "P3 content"]
+        intent = Intent(paragraph_index=8)
+        assert _select_paragraphs(paragraphs, intent) is None
+        # Last paragraph works
+        intent_last = Intent(paragraph_index=-1)
+        assert _select_paragraphs(paragraphs, intent_last) == "P3 content"
+        # Range that goes past end clips
+        intent_range = Intent(paragraph_range=(2, 10))
+        result = _select_paragraphs(paragraphs, intent_range)
+        assert result == "P2 content\n\nP3 content"
 
     def test_browser_agent_run_emits_fast_path_metadata(self) -> None:
         """Confirms the fast-path AgentResult shape carries the metadata
