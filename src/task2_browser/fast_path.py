@@ -87,21 +87,50 @@ async def _http_get(url: str) -> Optional[httpx.Response]:
 
 @_register("wikipedia.org")
 async def _wikipedia(url: str, task: str) -> HandlerResult:
-    """Wikipedia article first-paragraph / lead-section extraction."""
+    """Wikipedia article first-paragraph / lead-section extraction.
+
+    Triggers on intents like "first paragraph", "introduction", "summary",
+    "what is X", "首段", "lead paragraph". Falls through to the agent for
+    tasks asking for specific structured facts (infobox values, table rows,
+    population numbers) — those need the LLM to navigate.
+    """
     intent_terms = (
         "first paragraph",
         "introduction",
         "lead section",
         "lead paragraph",
-        "首段",
-        "首段落",
         "introduction paragraph",
         "summary",
         "what is",
         "what's",
+        "what does",
+        "tell me about",
+        "describe",
+        # CJK
+        "首段",
+        "首段落",
+        "簡介",
+        "介绍",
+        "介紹",
     )
     task_lower = task.lower()
     if not any(t in task_lower for t in intent_terms):
+        return None
+    # Reject obvious infobox / table / specific-fact queries that need the
+    # LLM agent to navigate the rendered DOM (httpx+BS4 can extract these
+    # too in principle, but they're not in our intent template).
+    infobox_terms = (
+        "infobox",
+        "side bar",
+        "sidebar",
+        "table",
+        "fact box",
+        "fact-box",
+    )
+    if any(t in task_lower for t in infobox_terms):
+        return None
+    # Only fast-path actual article pages — not the main page / search.
+    if "/wiki/" not in url:
         return None
     resp = await _http_get(url)
     if resp is None:
@@ -110,25 +139,39 @@ async def _wikipedia(url: str, task: str) -> HandlerResult:
     container = soup.select_one("#mw-content-text .mw-parser-output")
     if container is None:
         return None
-    # First non-empty <p> that is a direct child (skip hatnotes / infobox)
+    # First non-empty <p> that is a direct child (skip hatnotes / infobox).
+    # `get_text` separator " " produces `AI ( artificial intelligence )` with
+    # spaces around punctuation. We post-process to tighten that for readability.
     for p in container.find_all("p", recursive=False):
-        text = p.get_text(" ", strip=True)
-        if text and not p.get("class", []) or "mw-empty-elt" not in p.get("class", []):
-            if len(text) > 80:
-                return text, text
+        cls = p.get("class") or []
+        if "mw-empty-elt" in cls:
+            continue
+        raw = p.get_text(" ", strip=True)
+        if not raw or len(raw) <= 80:
+            continue
+        # Tighten spacing around punctuation (Wikipedia BS4 output adds extra
+        # spaces around parens / commas / periods that hurt readability).
+        cleaned = re.sub(r"\s+([,.;:!?\)\]])", r"\1", raw)
+        cleaned = re.sub(r"([\(\[])\s+", r"\1", cleaned)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        return cleaned, cleaned
     return None
 
 
 @_register("arxiv.org")
 async def _arxiv(url: str, task: str) -> HandlerResult:
-    """arxiv.org/abs/<id> — extract title + authors. Pure DOM, no LLM."""
+    """arxiv.org/abs/<id> — extract title + authors + (optionally) abstract.
+    Pure DOM, no LLM. Returns the fields the task asks for; if none of the
+    target fields are mentioned, returns all three so the agent doesn't
+    falsely hallucinate when this fast path served partial info.
+    """
     if "/abs/" not in url:
         return None
     task_lower = task.lower()
-    wants_title_or_authors = any(
-        t in task_lower for t in ("title", "author", "abstract", "paper")
-    )
-    if not wants_title_or_authors:
+    wants_title = "title" in task_lower or "paper" in task_lower
+    wants_authors = "author" in task_lower
+    wants_abstract = "abstract" in task_lower or "summary" in task_lower
+    if not (wants_title or wants_authors or wants_abstract):
         return None
     resp = await _http_get(url)
     if resp is None:
@@ -136,45 +179,97 @@ async def _arxiv(url: str, task: str) -> HandlerResult:
     soup = BeautifulSoup(resp.text, "lxml")
     title_node = soup.select_one("h1.title")
     authors_node = soup.select_one("div.authors")
-    if title_node is None and authors_node is None:
-        return None
+    abstract_node = soup.select_one("blockquote.abstract")
     title = (title_node.get_text(" ", strip=True) if title_node else "").removeprefix("Title:").strip()
     authors = (authors_node.get_text(" ", strip=True) if authors_node else "").removeprefix("Authors:").strip()
-    if not title and not authors:
+    abstract = (abstract_node.get_text(" ", strip=True) if abstract_node else "").removeprefix("Abstract:").strip()
+    # Collapse internal whitespace.
+    title = re.sub(r"\s{2,}", " ", title)
+    authors = re.sub(r"\s{2,}", " ", authors)
+    abstract = re.sub(r"\s{2,}", " ", abstract)
+    if not title and not authors and not abstract:
         return None
-    pieces = []
-    if title:
+    pieces: list[str] = []
+    if title and (wants_title or not (wants_authors or wants_abstract)):
         pieces.append(f"Title: {title}")
-    if authors:
+    if authors and (wants_authors or not (wants_title or wants_abstract)):
         pieces.append(f"Authors: {authors}")
+    if abstract and wants_abstract:
+        pieces.append(f"Abstract: {abstract}")
+    if not pieces:
+        # User asked for one specific field that wasn't in the page —
+        # fall through so the agent can try.
+        return None
     answer = "\n".join(pieces)
-    return answer, f"{title}\n{authors}"
+    observed = f"{title}\n{authors}\n{abstract}".strip()
+    return answer, observed
 
 
 @_register("news.ycombinator.com")
 async def _hackernews(url: str, task: str) -> HandlerResult:
-    """Hacker News top-story / front-page listing fast path."""
+    """Hacker News top-story / front-page listing fast path.
+
+    Returns title + URL of the top story. Also captures comment count and
+    points when the user asks (HN renders these as text in the subline
+    immediately after .athing, so a single GET fetches them all).
+
+    If user asks for "comment count" / "points" specifically and we can't
+    parse them, fall through to the agent — better than partial answer.
+    """
     task_lower = task.lower()
     wants_top = any(
         t in task_lower
-        for t in ("top story", "top post", "top story title", "front page", "first story", "first post")
+        for t in (
+            "top story", "top post", "top story title", "front page",
+            "first story", "first post", "first headline", "top headline",
+        )
     )
     if not wants_top:
         return None
-    # Always serve front page — old.ycombinator.com/news as well as /
+    wants_count = "comment" in task_lower or "count" in task_lower
+    wants_points = "points" in task_lower or "upvotes" in task_lower or "score" in task_lower
+
     target = "https://news.ycombinator.com/news"
     resp = await _http_get(target)
     if resp is None:
         return None
     soup = BeautifulSoup(resp.text, "lxml")
-    first = soup.select_one("tr.athing span.titleline > a")
-    if first is None:
+    first_row = soup.select_one("tr.athing")
+    if first_row is None:
         return None
-    title = first.get_text(strip=True)
-    href = first.get("href", "")
+    title_a = first_row.select_one("span.titleline > a")
+    if title_a is None:
+        return None
+    title = title_a.get_text(strip=True)
+    href = title_a.get("href", "")
     if not title:
         return None
-    return f"Top story: {title} ({href})", title
+
+    # Subline row (next <tr>) carries the comment count + points
+    comments = None
+    points = None
+    subline = first_row.find_next_sibling("tr")
+    if subline is not None:
+        sub_text = subline.get_text(" ", strip=True)
+        m_comments = re.search(r"(\d+)\s*comments?", sub_text, re.IGNORECASE)
+        if m_comments:
+            comments = int(m_comments.group(1))
+        m_points = re.search(r"(\d+)\s*points?", sub_text, re.IGNORECASE)
+        if m_points:
+            points = int(m_points.group(1))
+    # If the user asked specifically for fields we couldn't parse, fall
+    # through to the agent rather than return partial info.
+    if wants_count and comments is None:
+        return None
+    if wants_points and points is None:
+        return None
+    pieces = [f"Top story: {title}", f"URL: {href}"]
+    if comments is not None:
+        pieces.append(f"Comments: {comments}")
+    if points is not None:
+        pieces.append(f"Points: {points}")
+    answer = "\n".join(pieces)
+    return answer, f"{title}\n{href}"
 
 
 @_register("example.com")

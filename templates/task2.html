@@ -77,6 +77,8 @@
                     <label>Task Description (natural language)</label>
                     <textarea id="task-desc" placeholder="e.g. Go to Wikipedia and find the population of Tokyo"></textarea>
                     <div class="examples">
+                        <button class="example-btn" style="border-color:#22c55e;color:#86efac" onclick="setTask('Get the first paragraph of the Wikipedia article on the history of computing', 'https://en.wikipedia.org/wiki/History_of_computing')" title="Static-site FAST PATH demo: httpx + BeautifulSoup, NO Playwright, NO LLM. Expected: <1s latency, $0 cost, 0 LLM calls. Compare vs agent path which takes ~30-45s and ~$0.03-0.05 for the same task.">⚡ Fast path: Wikipedia intro (no LLM, &lt;1s)</button>
+                        <button class="example-btn" style="border-color:#22c55e;color:#86efac" onclick="setTask('What is the title and authors of arxiv paper 1706.03762 (Attention Is All You Need)?', 'https://arxiv.org/abs/1706.03762')" title="Static-site FAST PATH demo: arxiv abstract page DOM extraction, NO Playwright, NO LLM. Expected: <1s latency, $0 cost, 0 LLM calls. The famous Vaswani et al. transformer paper.">⚡ Fast path: arxiv abstract (no LLM, &lt;1s)</button>
                         <button class="example-btn" onclick="setTask('Open https://en.wikipedia.org/wiki/Tokyo and use the extract action to read the population row from the infobox sidebar (the structured fact-box, NOT below the fold). Report the population number you find there.', 'https://en.wikipedia.org/wiki/Tokyo')">📚 Wikipedia lookup (infobox)</button>
                         <button class="example-btn" onclick="setTask('Go to news.ycombinator.com and return the title of the top story and the comment count', 'https://news.ycombinator.com')">🟧 HN top story</button>
                         <button class="example-btn" onclick="setTask('Go to https://arxiv.org/abs/2509.13753 and report the paper title plus the first two authors', 'https://arxiv.org/abs/2509.13753')">🔬 arXiv paper</button>
@@ -287,7 +289,8 @@
                 const err = event.error ? ` ⚠️ ${event.error.slice(0, 80)}` : '';
                 text += `✓ step ${event.step}${heal}${conf}${err}`;
             } else if (event.event === 'agent_complete') {
-                text += `🏁 ${event.status} in ${event.steps} step(s) — $${(event.cost_usd||0).toFixed(4)}`;
+                const fastPathTag = event.fast_path ? ' ⚡ FAST PATH (no Playwright, no LLM)' : '';
+                text += `🏁 ${event.status} in ${event.steps} step(s) — $${(event.cost_usd||0).toFixed(4)}${fastPathTag}`;
             } else if (event.event === 'error') {
                 text += `❌ ${event.user_message || event.category}`;
             } else {
@@ -490,10 +493,15 @@
             const statusKind = isSuccess ? 'success'
                 : (isPartial || isNotFound) ? 'partial' : 'failed';
 
+            const fastPathHit = !!(data.metadata && data.metadata.fast_path && data.metadata.fast_path.hit);
+            const fastPathDomain = fastPathHit ? data.metadata.fast_path.domain : '';
+
             setStatus(
                 statusKind,
-                status.toUpperCase(),
-                isSuccess ? 'Task completed successfully'
+                fastPathHit ? `${status.toUpperCase()} ⚡ FAST PATH` : status.toUpperCase(),
+                fastPathHit
+                    ? `Static-site fast path hit (domain: ${fastPathDomain}) — skipped Playwright + LLM entirely. Result fetched via deterministic httpx + BeautifulSoup.`
+                    : isSuccess ? 'Task completed successfully'
                     : isNotFound ? 'Task not completable (anti-hallucination guard fired)'
                     : isPartial ? 'Task partially completed' : 'Task failed'
             );
