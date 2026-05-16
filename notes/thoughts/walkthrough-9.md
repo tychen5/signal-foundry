@@ -224,3 +224,87 @@
   - 402 tests passing (was 396), 0 lint errors
 
   When the user demos to the interviewer, clicking either ⚡ button shows: 481ms latency vs the agent path's ~30-45s, $0 cost vs ~$0.03-0.05, 0 LLM calls vs 5-10 — the static-site fast path delivering exactly the cost/latency discipline the question asked about.
+
+---
+
+● Summary — generalized fast-path improvements
+
+  412 tests passing (+10 new), 0 lint errors. All 6 fast-path demo buttons hit live E2E with <1s latency / $0 cost.
+
+  Architectural improvement: new fast_path_intent.py module (270 lines)
+  
+  A standalone, IO-free intent parser is now the single source of truth for what the user wants. Every handler queries the Intent struct instead of doing ad-hoc keyword matching.
+
+  Intent dimensions:
+
+  ┌─────────────────────────────────┬───────────────────────────────────────────────────────┬───────────────────────────────┐
+  │            Dimension            │                       Examples                        │            Used by            │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+  │ paragraph_index (1, 2, -1=last) │ "second paragraph", "3rd paragraph", "last paragraph" │ Wikipedia, MDN, GitHub README │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+
+  ┌─────────────────────────────────┬───────────────────────────────────────────────────────┬───────────────────────────────┐
+  │            Dimension            │                       Examples                        │            Used by            │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+  │ paragraph_index (1, 2, -1=last) │ "second paragraph", "3rd paragraph", "last paragraph" │ Wikipedia, MDN, GitHub README │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+  │ paragraph_range (a, b)          │ "first 3 paragraphs", "paragraphs 2-4"                │ Wikipedia, MDN, GitHub README │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+  │ paragraphs_all                  │ "entire article", "full text"                         │ Wikipedia, MDN                │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+  │ requested_fields                │ "authors", "title", "version", "license", "comments"  │ arxiv, PyPI, HN               │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+  │ strict_field_mode               │ single field OR "only X" / "just X"                   │ arxiv, PyPI                   │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+  │ top_n                           │ "top 5 stories", "first 3 results"                    │ HN                            │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+  │ wants_summary                   │ "tell me about X", "what is X"                        │ arxiv, MDN, Wikipedia         │
+  ├─────────────────────────────────┼───────────────────────────────────────────────────────┼───────────────────────────────┤
+  │ CJK support                     │ "首段", "簡介", "介紹", "概述"                        │ all                           │
+  └─────────────────────────────────┴───────────────────────────────────────────────────────┴───────────────────────────────┘
+
+  Bugs fixed (your reported cases)
+
+  1. ✅ "Second/third/last paragraph" of Wikipedia now hits fast path (was falling through)
+  2. ✅ "Just the authors" of arxiv now returns ONLY authors (was over-answering with title)
+  3. ✅ Strict mode auto-triggered when single field is named or "only/just" used
+
+  3 NEW domain handlers (generalization beyond the original 4)
+
+  ┌───────────────────────────┬──────────────────────────────────────────────────────────────────────────────┬───────────┐
+  │          Domain           │                               What it returns                                │ New tests │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────────────────────────┼───────────┤
+  │ developer.mozilla.org     │ MDN article paragraph N / summary, skipping browser-compat <details> banners │ 1         │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────────────────────────┼───────────┤
+  │ pypi.org/project/X        │ Version, license, author, description (strict-mode aware)                    │ 2         │
+  ├───────────────────────────┼──────────────────────────────────────────────────────────────────────────────┼───────────┤
+  │ github.com/<owner>/<repo> │ README paragraph N (rejects /issues, /pulls, /blob, /tree, etc.)             │ 1         │
+  └───────────────────────────┴──────────────────────────────────────────────────────────────────────────────┴───────────┘
+
+  Reusable helpers added (used by every paragraph-based handler)
+
+  - _tighten_wikitext — collapses BS4's "( AI )" → "(AI)" formatting noise
+  - _collect_paragraphs(container, min_len, recursive) — walks article body, filters noise wrappers (<details>, <aside>, <nav>, <table>, infobox/sidebar/notecard/baseline-indicator classes) recursively up the ancestor chain
+  - _select_paragraphs(paragraphs, intent) — domain-agnostic selector: handles paragraph index, range, all, and summary defaults. Returns None when index is out of range (falls through to agent).
+
+  UI changes
+
+  - 5 NEW green fast-path demo buttons (up from 2) in templates/task2.html:
+    - ⚡ Wikipedia intro
+    - ⚡ Wikipedia paragraph N (demos ordinal navigation)
+    - ⚡ arxiv authors only (demos strict-mode field selection)
+    - ⚡ MDN docs paragraph (demos generalization)
+    - ⚡ PyPI package metadata (demos structured-field extraction)
+    - ⚡ GitHub README intro (demos repo-root URL gating)
+  - Each tooltip explains what aspect of the fast-path architecture the button exercises
+
+  Fall-through behavior verified
+
+  - ✅ Dynamic verbs (click/submit/login) → fall through
+  - ✅ Infobox / table / fact-box queries on Wikipedia → fall through
+  - ✅ GitHub non-repo paths (/issues, /pulls) → fall through
+  - ✅ Out-of-range paragraph index → fall through
+  - ✅ Unknown domains (medium.com, etc.) → fall through
+  - ✅ Generic page queries without paragraph intent → fall through
+
+  The architecture now generalizes cleanly — adding a new static-site handler is a ~20-line file change (decorator + selector + intent-driven extraction) that immediately inherits paragraph navigation, field strict-mode, and noise filtering.
