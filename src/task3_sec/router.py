@@ -363,6 +363,31 @@ async def stream_extract_10k(request: SECExtractionRequest):
     )
 
 
+def _validate_cik_or_400(cik: str) -> str:
+    """Validate CIK is digit-string-like (after stripping leading zeros).
+
+    Raises HTTPException(400) for non-numeric inputs. Returns normalised
+    10-digit padded CIK on success.
+    """
+    import re
+
+    if not cik:
+        raise HTTPException(
+            status_code=400,
+            detail="cik parameter is required",
+        )
+    digits = re.sub(r"\D", "", cik)
+    if not digits or len(digits) > 10:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid CIK '{cik}'. CIK must be a number (1-10 digits), e.g. "
+                "'320193' or '0000320193' for Apple Inc."
+            ),
+        )
+    return digits.zfill(10)
+
+
 @router.get("/filings/{cik}")
 async def list_filings(cik: str, filing_type: str = "10-K", limit: int = 10):
     """
@@ -370,10 +395,11 @@ async def list_filings(cik: str, filing_type: str = "10-K", limit: int = 10):
 
     Useful for finding accession numbers to pass to /extract.
     """
+    cik_padded = _validate_cik_or_400(cik)
     try:
         from src.task3_sec.fetcher import fetch_company_metadata
 
-        metadata = await fetch_company_metadata(cik)
+        metadata = await fetch_company_metadata(cik_padded)
 
         # Filter by form type
         filings = [
@@ -383,7 +409,7 @@ async def list_filings(cik: str, filing_type: str = "10-K", limit: int = 10):
         ][:limit]
 
         return {
-            "cik": metadata.get("cik", cik),
+            "cik": metadata.get("cik", cik_padded),
             "company_name": metadata.get("company_name", ""),
             "tickers": metadata.get("tickers", []),
             "filing_type": filing_type,
@@ -391,25 +417,56 @@ async def list_filings(cik: str, filing_type: str = "10-K", limit: int = 10):
             "filings": filings,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("filing_list_failed", error=str(e), cik=cik)
-        raise HTTPException(status_code=500, detail=f"Failed to list filings: {str(e)}")
+        # SEC API 404 (CIK doesn't exist) → return clean 404 with no
+        # leaked URLs / internal error details. Other errors → 502
+        # (upstream issue) with sanitised message.
+        err_str = str(e)
+        logger.warning("filing_list_failed", error=err_str, cik=cik_padded)
+        if "404" in err_str or "Not Found" in err_str:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No SEC filings found for CIK {cik_padded}. "
+                "Verify the company exists at https://www.sec.gov/cgi-bin/browse-edgar.",
+            )
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"SEC EDGAR is temporarily unreachable for CIK {cik_padded}. "
+                "Try again in a moment."
+            ),
+        )
 
 
 @router.get("/company/{cik}")
 async def company_info(cik: str):
     """Get company metadata from SEC EDGAR."""
+    cik_padded = _validate_cik_or_400(cik)
     try:
         from src.task3_sec.fetcher import fetch_company_metadata
 
-        metadata = await fetch_company_metadata(cik)
+        metadata = await fetch_company_metadata(cik_padded)
         return {
-            "cik": metadata.get("cik", cik),
+            "cik": metadata.get("cik", cik_padded),
             "company_name": metadata.get("company_name", ""),
             "entity_type": metadata.get("entity_type", ""),
             "sic": metadata.get("sic", ""),
             "tickers": metadata.get("tickers", []),
             "exchanges": metadata.get("exchanges", []),
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        err_str = str(e)
+        logger.warning("company_info_failed", error=err_str, cik=cik_padded)
+        if "404" in err_str or "Not Found" in err_str:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No SEC company found for CIK {cik_padded}.",
+            )
+        raise HTTPException(
+            status_code=502,
+            detail=f"SEC EDGAR is temporarily unreachable for CIK {cik_padded}.",
+        )
