@@ -23,6 +23,7 @@ fast path to avoid opening browser + LLM every time?"
 
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 from typing import Callable, Optional
@@ -51,9 +52,18 @@ Handler = Callable[[str, str], "object"]  # async returning HandlerResult
 
 _STATIC_DOMAIN_REGISTRY: dict[str, Handler] = {}
 
-# Default User-Agent — identifies us politely. SEC/Wikipedia/HN all accept
-# any non-empty UA; arxiv occasionally throttles bare 'python-requests'.
-_FAST_PATH_UA = "SignalFoundry-FastPath/1.0 (+https://signal-foundry.zeabur.app)"
+# Default User-Agent — Wikipedia / Reddit / some Cloudflare-fronted sites
+# now actively block UAs that look like generic bots (just a tool name +
+# version with no contact info). The format below conforms to Wikipedia's
+# User-Agent policy
+# (https://meta.wikimedia.org/wiki/User-Agent_policy) and is also accepted
+# by arxiv, GitHub, MDN, PyPI, HN. Browser-shaped fallback is unnecessary
+# for static pages — the polite-bot string is enough.
+_FAST_PATH_UA = (
+    "SignalFoundry/1.0 "
+    "(+https://signal-foundry.zeabur.app; contact: signal-foundry@github) "
+    "python-httpx/0.27"
+)
 _HTTP_TIMEOUT = 12.0
 
 
@@ -67,23 +77,61 @@ def _register(domain_suffix: str):
     return deco
 
 
+_TRANSIENT_STATUS = {429, 500, 502, 503, 504}
+# 403 included because Wikipedia / Cloudflare-fronted sites sometimes
+# return spurious 403s during bot-detection sweeps that clear seconds
+# later. Other 4xx (404, 410, 422) are NOT retried — they're stable.
+_MAYBE_TRANSIENT_4XX = {403}
+_HTTP_MAX_RETRIES = 2
+
+
 async def _http_get(url: str) -> Optional[httpx.Response]:
-    """Single GET with bounded timeout, follow_redirects, normalized headers."""
-    try:
-        async with httpx.AsyncClient(
-            follow_redirects=True,
-            timeout=_HTTP_TIMEOUT,
-            headers={
-                "User-Agent": _FAST_PATH_UA,
-                "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-        ) as c:
-            r = await c.get(url)
-            return r if r.status_code == 200 and r.text else None
-    except (httpx.HTTPError, httpx.TimeoutException, OSError) as e:
-        logger.info("fast_path_http_failed", url=url, err=str(e)[:80])
-        return None
+    """Single GET with bounded timeout, follow_redirects, normalized headers.
+
+    Retries on transient 4xx/5xx (429, 5xx, occasional 403) up to
+    `_HTTP_MAX_RETRIES` times with linear back-off. Final response is
+    returned only when status==200 AND body is non-empty. Stable failures
+    (404, 410, etc.) return None immediately so the agent fallback fires.
+    """
+    for attempt in range(_HTTP_MAX_RETRIES + 1):
+        try:
+            async with httpx.AsyncClient(
+                follow_redirects=True,
+                timeout=_HTTP_TIMEOUT,
+                headers={
+                    "User-Agent": _FAST_PATH_UA,
+                    "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            ) as c:
+                r = await c.get(url)
+                if r.status_code == 200 and r.text:
+                    return r
+                logger.info(
+                    "fast_path_http_non200",
+                    url=url,
+                    status=r.status_code,
+                    attempt=attempt + 1,
+                )
+                if r.status_code in _TRANSIENT_STATUS or r.status_code in _MAYBE_TRANSIENT_4XX:
+                    if attempt < _HTTP_MAX_RETRIES:
+                        # Linear back-off: 0.5s, 1.0s
+                        await asyncio.sleep(0.5 * (attempt + 1))
+                        continue
+                # Stable failure (404, 410, etc.) — give up
+                return None
+        except (httpx.HTTPError, httpx.TimeoutException, OSError) as e:
+            logger.info(
+                "fast_path_http_failed",
+                url=url,
+                attempt=attempt + 1,
+                err=str(e)[:80],
+            )
+            if attempt < _HTTP_MAX_RETRIES:
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            return None
+    return None
 
 
 def _tighten_wikitext(raw: str) -> str:
@@ -211,7 +259,13 @@ async def _wikipedia(url: str, task: str) -> HandlerResult:
     container = soup.select_one("#mw-content-text .mw-parser-output")
     if container is None:
         return None
-    paragraphs = _collect_paragraphs(container, min_len=80)
+    # Try non-recursive first (English Wikipedia structure — paragraphs as
+    # direct children of `.mw-parser-output`). Fall back to recursive if
+    # the wiki language variant wraps paragraphs in <section> blocks
+    # (Japanese / Spanish / German Wikipedia all do this).
+    paragraphs = _collect_paragraphs(container, min_len=80, recursive=False)
+    if not paragraphs:
+        paragraphs = _collect_paragraphs(container, min_len=40, recursive=True)
     answer = _select_paragraphs(paragraphs, intent)
     if not answer:
         return None
@@ -230,12 +284,23 @@ async def _arxiv(url: str, task: str) -> HandlerResult:
     if "/abs/" not in url:
         return None
     intent = parse_intent(task)
-    # Trigger gate: must request at least one arxiv-relevant field OR
-    # explicit summary intent.
+    # Trigger gate: arxiv pages serve title/authors/abstract. Trigger on:
+    #   - explicit field request (title/author/abstract)
+    #   - summary intent ("tell me about", "what is")
+    #   - paragraph intent ("first paragraph") — on an arxiv abs page, the
+    #     "main paragraph" IS the abstract, so we treat the paragraph
+    #     request as an abstract request.
     relevant_fields = {"title", "author", "abstract"}
     has_relevant = bool(intent.requested_fields & relevant_fields)
-    if not (has_relevant or intent.wants_summary):
+    paragraph_intent_is_abstract = intent.any_paragraph_request()
+    if not (has_relevant or intent.wants_summary or paragraph_intent_is_abstract):
         return None
+    # Paragraph-intent → treat as abstract request (most useful answer for
+    # arxiv pages, which don't have multi-paragraph navigation).
+    if paragraph_intent_is_abstract and not has_relevant and not intent.wants_summary:
+        intent.requested_fields = {"abstract"}
+        intent.strict_field_mode = True
+        has_relevant = True
 
     resp = await _http_get(url)
     if resp is None:
@@ -439,10 +504,20 @@ async def _pypi(url: str, task: str) -> HandlerResult:
     # Summary tagline
     summary_node = soup.select_one("p.package-description__summary")
     summary = summary_node.get_text(" ", strip=True) if summary_node else ""
-    # Sidebar metadata (meta-list pattern with bordered cards)
+    # Sidebar metadata (meta-list pattern with bordered cards). PyPI's
+    # sidebar evolved: older packages use "License:", newer ones use
+    # "License Expression:" (PEP 639). Some packages also have just an
+    # SPDX identifier line with no label prefix.
     meta_text = (soup.select_one("aside") or soup).get_text("\n", strip=True)
-    m_license = re.search(r"License:\s*(.+?)(?:\n|$)", meta_text)
+    m_license = (
+        re.search(r"License\s+Expression:\s*\n?\s*(.+?)(?:\n|$)", meta_text)
+        or re.search(r"License:\s*\n?\s*(.+?)(?:\n|$)", meta_text)
+    )
     license_ = m_license.group(1).strip() if m_license else ""
+    # Skip the literal "UNKNOWN" placeholder PyPI emits when no license
+    # is declared.
+    if license_.upper() == "UNKNOWN":
+        license_ = ""
     m_author = re.search(r"Author:?\s*\n?\s*(.+?)(?:\n|Maintainer|$)", meta_text)
     author = m_author.group(1).strip() if m_author else ""
 
