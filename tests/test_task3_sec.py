@@ -1231,6 +1231,54 @@ class TestRegressionCitiIntelEvalEntries:
             )
 
 
+class TestT3RouterErrorHandling:
+    """Regression tests for T3 router error handling added 2026-05-17 during
+    the full-system audit. Previously these endpoints returned 500 with
+    leaky internal error details. They now return clean 4xx responses."""
+
+    def test_validate_cik_or_400_rejects_non_numeric(self) -> None:
+        """Non-numeric CIK paths must hit a 400 with a clean message —
+        no SEC URL leakage."""
+        import pytest
+        from fastapi import HTTPException
+
+        from src.task3_sec.router import _validate_cik_or_400
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_cik_or_400("not-a-cik")
+        assert exc_info.value.status_code == 400
+        assert "Invalid CIK" in str(exc_info.value.detail)
+
+    def test_validate_cik_or_400_pads_short_input(self) -> None:
+        """A short but valid CIK (e.g. '320193') is padded to 10 digits."""
+        from src.task3_sec.router import _validate_cik_or_400
+
+        assert _validate_cik_or_400("320193") == "0000320193"
+        assert _validate_cik_or_400("0000320193") == "0000320193"
+        assert _validate_cik_or_400("1") == "0000000001"
+
+    def test_validate_cik_or_400_rejects_too_long(self) -> None:
+        """CIKs are at most 10 digits; longer values must be rejected."""
+        import pytest
+        from fastapi import HTTPException
+
+        from src.task3_sec.router import _validate_cik_or_400
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_cik_or_400("12345678901")
+        assert exc_info.value.status_code == 400
+
+    def test_validate_cik_or_400_rejects_empty(self) -> None:
+        import pytest
+        from fastapi import HTTPException
+
+        from src.task3_sec.router import _validate_cik_or_400
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_cik_or_400("")
+        assert exc_info.value.status_code == 400
+
+
 class TestTitleFallbackHeadingDetection:
     """Tests for the title-only fallback added 2026-05-15 after live testing
     revealed the original P0.2 patch was insufficient for Citi/Intel 2026.

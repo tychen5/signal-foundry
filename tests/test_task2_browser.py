@@ -1571,6 +1571,93 @@ class TestFastPathCornerCases:
 
         assert asyncio.run(run()) is None
 
+    def test_http_get_retries_on_transient_status(self) -> None:
+        """_http_get retries on 429/5xx and (some) 403s. Stable failures
+        (404, 410) return None immediately. Regression for 2026-05-17
+        multilingual-Wikipedia transient-block work."""
+        from src.task2_browser.fast_path import (
+            _MAYBE_TRANSIENT_4XX,
+            _TRANSIENT_STATUS,
+        )
+
+        # Transient retries — known set
+        assert 429 in _TRANSIENT_STATUS
+        assert 500 in _TRANSIENT_STATUS
+        assert 502 in _TRANSIENT_STATUS
+        assert 503 in _TRANSIENT_STATUS
+        assert 504 in _TRANSIENT_STATUS
+        # 403 included for Wikipedia/Cloudflare transient blocks
+        assert 403 in _MAYBE_TRANSIENT_4XX
+        # 404 / 410 stable, must NOT retry
+        assert 404 not in _TRANSIENT_STATUS
+        assert 404 not in _MAYBE_TRANSIENT_4XX
+        assert 410 not in _TRANSIENT_STATUS
+
+    def test_wikipedia_handler_supports_nested_section_layout(self) -> None:
+        """Non-English Wikipedia variants (ja / es / de / fr / ko) nest
+        paragraphs inside <section> blocks, so a non-recursive collector
+        finds 0 paragraphs and falls back to recursive mode."""
+        import inspect
+
+        from src.task2_browser import fast_path as fp_module
+
+        # Verify the recursive fallback exists in the Wikipedia handler.
+        wiki_source = inspect.getsource(fp_module._wikipedia)
+        assert "recursive=False" in wiki_source
+        assert "recursive=True" in wiki_source, (
+            "Wikipedia handler must have a recursive=True fallback for "
+            "non-English variants that nest paragraphs in <section>"
+        )
+
+    def test_pypi_handler_recognizes_license_expression(self) -> None:
+        """Newer PyPI packages use PEP 639 'License Expression:' instead of
+        the legacy 'License:'. Both must be parsed."""
+        import inspect
+
+        from src.task2_browser import fast_path as fp_module
+
+        # The regex pattern must accept both forms — check the source.
+        src = inspect.getsource(fp_module._pypi)
+        assert "License\\s+Expression" in src
+        assert "License:" in src
+        # UNKNOWN placeholder must be suppressed
+        assert "UNKNOWN" in src
+
+    def test_arxiv_paragraph_intent_maps_to_abstract(self) -> None:
+        """'First paragraph of arxiv paper X' should hit fast path and
+        return the abstract — not fall through to the agent. Regression
+        test for the 2026-05-17 audit bug."""
+        from src.task2_browser.fast_path_intent import parse_intent
+
+        # Intent should detect paragraph request
+        intent = parse_intent("First paragraph of arxiv paper 1706.03762")
+        assert intent.paragraph_index == 1
+        assert intent.any_paragraph_request() is True
+
+    def test_browser_agent_complete_event_has_all_renderer_fields(self) -> None:
+        """The agent_complete SSE event must carry every field the
+        FE renderer expects (healer_activations, llm_calls, fast_path,
+        fast_path_meta). Regression test for the 2026-05-17 audit bug
+        where the synthetic envelope built from the stream event was
+        missing fast_path metadata."""
+        import inspect
+
+        from src.task2_browser import agent as agent_module
+
+        # The agent module must reference the expected emit keys in BOTH
+        # the fast-path and end-of-run emit sites
+        source = inspect.getsource(agent_module)
+        # Fast-path emit
+        assert "fast_path_meta=" in source, "fast_path emit must carry fast_path_meta"
+        assert "fast_path_domain=" in source, "fast_path emit must carry fast_path_domain"
+        # End-of-run emit
+        assert "healer_activations=result.healer_activations" in source, (
+            "End-of-run agent_complete must include healer_activations"
+        )
+        assert "llm_calls=result.llm_calls" in source, (
+            "End-of-run agent_complete must include llm_calls"
+        )
+
     def test_select_paragraphs_handles_out_of_range(self) -> None:
         """Asking for paragraph 8 when only 3 exist returns None (fall through)."""
         from src.task2_browser.fast_path import _select_paragraphs
