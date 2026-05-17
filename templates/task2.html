@@ -429,7 +429,19 @@
                     setStatus('failed', 'ERROR', lastError.user_message || lastError.category);
                     showLLMError(lastError);
                 } else if (agentComplete) {
-                    // Build a synthetic envelope so the existing renderer works
+                    // Build a synthetic envelope so the existing renderer works.
+                    // Pass fast_path metadata through so the ⚡ FAST PATH
+                    // indicator + domain show up on stream-driven runs.
+                    const fastPathMeta = agentComplete.fast_path
+                        ? (agentComplete.fast_path_meta && Object.keys(agentComplete.fast_path_meta).length
+                            ? agentComplete.fast_path_meta
+                            : {
+                                hit: true,
+                                domain: agentComplete.fast_path_domain || '',
+                                skipped_playwright: true,
+                                skipped_llm_calls: true,
+                            })
+                        : null;
                     renderAgentResult({
                         status: agentComplete.status === 'success' ? 'success' :
                                 agentComplete.status === 'partial' ? 'partial' : 'failed',
@@ -437,12 +449,14 @@
                             status: agentComplete.status,
                             total_steps: agentComplete.steps,
                             self_corrections: agentComplete.self_corrections,
-                            healer_activations: 0,
+                            healer_activations: agentComplete.healer_activations || 0,
                             failure_modes: agentComplete.failure_modes || [],
                             final_answer: agentComplete.answer,
                             cost_usd: agentComplete.cost_usd,
+                            llm_calls: agentComplete.llm_calls || 0,
                             total_duration_ms: agentComplete.duration_ms,
                             steps: [],
+                            metadata: fastPathMeta ? { fast_path: fastPathMeta } : {},
                         },
                         cost_metadata: { total_cost_usd: agentComplete.cost_usd },
                     });

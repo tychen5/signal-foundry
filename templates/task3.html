@@ -529,6 +529,14 @@
                 text += `✓ stage 2: ${event.llm_calls} LLM calls, conf ${(event.avg_confidence*100|0)}% (${event.duration_ms|0}ms)`;
             } else if (event.event === 'stage2_failed') {
                 text += `⚠️ stage 2 failed: ${event.error}`;
+            } else if (event.event === 'stage2b_start') {
+                text += `🪝 stage 2b: anchor-aware gap-fill (anchors=${event.anchors||0}, missing=${event.missing_count||0})...`;
+            } else if (event.event === 'stage2b_done') {
+                text += `✓ stage 2b: gap-fill added ${event.added||0} items (now ${event.items_found||0} total, ${event.duration_ms|0}ms)`;
+            } else if (event.event === 'stage2b_failed') {
+                text += `⚠️ stage 2b failed (soft-fail): ${event.error || 'unknown'} — rule-only result preserved`;
+            } else if (event.event === 'budget_cap_hit') {
+                text += `💰 budget cap hit at $${(event.cost_usd||0).toFixed(4)} (cap $${(event.cap_usd||0).toFixed(2)}); skipping remaining LLM stages`;
             } else if (event.event === 'stage3_start') {
                 text += `🔍 stage 3: validation...`;
             } else if (event.event === 'stage3_done') {

@@ -321,16 +321,23 @@ class BrowserAgent:
             if task_is_static_compatible(task_description):
                 fast_result = await try_fast_path(task_description, target_url, trace_id)
                 if fast_result is not None:
+                    fp_meta = (fast_result.metadata or {}).get("fast_path", {})
                     await self._emit(
                         "agent_complete",
                         status=fast_result.status,
                         steps=1,
                         self_corrections=0,
+                        healer_activations=0,
                         cost_usd=0.0,
+                        llm_calls=0,
                         duration_ms=fast_result.total_duration_ms,
                         answer=(fast_result.final_answer or "")[:300],
                         failure_modes=fast_result.failure_modes,
+                        # Pass the full fast_path metadata so the FE can
+                        # render the ⚡ FAST PATH indicator + domain.
                         fast_path=True,
+                        fast_path_domain=fp_meta.get("domain", ""),
+                        fast_path_meta=fp_meta,
                     )
                     return fast_result
 
@@ -636,7 +643,9 @@ class BrowserAgent:
             status=result.status,
             steps=result.total_steps,
             self_corrections=result.self_corrections,
+            healer_activations=result.healer_activations,
             cost_usd=result.cost_usd,
+            llm_calls=result.llm_calls,
             duration_ms=result.total_duration_ms,
             answer=(result.final_answer or "")[:300],
             failure_modes=result.failure_modes,
