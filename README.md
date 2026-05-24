@@ -2,14 +2,61 @@
 
 > Evaluation-first AI systems: harness engineering for CI/CD Skills, browser automation, and SEC 10-K extraction.
 
-[![Tests](https://img.shields.io/badge/tests-offline%20%2B%20opt--in%20live-22c55e)](tests/) [![Tasks](https://img.shields.io/badge/tasks-3%20complete-3b82f6)](#) [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt) [![Deploy](https://img.shields.io/badge/deploy-Zeabur-9333ea)](https://signal-foundry.zeabur.app)
+[![Tests](https://img.shields.io/badge/tests-offline%20%2B%20opt--in%20live-22c55e)](tests/) [![Tasks](https://img.shields.io/badge/tasks-3%20complete-3b82f6)](#) [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt) [![Deploy](https://img.shields.io/badge/deploy-one--click%20self--host-9333ea)](#-deploy-your-own-one-click)  [![Live demo](https://img.shields.io/badge/live%20demo-archived-lightgrey)](#-live-demo-archived)
 
-**Live demo:** [`https://signal-foundry.zeabur.app`](https://signal-foundry.zeabur.app) (Zeabur, 2 vCPU / 4 GB / 50 GB SSD dedicated)
-**🎥 Video Walkthroughs:** [YouTube Playlist (Overview & Tasks 1-3)](https://www.youtube.com/playlist?list=PLihQVz7VBjYHZ2JDSF-L9TfihXHNHuTCw)
-> *Alternatively, you can view the raw MP4 recordings directly in this repository: [01-Overview](demo_videos/01-Overview.mp4) | [02-Task1](demo_videos/02-Task1.mp4) | [03-Task2](demo_videos/03-Task2.mp4) | [04-Task3](demo_videos/04-Task3.mp4)*
+A production-grade portfolio piece showing how to push three different LLM prototypes — a CI/CD skill orchestrator, a self-healing browser agent, and an SEC 10-K item-level extractor — past "it runs once" and into systems you can actually operate, measure, and trust.
 
-> Routes: `/` dashboard, `/task1` CI/CD Skills, `/task2` Browser Agent, `/task3` SEC 10-K. JSON APIs under `/api/v1/{skills,browser,sec}/*`. Health at `/health`, live cost ledger at `/metrics`.
-> Browser visits to `/health`, `/metrics`, and `/api/v1/models` render user-friendly HTML dashboards; API clients still receive JSON.
+> **🏠 Live homepage preview**
+>
+> ![Signal-Foundry homepage](demo_videos/screenshots/index-homepage.png)
+>
+> *Dashboard: in-session BYOK model controls, three task launchers, live cost ledger.*
+
+### ⭐ Highlights at a glance
+
+| | What stands out | The numbers |
+|---|---|---|
+| 🧪 **Eval discipline** | Eval set designed *before* implementation. Held-out cases force the system to refuse hallucinations rather than fabricate answers. Reports committed under `evals/<task>/results/`. | T1 **5/5**, T2 **20/30** genuine + 9 correct refusals, T3 **35/35** filings, all reproducible |
+| 💸 **Cost discipline** | Rules first, LLM only when needed. Every chat call routes through a per-`(task, operation, trace_id)` ledger surfaced live at `/metrics`. Per-request budget caps enforced. | T3: **$0.00 across all 35 modern filings** on rule-only path; T1: **$0.0068 / 5 runs**; T2 Gemini sweep: **$0.22 / 30 cases** |
+| 🛡️ **Silent-failure prevention** | Deterministic post-hoc guard: URL blocklist + 80+ multilingual hedge phrases + ungrounded-number detection. Flips status to `not_found` / `unverified` regardless of what the LLM claimed. | Catches LinkedIn / Chase login walls, NYTimes paywalls, captcha redirects, fabricated finance numbers |
+| 🔁 **Self-healing, not retry** | 9-class root cause taxonomy (`selector_changed`, `captcha_detected`, `frame_detached`, `network_error`, …) with targeted recovery per class — not generic try/except. | ~65 % of broken selectors auto-recovered; the rest honestly reported instead of hidden |
+| 🧠 **Agentic CI/CD router** | NL query → LLM **PEPS loop** (Plan → Execute → Postmortem → Synthesize), with hard iteration cap, budget cap, idempotency cache, write-skill release-intent gate. | 4 skills composable in any order; full reviewer trace via `skill_executed` field |
+| 🔬 **Provider portability** | One OpenAI-compat backend serves NVIDIA NIM + OpenRouter, sidestepping wrapper-assertion bugs and silent kwarg-drop. Free-text `publisher/model-name` accepted. | 7+ models (Opus 4.7, GPT-5.5, Gemini 3.1 Pro, Kimi K2.6, GLM 5.1, DeepSeek V4 Pro, MiniMax M2.7) — swap with one dropdown |
+| 👁️ **Selective multimodal vision** | Opt-in `use_vision=true`; gracefully falls back to AOM-text when model is non-VLM. Task 3 renders 3-tier JPEG context around uncertain SEC boundaries. | Kimi+vision on hard T3 cases: **3/5 → 5/5 pass, 5.5× faster, $0 cost** (heading cues let rules recover) |
+| 🔍 **Full observability** | `@traced` LangSmith spans on all task entry points; BYOK LangSmith key routes traces to the user's own console; structured logs with trace IDs end-to-end. | Replay every Planner / Actor / Verifier / Healer / Refiner call with token + cost metadata |
+| 🔐 **Security boundaries** | Subprocess sandbox with SIGKILL timeout, env-var stripping into child processes, GitHub-token redaction in every log line, dry-run-first on write skills. | `build-and-release` defaults to `dry_run=true`; secrets never appear in stdout/logs/traces |
+| 🧬 **Test coverage** | Offline-only `pytest tests/` runs without API keys; opt-in `RUN_LLM_INTEGRATION=1` and `RUN_LIVE_EVALS=1` for live regression. Regression tests lock down every bug-fix in the AI Collaboration Log. | **182 + tests** passing, including thinking-mode block-list coercion, dry-run gate, char_range bounds, idempotency cache. |
+
+> The full story of how each highlight maps to **what would break if you handed this off to a generic agent (OpenClaw / HermesAgent)** is in [Why This Beats Generic LLM Agents](#why-this-beats-generic-llm-agents-vs-openclaw--hermesagent).
+
+### 📺 Live demo (archived)
+
+The interview-period hosted demo at `https://signal-foundry.zeabur.app` has been **decommissioned** — the rented Zeabur server has reached end-of-life and I've chosen not to renew it now that this repo is being shared publicly as a portfolio piece. Everything in this README is fully reproducible: **all the screenshots, eval reports, and metrics** below come from that exact deployment, and the same UI / API surface comes up unchanged when you run the code locally or one-click deploy your own (see [Deploy your own](#-deploy-your-own-one-click)).
+
+**🎥 Video walkthroughs of the hosted demo are preserved** (recorded while the server was live, so the legacy URL still appears on screen):
+[YouTube playlist (Overview & Tasks 1–3)](https://www.youtube.com/playlist?list=PLihQVz7VBjYHZ2JDSF-L9TfihXHNHuTCw) · Raw MP4s in this repo: [01-Overview](demo_videos/01-Overview.mp4) | [02-Task1](demo_videos/02-Task1.mp4) | [03-Task2](demo_videos/03-Task2.mp4) | [04-Task3](demo_videos/04-Task3.mp4)
+
+> Routes available in every deployment: `/` dashboard, `/task1` CI/CD Skills, `/task2` Browser Agent, `/task3` SEC 10-K. JSON APIs under `/api/v1/{skills,browser,sec}/*`. Health at `/health`, live cost ledger at `/metrics`. Browser visits to `/health`, `/metrics`, and `/api/v1/models` render user-friendly HTML dashboards; API clients still receive JSON.
+
+### 🚀 Deploy your own (one-click)
+
+Want to try the system live without setting anything up locally? Fork this repo and bring up the **exact same stack** on your own Zeabur account in three clicks:
+
+1. **Sign up at [zeabur.com](https://zeabur.com/)** (free tier works for evaluation — the live UI plus all four CI/CD skills, Task 2 fast-path, and Task 3 rule-only path stay $0; only LLM-heavy paths consume your own credit).
+2. **One-click deploy** — `New Project → Deploy from GitHub → select your fork`. Zeabur auto-detects `zbpack.json` + `Dockerfile`; the image includes `git`, `playwright install chromium`, and all Python deps.
+3. **Set environment variables** in the Zeabur dashboard (only the keys for the providers you actually plan to use):
+
+   | Variable | Purpose | How to get one |
+   |---|---|---|
+   | `OPENROUTER_API_KEY` | OpenRouter models (`gpt-5.5`, `claude-opus-4.7`, `gemini-3.1-pro-preview`) | [openrouter.ai/keys](https://openrouter.ai/keys) |
+   | `NVIDIA_API_KEY` | NVIDIA NIM models (`kimi-k2.6`, `glm-5.1`, `deepseek-v4-pro`, `minimax-m2.7`) | Free at [build.nvidia.com](https://build.nvidia.com) |
+   | `GITHUB_TOKEN` | Task 1 — clone private repos / raise GitHub API rate limit | [github.com/settings/tokens](https://github.com/settings/tokens) (fine-grained, `contents:read`) |
+   | `LANGSMITH_API_KEY` *(optional)* | Send traces to your own LangSmith console | [smith.langchain.com/settings](https://smith.langchain.com/settings) |
+
+   The server **doesn't require any of these to start** — users can paste their own keys per-request from the homepage (BYOK model controls), and those keys live only in the browser session. Server-side env vars exist as a fallback for when you want the UI to "just work."
+4. **Open the public URL** Zeabur gives you (e.g. `https://<your-fork>.zeabur.app`) — homepage, three task pages, `/health`, `/metrics`, `/docs` (FastAPI Swagger), `/api/v1/models` all come up immediately.
+
+Local-dev path is in the [How to Run](#how-to-run) section below.
 
 ---
 
@@ -27,7 +74,7 @@ Every section of this README is paired with the *deliberate engineering decision
 ### What's new in the latest sweep (Phase 10: Task 1 Auto-Router)
 
 - **Task 1 Auto-Router** — natural-language CI/CD orchestration. The user types a free-form query ("are there any leaked secrets and vulnerable deps?") and a router LLM autonomously plans an ordered set of skills, executes them via the existing 13-step engine, **reflects after every result** (continue / pivot to a different skill / stop), and synthesizes a single answer tying everything back to the original question. New endpoints: `POST /api/v1/skills/auto/run` + `POST /api/v1/skills/auto/stream` (SSE). The demo response surfaces a top-level `skill_executed` field so a reviewer can confirm at a glance which skills the LLM picked. See [Task 1 — Auto-Router](#task-1--auto-router-llm-driven-skill-orchestration).
-- The frontend at [`/task1`](https://signal-foundry.zeabur.app/task1) was rebuilt around an **Auto / Manual** mode toggle. Auto mode adds a NL query box, include/exclude skill hint chips, an iteration timeline that shows the router's plan → per-step decision → final synthesis, and an SSE live-trace.
+- The frontend at `/task1` was rebuilt around an **Auto / Manual** mode toggle. Auto mode adds a NL query box, include/exclude skill hint chips, an iteration timeline that shows the router's plan → per-step decision → final synthesis, and an SSE live-trace.
 - **NL query is fully optional** — the user can run the engine purely by ticking include/exclude chips (or by leaving everything blank for a default health check). When the query is empty, the auto-router skips the plan-stage LLM call entirely and uses the chips (or the safe default pair `dependency-audit + security-scan`) as the plan — a pure cost win because the user has already decided. Ticking the `build-and-release` chip counts as explicit release intent, so the write-skill gate that normally requires "release"/"ship"/"publish" in the query is honored by the chip too. See the [Auto-Router routing modes table](#auto-router-routing-modes).
 
 ### What's new in the latest sweep (Phase 8 + Phase 9)
@@ -106,7 +153,7 @@ python -m evals.task3.run_eval --allow-llm --vision --force-llm --timeout 300
 python -m evals.task2.run_eval --vision --timeout 120   # 38-case set, Playwright + LLM
 ```
 
-**Routes (also live at `https://signal-foundry.zeabur.app/...`):**
+**Routes (replace `localhost:8080` with your own `https://<your-fork>.zeabur.app` after [one-click deploy](#-deploy-your-own-one-click)):**
 - `GET /task1` — CI/CD Skills runner UI
 - `GET /task2` — Browser Agent UI
 - `GET /task3` — SEC 10-K Extraction UI
@@ -140,7 +187,9 @@ No more spinner-and-wait — every step / healer activation / confidence score i
 
 **Errors that explain themselves.** A 4xx/429/500 from the LLM provider is classified into one of `invalid_key | rate_limit | insufficient_credit | quota_exhausted | timeout | no_response | server_error` and surfaced in the UI with an actionable suggestion ("top up at openrouter.ai/credits", "rotate key on console", "wait 30 s and retry"). Users don't have to dig through stack traces.
 
-**Live deployment verification (2026-05-07):**
+**Live deployment verification (recorded 2026-05-07, against the now-archived `signal-foundry.zeabur.app`):**
+
+> *Kept here as evidence that every endpoint passed end-to-end on the real production-class deployment. The same checks pass on any fresh one-click deploy of this repo — the hosted service is gone, the system is reproducible.*
 
 | Endpoint | Status | Notes |
 |---|---|---|
@@ -159,7 +208,13 @@ No more spinner-and-wait — every step / healer activation / confidence score i
 
 ## API Reference (for users)
 
-All examples use the live deployment at `https://signal-foundry.zeabur.app`. Replace with `http://localhost:8080` for local testing. JSON requests; responses are JSON. Streaming endpoints return Server-Sent Events over a POST body.
+> **📖 Interactive API docs** — every deployment ships with auto-generated FastAPI Swagger UI at `/docs`, so reviewers can poke at every endpoint live without leaving the browser:
+>
+> ![FastAPI Swagger / OpenAPI docs page](demo_videos/screenshots/index-apidoc.png)
+>
+> *`/docs` (Swagger) and `/redoc` (ReDoc) are both wired automatically; full OpenAPI JSON at `/openapi.json`.*
+
+Examples below show URLs in the form `https://<your-deploy>.zeabur.app/...` — substitute your own Zeabur URL after [one-click deploy](#-deploy-your-own-one-click), or use `http://localhost:8080` for local testing. JSON requests; responses are JSON. Streaming endpoints return Server-Sent Events over a POST body.
 
 Every endpoint that may call an LLM accepts this shared `model` block. Keys are per-request only and are never stored server-side:
 
@@ -505,6 +560,12 @@ The thing that separates this repo from a one-shot prototype:
 - **Selective vision** (Task 2 + Task 3). `use_vision=true` is opt-in. `is_vision_capable()` checks the model id against a registry (gemini-3.1-pro / claude-opus-4.7 / gpt-5.5); for the 4 NVIDIA NIM text-only models the toggle silently degrades to AOM-only — no `image_url` payload sent, no 4xx surfaced. Task 2 keeps a bounded screenshot history (3 frames) so the LLM sees what *changed* between actions; Task 3 renders 3 zoom levels per uncertain boundary (header zone + local context + neighbour context) with a yellow `<mark>` highlight at the candidate position.
 - **Rate-limit circuit-break** (Task 3 LLM refiner). Inter-call delay (`LLM_REFINER_DELAY_S`, default 1.5 s) paces NVIDIA NIM's free-tier ~4 calls/min. After 3 consecutive 429s the refiner abandons further refinement rather than hammering the rate-limit window into next-month's quota. Vision rendering capped at `T3_VISION_MAX` (default 5) per filing — each render adds ~1.5 s, beyond which the latency dominates.
 - **`@traced` LangSmith decorators** (`src/shared/tracing.py`). Decorate the 3 task entry points; metadata-tag each span with model_name / trace_id / repo / cik / task_description for filterable runs in the LangSmith UI. No-op when env vars absent — zero cost for users without a LangSmith account.
+
+  > **🔍 LangSmith observability — real trace timeline of every task**
+  >
+  > ![LangSmith traces — all three tasks](demo_videos/screenshots/langsmith-traces.png)
+  >
+  > *Every LLM call (Planner / Actor / Verifier / Healer / Refiner / Synthesiser) appears as a separately-timed child span with token counts, model id, and stage tags — so a reviewer can replay any run, see which step burned cost, and audit the exact prompt + completion. BYOK LangSmith key: paste your own from the homepage and your traces land in your own console instead of the server's project.*
 - **Honest status taxonomy.** Task 2 returns `success | partial | not_found | unverified | failed`. Each has a precise meaning: `not_found` is the *correct* outcome on a login wall, paywall, captcha, or page that genuinely doesn't contain the answer. The eval scorer treats `not_found` on a negative-test case (example.com hallucination guard) as a pass.
 - **Stuck-loop guard** (`src/task2_browser/agent._detect_stuck_loop`). The reactive loop now detects when the planner picks the *same action* (action_type + target_description) AND the URL doesn't change for 3 consecutive steps — typical pattern when a Submit button silently fails or a captcha-locked field resets. The guard breaks out as `partial` with a `stuck_loop` failure mode rather than burning through `max_steps` repeating the same mistake. Healed retries with different selectors and redirect cycles correctly do *not* trip it.
 - **Per-request budget cap** (`src/shared/cost_tracker.BudgetExceededError`). Spec calls out "$0.50 per filing"; the tracker now enforces it. After Stage 2 in T3 (the only paid stage), the pipeline calls `check_request_budget(trace_id, cap, task)`. On overrun: emits a `budget_cap_hit` SSE event, marks the stage in `stages_used`, and skips remaining LLM stages. Default caps: $0.30 (T1), $0.50 (T2 / T3); set `max_cost_usd=0` on the request to disable for benchmarks.
@@ -519,6 +580,13 @@ For the per-task context-engineering decisions, LLM touch points, and red lines,
 ## Task 1: CI/CD Skills Engine
 
 GitHub CI/CD workflows packaged as precisely-triggerable Claude Skills with sandbox execution and idempotency.
+
+> **🖥️ UI preview** — Auto/Manual toggle, NL query + hint chips, SSE-driven iteration timeline:
+>
+> | Input — NL query + auto-router setup | Output — iteration timeline + final synthesis |
+> |---|---|
+> | ![Task 1 input view](demo_videos/screenshots/task1-01.png) | ![Task 1 results view](demo_videos/screenshots/task1-02.png) |
+> | *Auto mode: paste a free-form question, optionally pin/exclude skills via chips, choose model + BYOK key.* | *Plan → per-iteration cards (status pill, summary, `CONTINUE`/`PIVOT`/`STOP` decision) → synthesis. Trace-ID copy chip for LangSmith lookup.* |
 
 **Skills:**
 
@@ -679,7 +747,7 @@ Two behaviour notes that the FE preview surfaces live as the user types/clicks c
 
 ```bash
 # Mode 1 — LLM-routed: NL query alone, no chips.
-curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
+curl -X POST https://<your-fork>.zeabur.app/api/v1/skills/auto/run \
   -H "Content-Type: application/json" \
   -d '{
     "repo_url": "https://github.com/tychen5/signal-foundry",
@@ -690,7 +758,7 @@ curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
 # => ["dependency-audit", "security-scan"]
 
 # Mode 2 — Hybrid: NL query + chip hints. LLM plans, include chips pin to front.
-curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
+curl -X POST https://<your-fork>.zeabur.app/api/v1/skills/auto/run \
   -H "Content-Type: application/json" \
   -d '{
     "repo_url": "https://github.com/tychen5/signal-foundry",
@@ -701,7 +769,7 @@ curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
 
 # Mode 3 — Hint-only (no NL query). Skips the plan LLM call entirely.
 # Use this when you've already decided which skills to run.
-curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
+curl -X POST https://<your-fork>.zeabur.app/api/v1/skills/auto/run \
   -H "Content-Type: application/json" \
   -d '{
     "repo_url": "https://github.com/tychen5/signal-foundry",
@@ -710,14 +778,14 @@ curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
 # => ["dependency-audit", "security-scan"]  (no LLM plan call — pure cost win)
 
 # Mode 4 — No query, no hints. Runs the default health-check pair.
-curl -X POST https://signal-foundry.zeabur.app/api/v1/skills/auto/run \
+curl -X POST https://<your-fork>.zeabur.app/api/v1/skills/auto/run \
   -H "Content-Type: application/json" \
   -d '{"repo_url": "https://github.com/tychen5/signal-foundry"}' \
   | jq '.result.skill_executed'
 # => ["dependency-audit", "security-scan"]
 ```
 
-Or open [`/task1`](https://signal-foundry.zeabur.app/task1) in a browser, leave the mode toggle on **🤖 Auto (LLM routes)**, type a NL query, and watch the SSE-driven iteration timeline render plan → decision → final synthesis live.
+Or open `/task1` in a browser (local: `http://localhost:8080/task1`; deployed: `https://<your-fork>.zeabur.app/task1`), leave the mode toggle on **🤖 Auto (LLM routes)**, type a NL query, and watch the SSE-driven iteration timeline render plan → decision → final synthesis live.
 
 **Frontend redesign (Auto/Manual mode):** the legacy single-skill form is now the **Manual** tab; switching to **Auto** swaps in (a) a NL query textarea with one-click suggestion chips, (b) include/exclude hint chips that toggle mutually-exclusively per skill, (c) a plan strip showing the LLM's initial plan, (d) per-iteration cards that fill in live as SSE events arrive (status pill, summary, decision pill `CONTINUE` / `PIVOT` / `STOP` with the LLM's reasoning), and (e) a final synthesis box prominently above the iteration list. The same trace-ID copy pill and LangSmith deep-link work in both modes.
 
@@ -734,6 +802,13 @@ Or open [`/task1`](https://signal-foundry.zeabur.app/task1) in a browser, leave 
 ## Task 2: Browser Automation Agent
 
 Self-healing browser agent with **Planner → Executor → Observer → Healer** loop and a final-answer **silent-failure guard**.
+
+> **🖥️ UI preview** — natural-language task input, model selector with vision toggle, real-time SSE step trace:
+>
+> | Input — task + model + vision controls | Live trace — PEOH loop with per-step confidence |
+> |---|---|
+> | ![Task 2 input view](demo_videos/screenshots/task2-01.png) | ![Task 2 execution trace](demo_videos/screenshots/task2-02.png) |
+> | *Free-form NL task, optional target URL, max-steps cap, `use_vision` opt-in (only valid for OpenRouter VLMs).* | *Phase → step events streamed live: action, target description, verification confidence, healer activations, final grounded answer + cost.* |
 
 **Architecture layers:**
 
@@ -774,6 +849,22 @@ curl -X POST http://localhost:8080/api/v1/browser/execute \
 ## Task 3: SEC 10-K Extraction
 
 Hybrid rule + LLM pipeline for item-level structured extraction with XBRL cross-validation.
+
+> **🖥️ UI preview — two real filings end-to-end**
+>
+> **Example A — Citigroup 10-K** (mega-cap bank, Part III incorporated by reference to Proxy)
+>
+> | Input + stage diagram | Extracted items + processing metadata | Per-item drilldown |
+> |---|---|---|
+> | ![Citi — input form](demo_videos/screenshots/task3-citi01.png) | ![Citi — extracted items](demo_videos/screenshots/task3-citi02.png) | ![Citi — item detail](demo_videos/screenshots/task3-citi03.png) |
+> | *CIK + accession, vision/LLM toggles, 4-stage pipeline diagram.* | *Per-item status pills (`extracted` / `incorporated_by_reference` / `not_applicable`), confidence scores, cost.* | *Item content + `char_range` + extraction method + LLM/rule provenance.* |
+>
+> **Example B — Intel Corp 10-K** (tech mega-cap, modern inline-XBRL, $0 rule-only path)
+>
+> | Input + stage diagram | Extracted items + processing metadata | Per-item drilldown |
+> |---|---|---|
+> | ![Intel — input form](demo_videos/screenshots/task3-intel01.png) | ![Intel — extracted items](demo_videos/screenshots/task3-intel02.png) | ![Intel — item detail](demo_videos/screenshots/task3-intel03.png) |
+> | *Same UI as Citi — single entry point handles every filing shape.* | *23 items, rule-only path, XBRL cross-validation passed.* | *Stage 4 XBRL `report.checks[]` visible in the response payload.* |
 
 **4-stage pipeline:**
 
