@@ -1,16 +1,67 @@
-# Signal-Foundry
+<div align="center">
 
-> Evaluation-first AI systems: harness engineering for CI/CD Skills, browser automation, and SEC 10-K extraction.
+# 🛠️ Signal-Foundry
 
-[![Tests](https://img.shields.io/badge/tests-offline%20%2B%20opt--in%20live-22c55e)](tests/) [![Tasks](https://img.shields.io/badge/tasks-3%20complete-3b82f6)](#) [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt) [![Deploy](https://img.shields.io/badge/deploy-one--click%20self--host-9333ea)](#-deploy-your-own-one-click)  [![Live demo](https://img.shields.io/badge/live%20demo-archived-lightgrey)](#-live-demo-archived)
+### *Evaluation-first AI systems: **harness engineering** for CI/CD Skills, browser automation, and SEC 10-K extraction.*
 
-A production-grade portfolio piece showing how to push three different LLM prototypes — a CI/CD skill orchestrator, a self-healing browser agent, and an SEC 10-K item-level extractor — past "it runs once" and into systems you can actually operate, measure, and trust.
+[![Python](https://img.shields.io/badge/python-3.11%2B-3776ab?logo=python&logoColor=white)](requirements.txt)
+[![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)](src/main.py)
+[![LangChain](https://img.shields.io/badge/LangChain-LangGraph-1c3c3c?logo=langchain&logoColor=white)](src/llm_provider.py)
+[![Playwright](https://img.shields.io/badge/Playwright-chromium-2EAD33?logo=playwright&logoColor=white)](src/task2_browser)
+[![Tests](https://img.shields.io/badge/tests-182%2B%20passing-22c55e)](tests/)
+[![Tasks](https://img.shields.io/badge/tasks-3%20complete-3b82f6)](#)
+[![Deploy](https://img.shields.io/badge/deploy-one--click%20self--host-9333ea)](#-deploy-your-own-one-click)
+[![Live demo](https://img.shields.io/badge/live%20demo-archived-lightgrey)](#-live-demo-archived)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+**[🚀 Deploy Your Own](#-deploy-your-own-one-click)** · **[📺 Video Walkthroughs](#-live-demo-archived)** · **[📖 API Reference](#api-reference-for-users)** · **[🧪 Evaluation Results](#evaluation-results)** · **[🏗️ Architecture](#architecture)**
+
+</div>
+
+---
+
+> **Signal-Foundry is an open-source AI-systems side project that turns three messy LLM problems into reliable, observable, cost-disciplined services.** It's not "make it work" — it's *make it work, prove it works, keep it cheap, and don't lie when it doesn't*. Built on FastAPI + LangChain + Playwright with hot-swappable LLM providers (OpenRouter / NVIDIA NIM) and a per-request cost ledger.
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+### 🧰 Task 1
+**CI/CD Skills Engine**
+
+4 composable skills + LLM auto-router. Idempotency cache, dry-run gate, sandbox boundary.
+
+`lint-and-test` · `dependency-audit` · `security-scan` · `build-and-release`
+
+</td>
+<td width="33%" align="center">
+
+### 🌐 Task 2
+**Browser Automation Agent**
+
+Self-healing PEOH loop. AOM-first locators, 9-class root-cause taxonomy, silent-failure guard.
+
+`Planner` → `Executor` → `Observer` → `Healer`
+
+</td>
+<td width="33%" align="center">
+
+### 📊 Task 3
+**SEC 10-K Extractor**
+
+Hybrid rule + LLM + vision pipeline. XBRL cross-validation, incorporated-by-reference resolution.
+
+`Rules` → `LLM refine` → `Validate` → `XBRL check`
+
+</td>
+</tr>
+</table>
 
 > **🏠 Live homepage preview**
 >
 > ![Signal-Foundry homepage](demo_videos/screenshots/index-homepage.png)
 >
-> *Dashboard: in-session BYOK model controls, three task launchers, live cost ledger.*
+> *Unified launcher: in-session BYOK model controls, three task launchers, live cost ledger, model registry.*
 
 ### ⭐ Highlights at a glance
 
@@ -20,7 +71,7 @@ A production-grade portfolio piece showing how to push three different LLM proto
 | 💸 **Cost discipline** | Rules first, LLM only when needed. Every chat call routes through a per-`(task, operation, trace_id)` ledger surfaced live at `/metrics`. Per-request budget caps enforced. | T3: **$0.00 across all 35 modern filings** on rule-only path; T1: **$0.0068 / 5 runs**; T2 Gemini sweep: **$0.22 / 30 cases** |
 | 🛡️ **Silent-failure prevention** | Deterministic post-hoc guard: URL blocklist + 80+ multilingual hedge phrases + ungrounded-number detection. Flips status to `not_found` / `unverified` regardless of what the LLM claimed. | Catches LinkedIn / Chase login walls, NYTimes paywalls, captcha redirects, fabricated finance numbers |
 | 🔁 **Self-healing, not retry** | 9-class root cause taxonomy (`selector_changed`, `captcha_detected`, `frame_detached`, `network_error`, …) with targeted recovery per class — not generic try/except. | ~65 % of broken selectors auto-recovered; the rest honestly reported instead of hidden |
-| 🧠 **Agentic CI/CD router** | NL query → LLM **PEPS loop** (Plan → Execute → Postmortem → Synthesize), with hard iteration cap, budget cap, idempotency cache, write-skill release-intent gate. | 4 skills composable in any order; full reviewer trace via `skill_executed` field |
+| 🧠 **Agentic CI/CD router** | NL query → LLM **PEPS loop** (Plan → Execute → Postmortem → Synthesize), with hard iteration cap, budget cap, idempotency cache, write-skill release-intent gate. | 4 skills composable in any order; full audit trail via `skill_executed` field |
 | 🔬 **Provider portability** | One OpenAI-compat backend serves NVIDIA NIM + OpenRouter, sidestepping wrapper-assertion bugs and silent kwarg-drop. Free-text `publisher/model-name` accepted. | 7+ models (Opus 4.7, GPT-5.5, Gemini 3.1 Pro, Kimi K2.6, GLM 5.1, DeepSeek V4 Pro, MiniMax M2.7) — swap with one dropdown |
 | 👁️ **Selective multimodal vision** | Opt-in `use_vision=true`; gracefully falls back to AOM-text when model is non-VLM. Task 3 renders 3-tier JPEG context around uncertain SEC boundaries. | Kimi+vision on hard T3 cases: **3/5 → 5/5 pass, 5.5× faster, $0 cost** (heading cues let rules recover) |
 | 🔍 **Full observability** | `@traced` LangSmith spans on all task entry points; BYOK LangSmith key routes traces to the user's own console; structured logs with trace IDs end-to-end. | Replay every Planner / Actor / Verifier / Healer / Refiner call with token + cost metadata |
@@ -31,10 +82,16 @@ A production-grade portfolio piece showing how to push three different LLM proto
 
 ### 📺 Live demo (archived)
 
-The interview-period hosted demo at `https://signal-foundry.zeabur.app` has been **decommissioned** — the rented Zeabur server has reached end-of-life and I've chosen not to renew it now that this repo is being shared publicly as a portfolio piece. Everything in this README is fully reproducible: **all the screenshots, eval reports, and metrics** below come from that exact deployment, and the same UI / API surface comes up unchanged when you run the code locally or one-click deploy your own (see [Deploy your own](#-deploy-your-own-one-click)).
+The previously-hosted live demo at `https://signal-foundry.zeabur.app` has been **decommissioned** — the rented Zeabur dedicated server has reached end-of-life and I've chosen not to renew it now that the project is fully open-source. Everything in this README is fully reproducible: **all the screenshots, eval reports, and metrics** below come from that exact deployment, and the same UI / API surface comes up unchanged when you run the code locally or [one-click deploy your own](#-deploy-your-own-one-click).
 
-**🎥 Video walkthroughs of the hosted demo are preserved** (recorded while the server was live, so the legacy URL still appears on screen):
-[YouTube playlist (Overview & Tasks 1–3)](https://www.youtube.com/playlist?list=PLihQVz7VBjYHZ2JDSF-L9TfihXHNHuTCw) · Raw MP4s in this repo: [01-Overview](demo_videos/01-Overview.mp4) | [02-Task1](demo_videos/02-Task1.mp4) | [03-Task2](demo_videos/03-Task2.mp4) | [04-Task3](demo_videos/04-Task3.mp4)
+**🎥 Recorded video walkthroughs of the live system are preserved** (filmed while the server was online — the legacy URL still appears on screen):
+
+| | Video | What's in it |
+|---|---|---|
+| 🎯 | **[01 — Overview](demo_videos/01-Overview.mp4)** ([YouTube](https://www.youtube.com/playlist?list=PLihQVz7VBjYHZ2JDSF-L9TfihXHNHuTCw)) | Whole-system tour: homepage, model swap, cost ledger, observability |
+| 🧰 | **[02 — Task 1](demo_videos/02-Task1.mp4)** | CI/CD skills against real GitHub repos: lint, audit, security scan, auto-router |
+| 🌐 | **[03 — Task 2](demo_videos/03-Task2.mp4)** | Browser agent on Wikipedia / Yahoo Finance / TWSE with silent-failure refusal |
+| 📊 | **[04 — Task 3](demo_videos/04-Task3.mp4)** | SEC 10-K extraction on Apple / Tesla / TSMC / Lehman / pre-bankruptcy filings |
 
 > Routes available in every deployment: `/` dashboard, `/task1` CI/CD Skills, `/task2` Browser Agent, `/task3` SEC 10-K. JSON APIs under `/api/v1/{skills,browser,sec}/*`. Health at `/health`, live cost ledger at `/metrics`. Browser visits to `/health`, `/metrics`, and `/api/v1/models` render user-friendly HTML dashboards; API clients still receive JSON.
 
@@ -69,15 +126,18 @@ This is not a "make it work" demo — it's three systems engineered around the t
 3. **Idempotency** that's easy to assume and hard to actually achieve.
 4. **Provider quirks** (kwargs silently dropped, dual-listed models asserting, content fields shape-shifting between string and block list) that crash exactly when you finally exercise the live path.
 
-Every section of this README is paired with the *deliberate engineering decision* that addresses one of those failure modes — and where I noticed the spec asks for things that even a strong off-the-shelf agent (OpenClaw / HermesAgent) doesn't ship.
+Every section of this README is paired with the *deliberate engineering decision* that addresses one of those failure modes — and the places where a stock off-the-shelf agent (OpenClaw / HermesAgent) doesn't ship the same defenses.
 
-### What's new in the latest sweep (Phase 10: Task 1 Auto-Router)
+<details>
+<summary><strong>📜 Recent release notes</strong> — click to expand</summary>
 
-- **Task 1 Auto-Router** — natural-language CI/CD orchestration. The user types a free-form query ("are there any leaked secrets and vulnerable deps?") and a router LLM autonomously plans an ordered set of skills, executes them via the existing 13-step engine, **reflects after every result** (continue / pivot to a different skill / stop), and synthesizes a single answer tying everything back to the original question. New endpoints: `POST /api/v1/skills/auto/run` + `POST /api/v1/skills/auto/stream` (SSE). The demo response surfaces a top-level `skill_executed` field so a reviewer can confirm at a glance which skills the LLM picked. See [Task 1 — Auto-Router](#task-1--auto-router-llm-driven-skill-orchestration).
+#### Phase 10 — Task 1 Auto-Router
+
+- **Task 1 Auto-Router** — natural-language CI/CD orchestration. The user types a free-form query ("are there any leaked secrets and vulnerable deps?") and a router LLM autonomously plans an ordered set of skills, executes them via the existing 13-step engine, **reflects after every result** (continue / pivot to a different skill / stop), and synthesizes a single answer tying everything back to the original question. New endpoints: `POST /api/v1/skills/auto/run` + `POST /api/v1/skills/auto/stream` (SSE). Every response surfaces a top-level `skill_executed` field so callers can confirm at a glance which skills the LLM picked. See [Task 1 — Auto-Router](#task-1--auto-router-llm-driven-skill-orchestration).
 - The frontend at `/task1` was rebuilt around an **Auto / Manual** mode toggle. Auto mode adds a NL query box, include/exclude skill hint chips, an iteration timeline that shows the router's plan → per-step decision → final synthesis, and an SSE live-trace.
 - **NL query is fully optional** — the user can run the engine purely by ticking include/exclude chips (or by leaving everything blank for a default health check). When the query is empty, the auto-router skips the plan-stage LLM call entirely and uses the chips (or the safe default pair `dependency-audit + security-scan`) as the plan — a pure cost win because the user has already decided. Ticking the `build-and-release` chip counts as explicit release intent, so the write-skill gate that normally requires "release"/"ship"/"publish" in the query is honored by the chip too. See the [Auto-Router routing modes table](#auto-router-routing-modes).
 
-### What's new in the latest sweep (Phase 8 + Phase 9)
+#### Phase 8 + Phase 9 — eval expansion, JSON robustness, BYOK
 
 - **Task 3 eval set 30 → 35 cases**, 100% pass rate on rule-only path. Added pre-bankruptcy filings (Enron FY2000 plain-text, WorldCom FY2001, Lehman FY2007) and going-concern cases (Sears 2017) to genuinely exercise the LLM-trigger conditions. See [Task 3 — latest eval sweep](#task-3--latest-eval-sweep-3535-pass-100-0-rule-only-cost).
 - **v4 boundary-refine prompt** — added handling for combined items ("ITEMS 1 AND 2"), SPAC/blank-check N/A classification, early-EDGAR ASCII format, going-concern false-positive prevention, and a confidence calibration guide. Loads via `v4 → v3 → v2 → v1` fallback chain.
@@ -85,42 +145,67 @@ Every section of this README is paired with the *deliberate engineering decision
 - **OpenAI-compat `response_format=json_object`** — `get_llm(json_mode=True)` requests strict JSON output on supported backends. Pure win on the T3 refiner: eliminates a whole class of "could not parse" errors that were previously masked by regex fallback.
 - **Stream-as-source-of-truth** — Tasks 1, 2, and 3 now embed the final result in their SSE stream. Frontends no longer issue a redundant POST after `stream_end` (was doubling latency on slow NVIDIA paths).
 - **3-key BYOK** — homepage accepts OpenRouter, NVIDIA NIM, and (optionally) LangSmith API keys; sessionStorage persistence; never sent to a third party.
-- **Fixed real bugs** surfaced by exercising the live demo: T1 `encode/httpx` 422 (`default_branch` not honoured), T3 Microsoft / Abbott 404 (hand-typed accessions), T1 LangSmith link 404 (replaced with copy-trace-id chip), T3 fetcher's `find_10k_filing` raising before falling back to older submission pages.
+- **Fixed real bugs** surfaced by exercising the live system: T1 `encode/httpx` 422 (`default_branch` not honoured), T3 Microsoft / Abbott 404 (hand-typed accessions), T1 LangSmith link 404 (replaced with copy-trace-id chip), T3 fetcher's `find_10k_filing` raising before falling back to older submission pages.
+
+</details>
 
 ---
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph UI["🌐 FastAPI Unified Entry"]
+        H["/  homepage"]
+        T1UI["/task1  CI/CD Skills"]
+        T2UI["/task2  Browser Agent"]
+        T3UI["/task3  SEC 10-K"]
+        DOCS["/docs · /metrics · /health"]
+    end
+
+    subgraph Tasks["⚙️ Task Engines"]
+        T1["Task 1 · CI/CD Skill Engine<br/>13-step pipeline + Auto-Router (PEPS)"]
+        T2["Task 2 · Browser Agent<br/>Planner → Executor → Observer → Healer"]
+        T3["Task 3 · SEC 10-K Extractor<br/>Rules → LLM refine → Validate → XBRL"]
+    end
+
+    subgraph Shared["🔧 Shared Harness"]
+        HARN["Harness<br/>retry · circuit-break · fallback"]
+        COST["Cost Tracker<br/>token + USD ledger"]
+        EVAL["Evaluator<br/>deterministic + LLM-as-judge"]
+        TRACE["LangSmith Tracing<br/>@traced spans"]
+        VAL["LLM Validation<br/>+ Error Classifier"]
+    end
+
+    subgraph LLM["🧠 LLM Provider Factory"]
+        FACT["ChatOpenAI (compat)<br/>+ per-model extra_body"]
+        OR[("OpenRouter<br/>GPT-5.5 · Opus 4.7 · Gemini 3.1 Pro")]
+        NV[("NVIDIA NIM<br/>Kimi · GLM · DeepSeek · MiniMax")]
+    end
+
+    H --> T1UI & T2UI & T3UI
+    T1UI --> T1
+    T2UI --> T2
+    T3UI --> T3
+    T1 & T2 & T3 --> HARN
+    T1 & T2 & T3 --> COST
+    T1 & T2 & T3 --> EVAL
+    T1 & T2 & T3 --> TRACE
+    T1 & T2 & T3 --> VAL
+    HARN --> FACT
+    FACT --> OR & NV
+
+    classDef ui fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+    classDef task fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef shared fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef llm fill:#f3e8ff,stroke:#9333ea,color:#581c87
+    class H,T1UI,T2UI,T3UI,DOCS ui
+    class T1,T2,T3 task
+    class HARN,COST,EVAL,TRACE,VAL shared
+    class FACT,OR,NV llm
 ```
-                    ┌──────────────────────────┐
-                    │  FastAPI Unified Entry   │
-                    │  /task1  /task2  /task3  │
-                    └───────────┬──────────────┘
-                                │
-        ┌───────────────────────┼───────────────────────┐
-        │                       │                       │
-┌───────▼────────┐    ┌─────────▼──────┐    ┌───────────▼──────┐
-│  Task 1        │    │  Task 2        │    │  Task 3          │
-│  CI/CD Skills  │    │  Browser Agent │    │  SEC 10-K        │
-│  Engine        │    │  (PEOH Loop)   │    │  Pipeline        │
-└───────┬────────┘    └─────────┬──────┘    └───────────┬──────┘
-        │                       │                       │
-        └───────────────────────┼───────────────────────┘
-                                │
-        ┌───────────────────────┼───────────────────────┐
-        │                       │                       │
-┌───────▼────────┐    ┌─────────▼──────┐    ┌───────────▼──────┐
-│  Harness       │    │  Cost Tracker  │    │  Evaluator       │
-│  (retry/cb/fb) │    │  (token ledger)│    │  (LLM-as-judge)  │
-└───────┬────────┘    └─────────┬──────┘    └───────────┬──────┘
-        └───────────────────────┼───────────────────────┘
-                                │
-                    ┌───────────▼──────────────┐
-                    │  LLM Provider Factory    │
-                    │  ChatOpenAI →            │
-                    │  NVIDIA NIM | OpenRouter │
-                    └──────────────────────────┘
-```
+
+> **Reading the diagram.** Every request enters through the FastAPI router, dispatches into the appropriate task engine, and shares one cross-cutting harness (retry/cost/eval/trace/validation). The LLM provider factory routes any free-text `publisher/model-name` ID to whichever backend serves it — without writing a new wrapper.
 
 ---
 
@@ -208,7 +293,7 @@ No more spinner-and-wait — every step / healer activation / confidence score i
 
 ## API Reference (for users)
 
-> **📖 Interactive API docs** — every deployment ships with auto-generated FastAPI Swagger UI at `/docs`, so reviewers can poke at every endpoint live without leaving the browser:
+> **📖 Interactive API docs** — every deployment ships with auto-generated FastAPI Swagger UI at `/docs`, so anyone can poke at every endpoint live without leaving the browser:
 >
 > ![FastAPI Swagger / OpenAPI docs page](demo_videos/screenshots/index-apidoc.png)
 >
@@ -379,11 +464,6 @@ On a negative case (e.g. *t2_anuse_silent_failure_guard* expecting refusal on a 
 probe) — `not_found` is the **correct** outcome, and the same `expected_outcome` block enforces
 `allowed_statuses: ["not_found", "partial"]` + `answer_must_not_contain: ["@example.com"]` to
 catch hallucinated email addresses.
-
-This per-case enforcement was added 2026-05-15 in response to interviewer review surfacing that
-the original scorer's four generic checks (no_crash / has_answer / took_steps / reasonable_steps)
-were too permissive — they let positive cases pass even when the agent returned the wrong answer.
-See `notes/_briefs/interviewer_concerns.md` §3 for the full root-cause walk-through.
 
 ### Static-site fast path (Task 2 hybrid)
 
@@ -565,7 +645,7 @@ The thing that separates this repo from a one-shot prototype:
   >
   > ![LangSmith traces — all three tasks](demo_videos/screenshots/langsmith-traces.png)
   >
-  > *Every LLM call (Planner / Actor / Verifier / Healer / Refiner / Synthesiser) appears as a separately-timed child span with token counts, model id, and stage tags — so a reviewer can replay any run, see which step burned cost, and audit the exact prompt + completion. BYOK LangSmith key: paste your own from the homepage and your traces land in your own console instead of the server's project.*
+  > *Every LLM call (Planner / Actor / Verifier / Healer / Refiner / Synthesiser) appears as a separately-timed child span with token counts, model id, and stage tags — so you can replay any run, see which step burned cost, and audit the exact prompt + completion. BYOK LangSmith key: paste your own from the homepage and your traces land in your own console instead of the server's project.*
 - **Honest status taxonomy.** Task 2 returns `success | partial | not_found | unverified | failed`. Each has a precise meaning: `not_found` is the *correct* outcome on a login wall, paywall, captcha, or page that genuinely doesn't contain the answer. The eval scorer treats `not_found` on a negative-test case (example.com hallucination guard) as a pass.
 - **Stuck-loop guard** (`src/task2_browser/agent._detect_stuck_loop`). The reactive loop now detects when the planner picks the *same action* (action_type + target_description) AND the URL doesn't change for 3 consecutive steps — typical pattern when a Submit button silently fails or a captcha-locked field resets. The guard breaks out as `partial` with a `stuck_loop` failure mode rather than burning through `max_steps` repeating the same mistake. Healed retries with different selectors and redirect cycles correctly do *not* trip it.
 - **Per-request budget cap** (`src/shared/cost_tracker.BudgetExceededError`). Spec calls out "$0.50 per filing"; the tracker now enforces it. After Stage 2 in T3 (the only paid stage), the pipeline calls `check_request_budget(trace_id, cap, task)`. On overrun: emits a `budget_cap_hit` SSE event, marks the stage in `stages_used`, and skips remaining LLM stages. Default caps: $0.30 (T1), $0.50 (T2 / T3); set `max_cost_usd=0` on the request to disable for benchmarks.
@@ -694,7 +774,7 @@ Two behaviour notes that the FE preview surfaces live as the user types/clicks c
 | Hard exclude | The `exclude_skills_hint` list is honored at plan time AND at postmortem time, so a runaway LLM "add_skill" pivot can't override what the user explicitly forbade | Both `_llm_plan` and `_llm_decide` scrub `next_skill ∈ exclude_hint` |
 | Empty-plan fallback | If the LLM returns garbage, default to the two cheap read-only skills (`dependency-audit`, `security-scan`) — never crash the request | `_sanitise_plan` final branch |
 
-**Reviewer demo evidence.** The `result.skill_executed` field on every successful auto-router response is the single value to grep for — it's the canonical record of *what the LLM actually picked*. Example response shape:
+**How to audit a run.** The `result.skill_executed` field on every successful auto-router response is the single value to grep for — it's the canonical record of *what the LLM actually picked*. Example response shape:
 
 ```jsonc
 {
@@ -706,7 +786,7 @@ Two behaviour notes that the FE preview surfaces live as the user types/clicks c
     "overall_intent": "user wants both supply-chain CVE check and secret/SAST scan of source",
     "initial_plan": ["dependency-audit", "security-scan"],
     "plan_confidence": 0.94,
-    "skill_executed": ["dependency-audit", "security-scan"],   // ◄─ reviewer-facing field
+    "skill_executed": ["dependency-audit", "security-scan"],   // ◄─ audit field
     "skills_executed": ["dependency-audit", "security-scan"],  // alias for grep flexibility
     "steps": [
       {
@@ -789,7 +869,7 @@ Or open `/task1` in a browser (local: `http://localhost:8080/task1`; deployed: `
 
 **Frontend redesign (Auto/Manual mode):** the legacy single-skill form is now the **Manual** tab; switching to **Auto** swaps in (a) a NL query textarea with one-click suggestion chips, (b) include/exclude hint chips that toggle mutually-exclusively per skill, (c) a plan strip showing the LLM's initial plan, (d) per-iteration cards that fill in live as SSE events arrive (status pill, summary, decision pill `CONTINUE` / `PIVOT` / `STOP` with the LLM's reasoning), and (e) a final synthesis box prominently above the iteration list. The same trace-ID copy pill and LangSmith deep-link work in both modes.
 
-**Future extensions** (noted but deliberately not yet built — happy to expand in interview):
+**Future extensions** (noted but deliberately not yet built):
 
 - **Knowledge-graph augmented routing** — feed prior-run skill outputs into a small vector store so the router can reference *"last week security-scan found a leaked AWS key in this file"* when planning today's run.
 - **Multi-agent reviewer subagents** — when the synthesis confidence is below a threshold, fork a `code-reviewer` + `security-scanner` subagent (in their own context windows) to independently re-read the raw findings, then aggregate. Mirrors what `/code-review` does in vanilla Claude Code.
@@ -907,7 +987,48 @@ curl -X POST http://localhost:8080/api/v1/sec/extract \
 
 ## Evaluation Results
 
-Reports are committed under `evals/<task>/results/` — JSON for tooling, Markdown for review.
+Reports are committed under `evals/<task>/results/` — JSON for tooling, Markdown for inspection. **Every number below is reproducible** by re-running the corresponding `python -m evals.taskN.run_eval` command shown in [How to Run](#how-to-run).
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+### 🧰 Task 1
+**`5/5` pass (100%)**
+
+5 real GitHub repos<br/>
+Avg latency `6 076 ms`<br/>
+Total cost **`$0.0068`**
+
+Re-run cache → **`$0`**
+
+</td>
+<td width="33%" align="center">
+
+### 🌐 Task 2
+**`20/30` genuine success (66%)**<br/>+ 9 correct refusals
+
+Gemini 3.1 Pro · 30-case live<br/>
+Avg latency `45 s`<br/>
+Total cost **`$0.22`**
+
+`0` hallucinations, `0` crashes
+
+</td>
+<td width="33%" align="center">
+
+### 📊 Task 3
+**`35/35` pass (100%)**
+
+35 SEC filings (1994–2026)<br/>
+Avg latency `1 568 ms`<br/>
+Total cost **`$0.00`**
+
+100% rule-only path
+
+</td>
+</tr>
+</table>
 
 ### Task 1 — 5/5 pass (100%) against real GitHub repos + real NVIDIA LLM
 
@@ -1153,7 +1274,7 @@ Context engineering — what goes into each LLM call, what's deliberately exclud
 
 ## Known Failure Modes & Honest Limitations
 
-We document what *doesn't* work — not just what does. This is what the held-out evaluators are most likely to probe.
+We document what *doesn't* work — not just what does. These are the edge cases most likely to bite users in production.
 
 ### Task 1 — CI/CD Skills Engine
 | Failure Mode | Frequency | Root Cause | Mitigation |
@@ -1219,17 +1340,22 @@ I treat the `prompts/` directory as a versioned ledger and the AI as a fast-but-
 
 ## Why This Beats Generic LLM Agents (vs OpenClaw / HermesAgent)
 
-| Dimension | Generic Agent | Signal-Foundry |
-|-----------|--------------|----------------|
-| Failure handling | try/except + retry | 9-class root cause taxonomy + targeted recovery per class |
-| Silent failures | Trusts model output | Hedge-phrase check + numeric grounding before declaring success |
-| Cost discipline | Every operation calls LLM | Rules first; LLM only when needed; every call tracked with cost ledger |
-| Idempotency | None | SHA-keyed cache; same commit → same result guaranteed |
-| Security | Unrestricted execution | Subprocess sandbox, SIGKILL timeout, env var stripping, token redaction in logs |
-| Provider portability | One wrapper per provider, brittle | OpenAI-compat default; provider-specific wrappers opt-in |
-| Eval framework | "Vibes" testing | Automated scorer with deterministic checks + structured failure reports + committed historical results |
-| Failure reporting | Opaque errors | `FailureType` enum, `failure_modes` array, structured logging, trace IDs end-to-end |
-| Dry-run safety | None | `dry_run=true` by default; write ops require explicit `dry_run=false` |
+The exact same three tasks, handed to a generic LLM agent loop, will silently fail in ways that look like success. This table is the **side-by-side diff** of design decisions:
+
+| Dimension | ❌ Generic Agent | ✅ Signal-Foundry |
+|---|---|---|
+| **Failure handling** | `try/except` + sleep + retry | 9-class root-cause taxonomy with targeted recovery per class |
+| **Silent failures** | Trusts the model's "task complete" | URL blocklist + 80+ hedge phrases (EN/中/日) + numeric grounding *before* declaring success |
+| **Cost discipline** | Every operation hits the LLM | Rules first; LLM only when confidence < threshold; per-`(task, op, trace)` ledger; budget caps |
+| **Idempotency** | None — re-runs duplicate work | SHA-keyed cache: same commit → same result → $0 LLM call |
+| **Security** | Unrestricted shell execution | Subprocess sandbox + SIGKILL timeout + env-var stripping + GitHub-token redaction in every log line |
+| **Provider portability** | One brittle wrapper per provider | One OpenAI-compat backend serves NVIDIA + OpenRouter; free-text `model_id` accepted |
+| **Eval framework** | "Vibes" testing | Automated scorer with deterministic checks + structured failure reports + committed historical results |
+| **Failure reporting** | Opaque stack traces | `FailureType` enum, `failure_modes[]`, structured logs, trace IDs end-to-end, user-friendly error surface |
+| **Dry-run safety** | None — every action ships | `dry_run=true` by default on write skills; explicit opt-in required to tag/release |
+| **Observability** | Print to stdout | `@traced` LangSmith spans on every entry point; BYOK key routes traces to user's own console |
+| **Multimodal vision** | All-or-nothing | `is_vision_capable()` gates per model; graceful AOM fallback for text-only providers |
+| **Honest "I couldn't"** | Hallucinates plausible answer | Returns `not_found` / `unverified` with explicit `failure_modes` — eval scorer treats these as **passes** on negative cases |
 
 ---
 
@@ -1255,7 +1381,7 @@ Per-task cost / latency / token counts are exposed live at `/metrics`.
 
 This pass traced the FastAPI routes, UI templates, schemas, eval artifacts, and README against the user flow. Changes made:
 
-| Area | Tweak | Why it matters for demo/review |
+| Area | Tweak | Why it matters in use |
 |---|---|---|
 | System pages | `/health`, `/metrics`, `/api/v1/models` now render HTML dashboards for browser navigation while preserving JSON for API clients | Users can inspect readiness, spend, and model routing without reading raw JSON |
 | Dashboard | Added a user launchpad and shared in-session model/API-key controls | Faster video flow across Task 1/2/3 pages |
